@@ -159,8 +159,10 @@ function PackagingSpecForm() {
 
   return (
     <div className="p-6 max-w-3xl h-full overflow-y-auto thin-scrollbar">
-      <h1 className="text-xl font-semibold text-gray-800 mb-1">New Packaging Specification Request</h1>
-      <p className="text-sm text-gray-500 mb-4">
+    <button onClick={() => navigate('/artwork')} className="text-sm text-gray-500 mb-3 hover:underline">
+      ← Back to list
+    </button>
+    <h1 className="text-xl font-semibold text-gray-800 mb-1">New Packaging Specification Request</h1>      <p className="text-sm text-gray-500 mb-4">
         Fields shown below match the TRIMS Specification sheet exactly, based on the category chosen.
         Fields with a list icon support quick-select — start typing to see suggestions, or type your own value.
       </p>

@@ -116,7 +116,7 @@ function App() {
                     role === 'ppc' ? <PPSamplePPC /> :
                       role === 'warehouse' ? <CartonMainWarehouse /> :
                         role === 'lab' ? <LabDipLab /> :
-                         role === 'vendor' ? <CartonMainTTQM /> :
+                         role === 'vendor' ? <ArtworkList role={role} /> :
                           <CartonMain />
               }
             />

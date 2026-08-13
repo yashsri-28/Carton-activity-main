@@ -74,7 +74,7 @@ function Sidebar({ collapsed, role }) {
 
   if (role.toLowerCase() === 'vendor') {
     filteredMenu = fullMenu.filter(
-      item => item.name === "Dashboard" || item.name === "Artwork Management"
+      item => item.name === "Artwork Management"
     );
   }
 

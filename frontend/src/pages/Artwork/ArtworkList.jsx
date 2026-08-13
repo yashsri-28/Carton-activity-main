@@ -95,12 +95,15 @@ function ArtworkList({ role }) {
           <option value="">All Statuses</option>
           {Object.keys(STATUS_COLORS).map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
-        <button
-          onClick={fetchArtworks}
-          className="bg-gray-100 text-gray-700 px-4 py-2 rounded-md text-sm hover:bg-gray-200"
-        >
-          Search
-        </button>
+      <button
+        onClick={fetchArtworks}
+        className="bg-[#003366] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#002a52] flex items-center gap-1.5"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        Search
+      </button>
       </div>
 
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">

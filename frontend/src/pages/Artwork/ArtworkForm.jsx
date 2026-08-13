@@ -54,6 +54,9 @@ function ArtworkForm() {
 
   return (
     <div className="p-6 max-w-2xl overflow-y-auto">
+      <button onClick={() => navigate('/artwork')} className="text-sm text-gray-500 mb-3 hover:underline">
+        ← Back to list
+      </button>
       <h1 className="text-xl font-semibold text-gray-800 mb-4">New Artwork Request</h1>
 
       <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-lg p-6 space-y-4">

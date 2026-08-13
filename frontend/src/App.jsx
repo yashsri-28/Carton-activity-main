@@ -115,6 +115,7 @@ function App() {
                     role === 'ppc' ? <PPSamplePPC /> :
                       role === 'warehouse' ? <CartonMainWarehouse /> :
                         role === 'lab' ? <LabDipLab /> :
+                         role === 'vendor' ? <CartonMainTTQM /> :
                           <CartonMain />
               }
             />

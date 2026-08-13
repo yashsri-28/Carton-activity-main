@@ -12,7 +12,7 @@ import {
 
 // Which role is allowed to act on which approval stage — mirrors
 // ArtworkApproval.STAGE_ROLE_MAP on the backend.
-const STAGE_ROLE_MAP = { MARKETING: 'marketing', PACKAGING: 'ppc', TQM: 'ttqm', CUSTOMER: 'admin' };
+const STAGE_ROLE_MAP = { MARKETING: 'marketing', PPC: 'ppc', TQM: 'ttqm', CUSTOMER: 'admin' };
 
 function ArtworkDetails({ role }) {
   const { artworkId } = useParams();

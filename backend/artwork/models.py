@@ -43,7 +43,7 @@ class ArtworkRequest(models.Model):
         ("AI_VALIDATION_PENDING", "AI Validation Pending"),
         ("AI_VALIDATION_FAILED", "AI Validation Failed"),
         ("MARKETING_REVIEW", "Marketing Review"),
-        ("PACKAGING_REVIEW", "Packaging Review"),
+        ("PPC_REVIEW", "PPC Review"),
         ("TQM_REVIEW", "TQM Review"),
         ("CUSTOMER_REVIEW", "Customer Review"),
         ("APPROVED", "Approved"),
@@ -215,7 +215,7 @@ class ArtworkApproval(models.Model):
 
     STAGE_CHOICES = (
         ("MARKETING", "Marketing"),
-        ("PACKAGING", "Packaging"),
+        ("PPC", "PPC"),
         ("TQM", "TQM"),
         ("CUSTOMER", "Customer"),
     )
@@ -230,7 +230,7 @@ class ArtworkApproval(models.Model):
     # used by the view to authorize decisions.
     STAGE_ROLE_MAP = {
         "MARKETING": "MARKETING",
-        "PACKAGING": "PPC",   # Packaging Procurement team role in this system
+        "PPC": "PPC",   # Packaging Procurement team role in this system
         "TQM": "TTQM",
         "CUSTOMER": "ADMIN",       # customer has no direct login yet (Phase 2); logged on their behalf
     }

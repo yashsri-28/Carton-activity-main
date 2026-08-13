@@ -18,7 +18,7 @@ from activity_logs.models import ActivityLog
 # Helpers
 # ------------------------------------------------------------------
 
-APPROVAL_STAGE_ORDER = ["MARKETING", "PACKAGING", "TQM", "CUSTOMER"]
+APPROVAL_STAGE_ORDER = ["MARKETING", "PPC", "TQM", "CUSTOMER"]
 
 MAX_UPLOAD_SIZE_MB = 25
 ALLOWED_EXTENSIONS = [".pdf", ".ai", ".eps", ".psd", ".png", ".jpg", ".jpeg", ".tiff"]
@@ -133,7 +133,7 @@ def create_artwork_request(request):
     )
 
     # Pre-create the approval stage rows so the pipeline is visible upfront
-    stages = ["MARKETING", "PACKAGING", "TQM"]
+    stages = ["MARKETING", "PPC", "TQM"]
     if artwork.customer_approval_required:
         stages.append("CUSTOMER")
     # (approvals are attached once the first version is uploaded — see upload_artwork_version)
@@ -194,7 +194,7 @@ def upload_artwork_version(request, artwork_id):
 
     # Reset approval stages for this new version
     ArtworkApproval.objects.filter(artwork=artwork).delete()
-    stages = ["MARKETING", "PACKAGING", "TQM"]
+    stages = ["MARKETING", "PPC", "TQM"]
     if artwork.customer_approval_required:
         stages.append("CUSTOMER")
     for i, stage in enumerate(stages, start=1):

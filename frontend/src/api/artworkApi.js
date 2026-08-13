@@ -35,3 +35,6 @@ export const getArtworkComments = (artworkId) =>
 
 export const addArtworkComment = (artworkId, message) =>
   api.post(`/api/artwork/${artworkId}/comments/add/`, { message });
+
+export const getVendorList = () =>
+  api.get('/api/artwork/vendors/');

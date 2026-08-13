@@ -441,3 +441,17 @@ def add_artwork_comment(request, artwork_id):
         },
         status=http_status.HTTP_201_CREATED,
     )
+    
+# ------------------------------------------------------------------
+# Vendor dropdown data — for Marketing to pick a vendor while
+# creating/assigning an artwork request from the UI.
+# ------------------------------------------------------------------
+
+@swagger_auto_schema(method="get", operation_summary="List Vendor Users")
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def list_vendors(request):
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    vendors = User.objects.filter(role="VENDOR").values("id", "username")
+    return Response(list(vendors), status=http_status.HTTP_200_OK)    

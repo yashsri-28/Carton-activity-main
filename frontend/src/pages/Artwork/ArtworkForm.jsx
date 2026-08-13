@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { createArtworkRequest } from '../../api/artworkApi';
+import { createArtworkRequest, getVendorList } from '../../api/artworkApi';
 
 function ArtworkForm() {
   const navigate = useNavigate();
@@ -12,10 +12,18 @@ function ArtworkForm() {
     customer_name: '',
     material_code: '',
     po_number: '',
+    assigned_vendor_id: '',
     customer_approval_required: false,
     remarks: '',
   });
+  const [vendors, setVendors] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    getVendorList()
+      .then((res) => setVendors(res.data))
+      .catch(() => setVendors([]));
+  }, []);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -30,7 +38,11 @@ function ArtworkForm() {
     }
     setSubmitting(true);
     try {
-      const res = await createArtworkRequest(form);
+      const payload = {
+        ...form,
+        assigned_vendor_id: form.assigned_vendor_id || null,
+      };
+      const res = await createArtworkRequest(payload);
       toast.success(`Artwork request ${res.data.artwork_id} created.`);
       navigate(`/artwork/${res.data.artwork_id}`);
     } catch (err) {
@@ -77,10 +89,22 @@ function ArtworkForm() {
           </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">PO Number</label>
-          <input name="po_number" value={form.po_number} onChange={handleChange}
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm" />
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">PO Number</label>
+            <input name="po_number" value={form.po_number} onChange={handleChange}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Assign Vendor</label>
+            <select name="assigned_vendor_id" value={form.assigned_vendor_id} onChange={handleChange}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
+              <option value="">-- No vendor (assign later) --</option>
+              {vendors.map((v) => (
+                <option key={v.id} value={v.id}>{v.username}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <label className="flex items-center gap-2 text-sm text-gray-700">

@@ -3,6 +3,7 @@ from . import views
 
 urlpatterns = [
     path("create/", views.create_artwork_request, name="create_artwork_request"),
+     path("create-with-spec/", views.create_artwork_with_spec, name="create_artwork_with_spec"),
     path("list/", views.list_artwork_requests, name="list_artwork_requests"),
     path("vendors/", views.list_vendors, name="list_vendors"),
     path("<str:artwork_id>/", views.get_artwork_details, name="get_artwork_details"),
@@ -12,4 +13,6 @@ urlpatterns = [
     path("<str:artwork_id>/archive/", views.archive_artwork, name="archive_artwork"),
     path("<str:artwork_id>/comments/", views.list_artwork_comments, name="list_artwork_comments"),
     path("<str:artwork_id>/comments/add/", views.add_artwork_comment, name="add_artwork_comment"),
+    path("<str:artwork_id>/spec/", views.get_packaging_spec, name="get_packaging_spec"),
 ]
+

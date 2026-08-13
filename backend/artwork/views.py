@@ -10,7 +10,7 @@ from rest_framework import status as http_status
 from drf_yasg.utils import swagger_auto_schema
 
 # from .models import ArtworkRequest, ArtworkVersion, ArtworkApproval
-from .models import ArtworkRequest, ArtworkVersion, ArtworkApproval, ArtworkComment
+from .models import ArtworkRequest, ArtworkVersion, ArtworkApproval, ArtworkComment, PackagingSpecification
 from activity_logs.models import ActivityLog
 
 
@@ -455,3 +455,86 @@ def list_vendors(request):
     User = get_user_model()
     vendors = User.objects.filter(role="VENDOR").values("id", "username")
     return Response(list(vendors), status=http_status.HTTP_200_OK)    
+
+
+# ------------------------------------------------------------------
+# FR008, FR022 — Create Artwork Request WITH full Packaging
+# Specification (from the TRIMS_SPECIFICATION.xlsx form).
+# One call: generates the Artwork ID and stores every filled
+# spec field exactly as the excel form defines it.
+# ------------------------------------------------------------------
+
+@swagger_auto_schema(method="post", operation_summary="Create Artwork Request With Packaging Spec")
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@transaction.atomic
+def create_artwork_with_spec(request):
+    data = request.data
+
+    category = data.get("category")
+    spec_data = data.get("spec_data") or {}
+
+    valid_categories = [c[0] for c in PackagingSpecification.CATEGORY_CHOICES]
+    if category not in valid_categories:
+        return Response(
+            {"error": f"category must be one of {valid_categories}"},
+            status=http_status.HTTP_400_BAD_REQUEST,
+        )
+
+    # PRODUCT / BUYER NAME are always present in every sheet — use them
+    # to build a sensible title/sku if the caller didn't send explicit ones.
+    title = data.get("title") or spec_data.get("PRODUCT") or f"{category} Artwork Request"
+    sku_code = data.get("sku_code") or spec_data.get("SIZE") or category
+
+    artwork = ArtworkRequest.objects.create(
+        title=title,
+        sku_code=sku_code,
+        brand_name=data.get("brand_name") or spec_data.get("BUYER NAME"),
+        customer_name=data.get("customer_name"),
+        material_code=data.get("material_code"),
+        po_number=data.get("po_number"),
+        assigned_vendor_id=data.get("assigned_vendor_id") or None,
+        customer_approval_required=bool(data.get("customer_approval_required", False)),
+        remarks=data.get("remarks"),
+        status="VENDOR_UPLOAD_PENDING" if data.get("assigned_vendor_id") else "DRAFT",
+        created_by=request.user,
+        updated_by=request.user,
+    )
+
+    PackagingSpecification.objects.create(
+        artwork=artwork,
+        category=category,
+        spec_data=spec_data,
+        created_by=request.user,
+    )
+
+    _log_activity(
+        request, artwork, "Created",
+        f"Artwork request {artwork.artwork_id} created with {category} packaging specification.",
+        new_value=artwork.status,
+    )
+
+    return Response(_artwork_to_dict(artwork), status=http_status.HTTP_201_CREATED)
+
+
+# ------------------------------------------------------------------
+# Fetch a saved packaging specification for an artwork
+# ------------------------------------------------------------------
+
+@swagger_auto_schema(method="get", operation_summary="Get Packaging Specification")
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_packaging_spec(request, artwork_id):
+    artwork = get_object_or_404(ArtworkRequest, artwork_id=artwork_id)
+
+    if getattr(request.user, "role", None) == "VENDOR" and artwork.assigned_vendor_id != request.user.id:
+        return Response({"error": "Not authorized to view this artwork."}, status=http_status.HTTP_403_FORBIDDEN)
+
+    spec = getattr(artwork, "packaging_spec", None)
+    if not spec:
+        return Response({"error": "No packaging specification found."}, status=http_status.HTTP_404_NOT_FOUND)
+
+    return Response(
+        {"category": spec.category, "spec_data": spec.spec_data},
+        status=http_status.HTTP_200_OK,
+    )

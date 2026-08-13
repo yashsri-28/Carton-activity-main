@@ -310,4 +310,55 @@ class ArtworkComment(models.Model):
         ordering = ["created_on"]
 
     def __str__(self):
-        return f"{self.artwork.artwork_id} - comment by {self.author}"    
+        return f"{self.artwork.artwork_id} - comment by {self.author}"   
+    
+    
+    
+    # ============================================================
+# FR008, FR022 — Packaging Specification Management
+# Captures the full TRIMS_SPECIFICATION.xlsx form data per
+# category (PVC Bag, Ribbon, Label, Box, etc). Every category has
+# a different set of fields, so answers are stored as JSON keyed
+# by the exact excel field label — nothing is hardcoded per
+# category, so it always matches the source excel exactly.
+# ============================================================
+
+class PackagingSpecification(models.Model):
+
+    CATEGORY_CHOICES = (
+        ("PVC_BAG", "PVC Bag Specification"),
+        ("RIBBON", "Ribbon"),
+        ("BW_STICKER", "B&W Sticker"),
+        ("LABEL", "Label"),
+        ("PAPER_PRINTED_ITEM", "Paper Printed Item"),
+        ("BOX", "Box"),
+        ("OTHER", "Other"),
+        ("PDQ", "PDQ"),
+    )
+
+    artwork = models.OneToOneField(
+        ArtworkRequest,
+        on_delete=models.CASCADE,
+        related_name="packaging_spec",
+    )
+
+    category = models.CharField(max_length=30, choices=CATEGORY_CHOICES)
+
+    # Every filled field from the excel form, keyed exactly by its
+    # label text (e.g. {"BUYER NAME": "Costco", "QUALITY OF THE PVC": "LHM"})
+    spec_data = models.JSONField(default=dict, blank=True)
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="packaging_specs_created",
+    )
+    created_on = models.DateTimeField(auto_now_add=True)
+    updated_on = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "artwork_packaging_specification"
+
+    def __str__(self):
+        return f"{self.artwork.artwork_id} - {self.category}" 

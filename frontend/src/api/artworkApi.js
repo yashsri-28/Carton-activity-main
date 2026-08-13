@@ -38,3 +38,9 @@ export const addArtworkComment = (artworkId, message) =>
 
 export const getVendorList = () =>
   api.get('/api/artwork/vendors/');
+
+export const createArtworkWithSpec = (payload) =>
+  api.post('/api/artwork/create-with-spec/', payload);
+
+export const getPackagingSpec = (artworkId) =>
+  api.get(`/api/artwork/${artworkId}/spec/`);

@@ -42,8 +42,8 @@ function ArtworkList({ role }) {
   const canCreate = role === 'marketing';
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-4">
+    <div className="p-6 overflow-y-auto">
+      {/* <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-semibold text-gray-800">Packaging Artwork Management</h1>
         {canCreate && (
           <button
@@ -52,6 +52,25 @@ function ArtworkList({ role }) {
           >
             + New Artwork Request
           </button>
+        )}
+      </div> */}
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl font-semibold text-gray-800">Packaging Artwork Management</h1>
+        {canCreate && (
+          <div className="flex gap-2">
+            <button
+              onClick={() => navigate('/artwork/new')}
+              className="bg-gray-100 text-gray-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-200"
+            >
+              + Quick Request
+            </button>
+            <button
+              onClick={() => navigate('/artwork/new-spec')}
+              className="bg-[#003366] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#002a52]"
+            >
+              + New Packaging Spec Request
+            </button>
+          </div>
         )}
       </div>
 

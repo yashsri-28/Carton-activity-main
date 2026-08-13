@@ -8,6 +8,7 @@ import {
   releaseArtwork,
   getArtworkComments,
   addArtworkComment,
+  getPackagingSpec,
 } from '../../api/artworkApi';
 
 // Which role is allowed to act on which approval stage — mirrors
@@ -27,6 +28,7 @@ function ArtworkDetails({ role }) {
   const [commentList, setCommentList] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [commentBusy, setCommentBusy] = useState(false);
+  const [packagingSpec, setPackagingSpec] = useState(null);
 
   const fetchDetails = async () => {
     setLoading(true);
@@ -40,7 +42,7 @@ function ArtworkDetails({ role }) {
     }
   };
 
-  const fetchComments = async () => {
+const fetchComments = async () => {
     try {
       const res = await getArtworkComments(artworkId);
       setCommentList(res.data);
@@ -49,9 +51,21 @@ function ArtworkDetails({ role }) {
     }
   };
 
+  const fetchPackagingSpec = async () => {
+    try {
+      const res = await getPackagingSpec(artworkId);
+      setPackagingSpec(res.data);
+    } catch (err) {
+      // 404 is normal — this artwork was created via "Quick Request"
+      // without a packaging spec, so just show nothing.
+      setPackagingSpec(null);
+    }
+  };
+
   useEffect(() => {
     fetchDetails();
     fetchComments();
+    fetchPackagingSpec();
   }, [artworkId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleUpload = async () => {
@@ -115,11 +129,11 @@ function ArtworkDetails({ role }) {
 
   const pendingStage = artwork.approvals?.find((a) => a.decision === 'PENDING');
   const canActOnPending = pendingStage && STAGE_ROLE_MAP[pendingStage.stage] === role;
-  const canUpload = ['marketing', 'admin', 'vendor'].includes(role) && !['APPROVED', 'RELEASED', 'ARCHIVED', 'OBSOLETE'].includes(artwork.status);
+  const canUpload = ['admin', 'vendor'].includes(role) && !['APPROVED', 'RELEASED', 'ARCHIVED', 'OBSOLETE'].includes(artwork.status);
   const canRelease = artwork.status === 'APPROVED' && ['ppc', 'admin'].includes(role);
 
   return (
-    <div className="p-6 max-w-3xl">
+    <div className="p-6 max-w-3xl h-full overflow-y-auto">
       <button onClick={() => navigate('/artwork')} className="text-sm text-gray-500 mb-3 hover:underline">
         ← Back to list
       </button>
@@ -133,6 +147,26 @@ function ArtworkDetails({ role }) {
       <p className="text-sm text-gray-500 mb-6">
         SKU: {artwork.sku_code} · Brand: {artwork.brand_name || '-'} · Customer: {artwork.customer_name || '-'}
       </p>
+
+      {packagingSpec && (
+        <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
+          <h2 className="font-medium text-gray-800 mb-1">Packaging Specification</h2>
+          <p className="text-xs text-gray-400 mb-3">Category: {packagingSpec.category}</p>
+          <table className="w-full text-sm">
+            <tbody>
+              {Object.entries(packagingSpec.spec_data).map(([label, val]) => (
+                val ? (
+                  <tr key={label} className="border-b border-gray-100">
+                    <td className="py-2 pr-4 font-medium text-gray-600 w-1/3">{label}</td>
+                    <td className="py-2 text-gray-800">{val}</td>
+                  </tr>
+                ) : null
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
 
       {/* Versions */}
       <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">

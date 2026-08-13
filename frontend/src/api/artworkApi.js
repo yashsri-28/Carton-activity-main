@@ -29,3 +29,9 @@ export const releaseArtwork = (artworkId) =>
 
 export const archiveArtwork = (artworkId) =>
   api.post(`/api/artwork/${artworkId}/archive/`);
+
+export const getArtworkComments = (artworkId) =>
+  api.get(`/api/artwork/${artworkId}/comments/`);
+
+export const addArtworkComment = (artworkId, message) =>
+  api.post(`/api/artwork/${artworkId}/comments/add/`, { message });

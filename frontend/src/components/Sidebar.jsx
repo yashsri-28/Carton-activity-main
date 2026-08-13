@@ -72,6 +72,12 @@ function Sidebar({ collapsed, role }) {
     );
   }
 
+  if (role.toLowerCase() === 'vendor') {
+    filteredMenu = fullMenu.filter(
+      item => item.name === "Dashboard" || item.name === "Artwork Management"
+    );
+  }
+
   return (
     <div className="h-full bg-white flex flex-col pt-4 pl-2 border-r border-gray-100">
 

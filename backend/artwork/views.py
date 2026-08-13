@@ -9,7 +9,8 @@ from rest_framework import status as http_status
 
 from drf_yasg.utils import swagger_auto_schema
 
-from .models import ArtworkRequest, ArtworkVersion, ArtworkApproval
+# from .models import ArtworkRequest, ArtworkVersion, ArtworkApproval
+from .models import ArtworkRequest, ArtworkVersion, ArtworkApproval, ArtworkComment
 from activity_logs.models import ActivityLog
 
 
@@ -377,3 +378,66 @@ def archive_artwork(request, artwork_id):
     _log_activity(request, artwork, "Archived", f"{artwork.artwork_id} marked obsolete.", new_value="OBSOLETE")
 
     return Response(_artwork_to_dict(artwork), status=http_status.HTTP_200_OK)
+
+
+# ------------------------------------------------------------------
+# FR006, FR028 — Vendor comments / query management
+# Same visibility rule as everywhere else: vendor only sees/posts
+# on artwork assigned to them; internal roles see everything.
+# ------------------------------------------------------------------
+
+@swagger_auto_schema(method="get", operation_summary="List Artwork Comments")
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def list_artwork_comments(request, artwork_id):
+    artwork = get_object_or_404(ArtworkRequest, artwork_id=artwork_id)
+
+    if getattr(request.user, "role", None) == "VENDOR" and artwork.assigned_vendor_id != request.user.id:
+        return Response({"error": "Not authorized to view this artwork."}, status=http_status.HTTP_403_FORBIDDEN)
+
+    comments = artwork.comments.select_related("author").order_by("created_on")
+    return Response(
+        [
+            {
+                "id": c.id,
+                "author": c.author.username if c.author else None,
+                "author_role": getattr(c.author, "role", None),
+                "message": c.message,
+                "created_on": c.created_on,
+            }
+            for c in comments
+        ],
+        status=http_status.HTTP_200_OK,
+    )
+
+
+@swagger_auto_schema(method="post", operation_summary="Add Artwork Comment")
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def add_artwork_comment(request, artwork_id):
+    artwork = get_object_or_404(ArtworkRequest, artwork_id=artwork_id)
+
+    if getattr(request.user, "role", None) == "VENDOR" and artwork.assigned_vendor_id != request.user.id:
+        return Response({"error": "Not authorized to comment on this artwork."}, status=http_status.HTTP_403_FORBIDDEN)
+
+    message = request.data.get("message", "").strip()
+    if not message:
+        return Response({"error": "Comment message cannot be empty."}, status=http_status.HTTP_400_BAD_REQUEST)
+
+    comment = ArtworkComment.objects.create(artwork=artwork, author=request.user, message=message)
+
+    _log_activity(
+        request, artwork, "Comment Added",
+        f"{request.user.username} commented on {artwork.artwork_id}.",
+    )
+
+    return Response(
+        {
+            "id": comment.id,
+            "author": comment.author.username,
+            "author_role": getattr(comment.author, "role", None),
+            "message": comment.message,
+            "created_on": comment.created_on,
+        },
+        status=http_status.HTTP_201_CREATED,
+    )

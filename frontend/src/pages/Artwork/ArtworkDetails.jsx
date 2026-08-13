@@ -6,6 +6,8 @@ import {
   uploadArtworkVersion,
   actOnArtworkApproval,
   releaseArtwork,
+  getArtworkComments,
+  addArtworkComment,
 } from '../../api/artworkApi';
 
 // Which role is allowed to act on which approval stage — mirrors
@@ -21,6 +23,11 @@ function ArtworkDetails({ role }) {
   const [comments, setComments] = useState('');
   const [busy, setBusy] = useState(false);
 
+  // FR006/FR028 — vendor collaboration comments & query thread
+  const [commentList, setCommentList] = useState([]);
+  const [newComment, setNewComment] = useState('');
+  const [commentBusy, setCommentBusy] = useState(false);
+
   const fetchDetails = async () => {
     setLoading(true);
     try {
@@ -33,7 +40,19 @@ function ArtworkDetails({ role }) {
     }
   };
 
-  useEffect(() => { fetchDetails(); }, [artworkId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const fetchComments = async () => {
+    try {
+      const res = await getArtworkComments(artworkId);
+      setCommentList(res.data);
+    } catch (err) {
+      // silent — comments are secondary, don't block the page on failure
+    }
+  };
+
+  useEffect(() => {
+    fetchDetails();
+    fetchComments();
+  }, [artworkId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleUpload = async () => {
     if (!file) { toast.error('Choose a file first.'); return; }
@@ -77,12 +96,26 @@ function ArtworkDetails({ role }) {
     }
   };
 
+  const handleAddComment = async () => {
+    if (!newComment.trim()) return;
+    setCommentBusy(true);
+    try {
+      await addArtworkComment(artworkId, newComment.trim());
+      setNewComment('');
+      fetchComments();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to post comment.');
+    } finally {
+      setCommentBusy(false);
+    }
+  };
+
   if (loading) return <div className="p-6 text-gray-400">Loading...</div>;
   if (!artwork) return <div className="p-6 text-gray-400">Artwork not found.</div>;
 
   const pendingStage = artwork.approvals?.find((a) => a.decision === 'PENDING');
   const canActOnPending = pendingStage && STAGE_ROLE_MAP[pendingStage.stage] === role;
-  const canUpload = ['marketing', 'admin'].includes(role) && !['APPROVED', 'RELEASED', 'ARCHIVED', 'OBSOLETE'].includes(artwork.status);
+  const canUpload = ['marketing', 'admin', 'vendor'].includes(role) && !['APPROVED', 'RELEASED', 'ARCHIVED', 'OBSOLETE'].includes(artwork.status);
   const canRelease = artwork.status === 'APPROVED' && ['ppc', 'admin'].includes(role);
 
   return (
@@ -112,7 +145,7 @@ function ArtworkDetails({ role }) {
                 v{v.version_number} — {v.uploaded_by} — {new Date(v.uploaded_on).toLocaleString()}
                 {v.is_locked && <span className="ml-2 text-xs text-green-700">(locked / approved)</span>}
               </span>
-              <a href={v.file_url} target="_blank" rel="noreferrer" className="text-[#003366] hover:underline">
+              <a href={`${import.meta.env.VITE_API_BASE_URL}${v.file_url}`} target="_blank" rel="noreferrer" className="text-[#003366] hover:underline">
                 View
               </a>
             </li>
@@ -168,6 +201,46 @@ function ArtworkDetails({ role }) {
             </div>
           </div>
         )}
+      </div>
+
+      {/* FR006, FR028 — Comments / Query thread (vendor <-> internal team) */}
+      <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
+        <h2 className="font-medium text-gray-800 mb-3">Comments &amp; Queries</h2>
+
+        {commentList.length === 0 && (
+          <p className="text-sm text-gray-400 mb-3">No comments yet.</p>
+        )}
+
+        <ul className="space-y-3 mb-4">
+          {commentList.map((c) => (
+            <li key={c.id} className="text-sm bg-gray-50 rounded-md p-3">
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-medium text-gray-800">
+                  {c.author} <span className="text-gray-400 font-normal">({c.author_role})</span>
+                </span>
+                <span className="text-xs text-gray-400">{new Date(c.created_on).toLocaleString()}</span>
+              </div>
+              <p className="text-gray-700">{c.message}</p>
+            </li>
+          ))}
+        </ul>
+
+        <div className="flex items-start gap-2">
+          <textarea
+            placeholder="Ask a question or leave feedback..."
+            value={newComment}
+            onChange={(e) => setNewComment(e.target.value)}
+            className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm"
+            rows={2}
+          />
+          <button
+            onClick={handleAddComment}
+            disabled={commentBusy || !newComment.trim()}
+            className="bg-[#003366] text-white px-3 py-1.5 rounded-md text-sm hover:bg-[#002a52] disabled:opacity-50"
+          >
+            Send
+          </button>
+        </div>
       </div>
 
       {canRelease && (

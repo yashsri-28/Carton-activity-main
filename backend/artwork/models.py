@@ -275,3 +275,39 @@ class ArtworkApproval(models.Model):
 
     def __str__(self):
         return f"{self.artwork.artwork_id} - {self.stage} - {self.decision}"
+    
+    
+# ============================================================
+# FR006, FR028 — Vendor Collaboration: Comments & Query Management
+# A simple threaded comment feed on each artwork — vendor can ask
+# a question, internal team can reply, or internal team can leave
+# feedback for the vendor. Same table serves both "comments" and
+# "query management" from the BRD — kept as one feed to avoid a
+# separate, more complex ticketing system.
+# ============================================================
+
+class ArtworkComment(models.Model):
+
+    artwork = models.ForeignKey(
+        ArtworkRequest,
+        on_delete=models.CASCADE,
+        related_name="comments",
+    )
+
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="artwork_comments_authored",
+    )
+
+    message = models.TextField()
+
+    created_on = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "artwork_comment"
+        ordering = ["created_on"]
+
+    def __str__(self):
+        return f"{self.artwork.artwork_id} - comment by {self.author}"    

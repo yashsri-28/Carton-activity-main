@@ -9,4 +9,6 @@ urlpatterns = [
     path("<str:artwork_id>/act-approval/", views.act_on_artwork_approval, name="act_on_artwork_approval"),
     path("<str:artwork_id>/release/", views.release_artwork, name="release_artwork"),
     path("<str:artwork_id>/archive/", views.archive_artwork, name="archive_artwork"),
+    path("<str:artwork_id>/comments/", views.list_artwork_comments, name="list_artwork_comments"),
+    path("<str:artwork_id>/comments/add/", views.add_artwork_comment, name="add_artwork_comment"),
 ]

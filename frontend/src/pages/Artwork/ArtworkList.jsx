@@ -20,7 +20,7 @@ const STATUS_COLORS = {
 function ArtworkList({ role }) {
   const [artworks, setArtworks] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({ sku_code: '', brand_name: '', status: '' });
+  const [filters, setFilters] = useState({ artwork_id: '', sku_code: '', brand_name: '', status: '' });
   const navigate = useNavigate();
 
   const fetchArtworks = async () => {
@@ -75,6 +75,12 @@ function ArtworkList({ role }) {
       </div>
 
       <div className="flex gap-3 mb-4">
+         <input
+          placeholder="Artwork ID"
+          className="border border-gray-300 rounded-md px-3 py-2 text-sm"
+          value={filters.artwork_id}
+          onChange={(e) => setFilters({ ...filters, artwork_id: e.target.value })}
+        />
         <input
           placeholder="SKU Code"
           className="border border-gray-300 rounded-md px-3 py-2 text-sm"

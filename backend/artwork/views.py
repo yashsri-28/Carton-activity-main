@@ -317,6 +317,8 @@ def list_artwork_requests(request):
         qs = qs.filter(assigned_vendor=request.user)
 
     params = request.query_params
+    if params.get("artwork_id"):
+        qs = qs.filter(artwork_id__icontains=params["artwork_id"])
     if params.get("sku_code"):
         qs = qs.filter(sku_code__icontains=params["sku_code"])
     if params.get("brand_name"):

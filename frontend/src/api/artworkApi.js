@@ -33,11 +33,17 @@ export const archiveArtwork = (artworkId) =>
 export const getArtworkComments = (artworkId) =>
   api.get(`/api/artwork/${artworkId}/comments/`);
 
-export const addArtworkComment = (artworkId, message) =>
-  api.post(`/api/artwork/${artworkId}/comments/add/`, { message });
+export const addArtworkComment = (artworkId, message, attachment = null) => {
+  const formData = new FormData();
+  if (message) formData.append('message', message);
+  if (attachment) formData.append('attachment', attachment);
+  return api.post(`/api/artwork/${artworkId}/comments/add/`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
 
-export const getVendorList = () =>
-  api.get('/api/artwork/vendors/');
+export const getProcurementList = () =>
+  api.get('/api/artwork/procurement-team/');
 
 export const createArtworkWithSpec = (payload) =>
   api.post('/api/artwork/create-with-spec/', payload);

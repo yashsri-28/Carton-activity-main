@@ -72,7 +72,7 @@ function Sidebar({ collapsed, role }) {
     );
   }
 
-  if (role.toLowerCase() === 'vendor') {
+  if (role.toLowerCase() === 'procurement') {
     filteredMenu = fullMenu.filter(
       item => item.name === "Artwork Management"
     );

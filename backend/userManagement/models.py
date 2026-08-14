@@ -29,6 +29,7 @@ class User(AbstractUser):
     TESTING = "TESTING"
     LAB = "LAB"
     VENDOR = "VENDOR"
+    PROCUREMENT = "PROCUREMENT"
 
     # --------------------------------------------------
     # Role Choices
@@ -47,6 +48,7 @@ class User(AbstractUser):
         (TESTING, "Testing"),
         (LAB, "LAB"),
         (VENDOR, "Vendor"),
+        (PROCUREMENT, "Procurement"),
 
 
     ]

@@ -301,13 +301,18 @@ class ArtworkComment(models.Model):
         related_name="artwork_comments_authored",
     )
 
-    message = models.TextField()
+    message = models.TextField(blank=True, default="")
+
+        # Optional reference attachment (customer requirement doc, revised
+        # spec, physical proof photo, etc.) — any role can attach one along
+        # with their remark.
+    attachment = models.FileField(upload_to="artwork_attachments/%Y/%m/", null=True, blank=True)
 
     created_on = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = "artwork_comment"
-        ordering = ["created_on"]
+            db_table = "artwork_comment"
+            ordering = ["created_on"]
 
     def __str__(self):
         return f"{self.artwork.artwork_id} - comment by {self.author}"   

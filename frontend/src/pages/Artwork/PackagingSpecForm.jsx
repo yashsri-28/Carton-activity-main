@@ -30,21 +30,21 @@
 //   return [...new Set(choices)];
 // }
 
-// // Renders one Excel field as a table row: Label cell | Input cell.
-// // Every cell has a full border on all sides — like a real spreadsheet /
-// // SQL result grid — and the input itself is borderless/flat so it feels
-// // like you're typing directly into the cell.
-// function SpecFieldRow({ field, value, onChange }) {
+// // One field = bold label above + its own clean rounded-border input box
+// // below (no gray header bar, no shared table cell borders). This matches
+// // the "Activity Name / Customer Name" reference look — label and input
+// // clearly separated with real spacing instead of touching cell borders.
+// function SpecField({ field, value, onChange }) {
 //   const options = flattenOptions(field.options || []);
 //   const hasOptions = options.length > 0;
 //   const datalistId = `dl-${field.label.replace(/[^a-zA-Z0-9]/g, '')}`;
 //   const [showCustomHint, setShowCustomHint] = useState(false);
 
 //   const placeholder = showCustomHint
-//     ? 'Type your own value here...'
+//     ? 'Type your own value...'
 //     : hasOptions
-//       ? `e.g. ${options.slice(0, 3).join(', ')}${options.length > 3 ? '...' : ''}`
-//       : `Enter ${field.label.toLowerCase()}`;
+//       ? `e.g. ${options.slice(0, 2).join(', ')}${options.length > 2 ? '...' : ''}`
+//       : `Enter value`;
 
 //   const handleChange = (e) => {
 //     const raw = e.target.value;
@@ -58,34 +58,32 @@
 //   };
 
 //   return (
-//     <tr className="hover:bg-blue-50">
-//       <td className="border border-gray-300 px-3 py-2 font-medium text-gray-700 bg-gray-50 align-top w-1/3">
+//     <div>
+//       <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1.5 truncate" title={field.label}>
 //         {field.label}
-//       </td>
-//       <td className="border border-gray-300 p-0 align-top">
-//         <input
-//           type="text"
-//           list={hasOptions ? datalistId : undefined}
-//           value={value || ''}
-//           onChange={handleChange}
-//           placeholder={placeholder}
-//           autoFocus={showCustomHint}
-//           className="w-full px-3 py-2 text-sm border-0 outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400 bg-transparent"
-//         />
-//         {showCustomHint && (
-//           <p className="text-xs text-amber-600 px-3 pb-1">
-//             "Other" selected — please type your specific value above.
-//           </p>
-//         )}
-//         {hasOptions && (
-//           <datalist id={datalistId}>
-//             {options.map((opt, i) => (
-//               <option key={i} value={opt} />
-//             ))}
-//           </datalist>
-//         )}
-//       </td>
-//     </tr>
+//       </label>
+//       <input
+//         type="text"
+//         list={hasOptions ? datalistId : undefined}
+//         value={value || ''}
+//         onChange={handleChange}
+//         placeholder={placeholder}
+//         autoFocus={showCustomHint}
+//         className="w-full px-3 py-2 text-sm text-gray-800 placeholder-gray-400 bg-white border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-colors"
+//       />
+//       {showCustomHint && (
+//         <p className="text-xs text-amber-600 mt-1">
+//           "Other" — type your value above.
+//         </p>
+//       )}
+//       {hasOptions && (
+//         <datalist id={datalistId}>
+//           {options.map((opt, i) => (
+//             <option key={i} value={opt} />
+//           ))}
+//         </datalist>
+//       )}
+//     </div>
 //   );
 // }
 
@@ -155,7 +153,7 @@
 //   if (currentGroup.fields.length > 0) grouped.push(currentGroup);
 
 //   return (
-//     <div className="p-6 max-w-3xl h-full overflow-y-auto thin-scrollbar">
+//     <div className="p-6 w-full h-full overflow-y-auto thin-scrollbar">
 //       <button onClick={() => navigate('/artwork')} className="text-sm text-gray-500 mb-3 hover:underline">
 //         ← Back to list
 //       </button>
@@ -163,7 +161,7 @@
 //       <h1 className="text-xl font-semibold text-gray-800 mb-1">New Packaging Specification Request</h1>
 //       <p className="text-sm text-gray-500 mb-4">
 //         Fields shown below match the TRIMS Specification sheet exactly, based on the category chosen.
-//         Fields with a list icon support quick-select — start typing to see suggestions, or type your own value.
+//         Start typing in any field to see suggestions, or type your own value.
 //       </p>
 
 //       <div className="bg-white border border-gray-200 rounded-lg p-6 mb-5">
@@ -183,34 +181,24 @@
 //       {category && (
 //         <form onSubmit={handleSubmit}>
 //           {grouped.map((group, gi) => (
-//             <div key={gi} className="mb-5">
+//             <div key={gi} className="mb-5 border border-gray-300 rounded overflow-hidden">
 //               {group.section && (
-//                 <div className="bg-[#003366] text-white px-3 py-1.5 font-semibold text-xs uppercase tracking-wide border border-b-0 border-gray-300">
+//                 <div className="bg-[#003366] text-white px-3 py-1.5 font-semibold text-xs uppercase tracking-wide">
 //                   {group.section}
 //                 </div>
 //               )}
-//               <table className="w-full text-sm border-collapse">
-//                 <thead>
-//                   <tr>
-//                     <th className="border border-gray-300 bg-gray-100 text-left px-3 py-2 font-semibold text-gray-700 w-1/3">
-//                       Field
-//                     </th>
-//                     <th className="border border-gray-300 bg-gray-100 text-left px-3 py-2 font-semibold text-gray-700">
-//                       Value
-//                     </th>
-//                   </tr>
-//                 </thead>
-//                 <tbody>
-//                   {group.fields.map((f, fi) => (
-//                     <SpecFieldRow
-//                       key={fi}
-//                       field={f}
-//                       value={specValues[f.label]}
-//                       onChange={handleFieldChange}
-//                     />
-//                   ))}
-//                 </tbody>
-//               </table>
+//               {/* Clean spaced-out grid — bold label + own bordered input box
+//                   per field, real gaps instead of shared table-cell borders. */}
+//               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-5 p-5">
+//                 {group.fields.map((f, fi) => (
+//                   <SpecField
+//                     key={fi}
+//                     field={f}
+//                     value={specValues[f.label]}
+//                     onChange={handleFieldChange}
+//                   />
+//                 ))}
+//               </div>
 //             </div>
 //           ))}
 
@@ -274,6 +262,7 @@
 // export default PackagingSpecForm;
 
 
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
@@ -292,6 +281,12 @@ const CATEGORY_LABELS = {
   PDQ: 'PDQ',
 };
 
+// These 4 fields are identical across every category in the excel sheet
+// (confirmed from the source data), so they are shown once at the top,
+// BEFORE the category picker, and excluded from the category-specific
+// field list below so they never appear twice.
+const COMMON_FIELD_LABELS = ['PRODUCT', 'BUYER NAME', 'PROGRAM', 'COUNTRY'];
+
 // Splits raw excel option strings (e.g. "COTTON / POLYESTER/RECYCLE POLYESTER")
 // into a clean, deduplicated list of individual choices for the dropdown/suggestions.
 function flattenOptions(rawOptions) {
@@ -306,21 +301,18 @@ function flattenOptions(rawOptions) {
   return [...new Set(choices)];
 }
 
-// Renders one Excel field as a table CELL (column) instead of a row now.
-// Same exact placeholder / "other" hint / datalist logic as before —
-// only the wrapper element changed from <tr> to <td> since fields are
-// now columns, not rows.
-function SpecFieldCell({ field, value, onChange }) {
+// One field = bold label above + its own clean rounded-border input box below.
+function SpecField({ field, value, onChange }) {
   const options = flattenOptions(field.options || []);
   const hasOptions = options.length > 0;
   const datalistId = `dl-${field.label.replace(/[^a-zA-Z0-9]/g, '')}`;
   const [showCustomHint, setShowCustomHint] = useState(false);
 
   const placeholder = showCustomHint
-    ? 'Type your own value here...'
+    ? 'Type your own value...'
     : hasOptions
-      ? `e.g. ${options.slice(0, 3).join(', ')}${options.length > 3 ? '...' : ''}`
-      : `Enter ${field.label.toLowerCase()}`;
+      ? `e.g. ${options.slice(0, 2).join(', ')}${options.length > 2 ? '...' : ''}`
+      : `Enter value`;
 
   const handleChange = (e) => {
     const raw = e.target.value;
@@ -334,7 +326,10 @@ function SpecFieldCell({ field, value, onChange }) {
   };
 
   return (
-    <td className="border border-gray-300 p-0 align-top min-w-[180px]">
+    <div>
+      <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1.5 truncate" title={field.label}>
+        {field.label}
+      </label>
       <input
         type="text"
         list={hasOptions ? datalistId : undefined}
@@ -342,11 +337,11 @@ function SpecFieldCell({ field, value, onChange }) {
         onChange={handleChange}
         placeholder={placeholder}
         autoFocus={showCustomHint}
-        className="w-full px-3 py-2 text-sm border-0 outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400 bg-transparent"
+        className="w-full px-3 py-2 text-sm text-gray-800 placeholder-gray-400 bg-white border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-colors"
       />
       {showCustomHint && (
-        <p className="text-xs text-amber-600 px-3 pb-1 whitespace-nowrap">
-          "Other" selected — please type your specific value above.
+        <p className="text-xs text-amber-600 mt-1">
+          "Other" — type your value above.
         </p>
       )}
       {hasOptions && (
@@ -356,7 +351,7 @@ function SpecFieldCell({ field, value, onChange }) {
           ))}
         </datalist>
       )}
-    </td>
+    </div>
   );
 }
 
@@ -379,7 +374,15 @@ function PackagingSpecForm() {
 
   const handleCategoryChange = (e) => {
     setCategory(e.target.value);
-    setSpecValues({});
+    // Keep the 4 common field values (PRODUCT/BUYER NAME/PROGRAM/COUNTRY)
+    // when switching category — only category-specific answers reset.
+    setSpecValues((prev) => {
+      const kept = {};
+      COMMON_FIELD_LABELS.forEach((label) => {
+        if (prev[label]) kept[label] = prev[label];
+      });
+      return kept;
+    });
   };
 
   const handleFieldChange = (label, value) => {
@@ -412,11 +415,21 @@ function PackagingSpecForm() {
     }
   };
 
-  const fields = category ? specConfig[category]?.fields || [] : [];
+  // Common fields (from whichever category's config — they're identical
+  // everywhere, so PVC_BAG's copy is used as the reference definition).
+  const commonFields = (specConfig.PVC_BAG?.fields || []).filter((f) =>
+    COMMON_FIELD_LABELS.includes(f.label)
+  );
+
+  // Category-specific fields = everything EXCEPT the 4 common ones above,
+  // so nothing is ever duplicated on screen.
+  const categoryFields = category
+    ? (specConfig[category]?.fields || []).filter((f) => !COMMON_FIELD_LABELS.includes(f.label))
+    : [];
 
   const grouped = [];
   let currentGroup = { section: null, fields: [] };
-  fields.forEach((f) => {
+  categoryFields.forEach((f) => {
     if (f.section !== currentGroup.section) {
       if (currentGroup.fields.length > 0) grouped.push(currentGroup);
       currentGroup = { section: f.section, fields: [] };
@@ -426,17 +439,31 @@ function PackagingSpecForm() {
   if (currentGroup.fields.length > 0) grouped.push(currentGroup);
 
   return (
-    <div className="p-6 max-w-5xl h-full overflow-y-auto thin-scrollbar">
+    <div className="p-6 w-full h-full overflow-y-auto thin-scrollbar">
       <button onClick={() => navigate('/artwork')} className="text-sm text-gray-500 mb-3 hover:underline">
         ← Back to list
       </button>
 
       <h1 className="text-xl font-semibold text-gray-800 mb-1">New Packaging Specification Request</h1>
       <p className="text-sm text-gray-500 mb-4">
-        Fields shown below match the TRIMS Specification sheet exactly, based on the category chosen.
-        Fields with a list icon support quick-select — start typing to see suggestions, or type your own value.
+        Fill in the basic details first, then choose a category to see its specific fields.
       </p>
 
+      {/* Step 1 — the 4 fields common to every category, always shown first */}
+      <div className="bg-white border border-gray-200 rounded-lg p-6 mb-5">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-5">
+          {commonFields.map((f, fi) => (
+            <SpecField
+              key={fi}
+              field={f}
+              value={specValues[f.label]}
+              onChange={handleFieldChange}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Step 2 — category picker, shown AFTER the common fields */}
       <div className="bg-white border border-gray-200 rounded-lg p-6 mb-5">
         <label className="block text-sm font-medium text-gray-700 mb-1">Product Category *</label>
         <select
@@ -451,53 +478,28 @@ function PackagingSpecForm() {
         </select>
       </div>
 
+      {/* Step 3 — category-specific fields, shown once a category is picked */}
       {category && (
         <form onSubmit={handleSubmit}>
-          {/* ===== horizontal grid: fields as COLUMNS, one input ROW (was vertical before) ===== */}
-          <div className="mb-5 border border-gray-300 rounded overflow-auto max-h-[60vh]">
-            <table className="border-collapse text-sm">
-              <thead>
-                <tr>
-                  {grouped.map((group, gi) => (
-                    <th
-                      key={gi}
-                      colSpan={group.fields.length}
-                      className="sticky top-0 z-20 border border-gray-300 bg-[#003366] text-white px-3 py-1.5 text-xs uppercase tracking-wide font-semibold"
-                    >
-                      {group.section || '—'}
-                    </th>
-                  ))}
-                </tr>
-                <tr>
-                  {grouped.map((group) =>
-                    group.fields.map((f, fi) => (
-                      <th
-                        key={fi}
-                        className="sticky top-[29px] z-10 border border-gray-300 bg-gray-100 text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap min-w-[180px]"
-                      >
-                        {f.label}
-                      </th>
-                    ))
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="hover:bg-blue-50">
-                  {grouped.map((group) =>
-                    group.fields.map((f, fi) => (
-                      <SpecFieldCell
-                        key={fi}
-                        field={f}
-                        value={specValues[f.label]}
-                        onChange={handleFieldChange}
-                      />
-                    ))
-                  )}
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          {/* ===== end grid ===== */}
+          {grouped.map((group, gi) => (
+            <div key={gi} className="mb-5 border border-gray-300 rounded overflow-hidden">
+              {group.section && (
+                <div className="bg-[#003366] text-white px-3 py-1.5 font-semibold text-xs uppercase tracking-wide">
+                  {group.section}
+                </div>
+              )}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-5 p-5">
+                {group.fields.map((f, fi) => (
+                  <SpecField
+                    key={fi}
+                    field={f}
+                    value={specValues[f.label]}
+                    onChange={handleFieldChange}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
 
           <div className="bg-white border border-gray-200 rounded-lg p-6 mb-5">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">

@@ -306,7 +306,10 @@ import {
 // Which role is allowed to act on which approval stage — mirrors
 // ArtworkApproval.STAGE_ROLE_MAP on the backend.
 const STAGE_ROLE_MAP = { MARKETING: 'marketing', PPC: 'ppc', TQM: 'ttqm', CUSTOMER: 'admin' };
-
+const STATUS_LABELS = {
+  VENDOR_UPLOAD_PENDING: 'PROCUREMENT UPLOAD PENDING',
+  VENDOR_UPLOADED: 'PROCUREMENT UPLOADED',
+};
 function ArtworkDetails({ role }) {
   const { artworkId } = useParams();
   const navigate = useNavigate();
@@ -423,7 +426,14 @@ function ArtworkDetails({ role }) {
   if (loading) return <div className="p-6 text-gray-400">Loading...</div>;
   if (!artwork) return <div className="p-6 text-gray-400">Artwork not found.</div>;
 
-  const pendingStage = artwork.approvals?.find((a) => a.decision === 'PENDING');
+// Approve/Reject buttons should ONLY appear while the artwork is
+  // actually in an active review status — never after a rejection
+  // (even though PPC/TQM's rows technically still say "PENDING",
+  // the cycle already stopped at the stage that rejected).
+  const ACTIVE_REVIEW_STATUSES = ['MARKETING_REVIEW', 'PPC_REVIEW', 'TQM_REVIEW', 'CUSTOMER_REVIEW'];
+  const pendingStage = ACTIVE_REVIEW_STATUSES.includes(artwork.status)
+    ? artwork.approvals?.find((a) => a.decision === 'PENDING')
+    : null;
   const canActOnPending = pendingStage && STAGE_ROLE_MAP[pendingStage.stage] === role;
   const canUpload = ['procurement', 'admin'].includes(role) && !['APPROVED', 'RELEASED', 'ARCHIVED', 'OBSOLETE'].includes(artwork.status);
   const canRelease = artwork.status === 'APPROVED' && ['ppc', 'admin'].includes(role);
@@ -437,7 +447,7 @@ function ArtworkDetails({ role }) {
       <div className="flex items-center justify-between mb-1">
         <h1 className="text-xl font-semibold text-gray-800">{artwork.artwork_id} — {artwork.title}</h1>
         <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-          {artwork.status.replace(/_/g, ' ')}
+         {STATUS_LABELS[artwork.status] || artwork.status.replace(/_/g, ' ')}
         </span>
       </div>
       <p className="text-sm text-gray-500 mb-6">
@@ -493,26 +503,38 @@ function ArtworkDetails({ role }) {
         )}
       </div>
 
-      {/* Current Approval Workflow (active version only) */}
+  
+        {/* Current Approval Workflow (active version only) */}
       <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
         <h2 className="font-medium text-gray-800 mb-3">Approval Workflow</h2>
         <ul className="space-y-2">
-          {artwork.approvals.map((a) => (
-            <li key={a.stage} className="text-sm border-b border-gray-100 pb-2">
-              <div className="flex items-center justify-between">
-                <span>{a.stage}</span>
-                <span className={
-                  a.decision === 'APPROVED' ? 'text-green-700' :
-                  a.decision === 'REJECTED' ? 'text-red-700' : 'text-gray-400'
-                }>
-                  {a.decision}{a.acted_by ? ` — ${a.acted_by}` : ''}
-                </span>
-              </div>
-              {a.comments && (
-                <p className="text-xs text-gray-500 mt-1">"{a.comments}"</p>
-              )}
-            </li>
-          ))}
+          {(() => {
+            // If a stage was rejected, every LATER stage never actually
+            // got reviewed — show them as "Not Reached" instead of the
+            // misleading "PENDING" (which implies still-active).
+            const rejectedStage = artwork.approvals.find((a) => a.decision === 'REJECTED');
+            return artwork.approvals.map((a) => {
+              const isSkipped = rejectedStage && a.sequence > rejectedStage.sequence && a.decision === 'PENDING';
+              const displayDecision = isSkipped ? 'NOT REACHED' : a.decision;
+              return (
+                <li key={a.stage} className="text-sm border-b border-gray-100 pb-2">
+                  <div className="flex items-center justify-between">
+                    <span className={isSkipped ? 'text-gray-400' : ''}>{a.stage}</span>
+                    <span className={
+                      a.decision === 'APPROVED' ? 'text-green-700' :
+                      a.decision === 'REJECTED' ? 'text-red-700' :
+                      isSkipped ? 'text-gray-300' : 'text-gray-400'
+                    }>
+                      {displayDecision}{a.acted_by ? ` — ${a.acted_by}` : ''}
+                    </span>
+                  </div>
+                  {a.comments && (
+                    <p className="text-xs text-gray-500 mt-1">"{a.comments}"</p>
+                  )}
+                </li>
+              );
+            });
+          })()}
         </ul>
 
         {canActOnPending && (

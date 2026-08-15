@@ -38,8 +38,8 @@ class ArtworkRequest(models.Model):
 
     STATUS_CHOICES = (
         ("DRAFT", "Draft"),
-        ("VENDOR_UPLOAD_PENDING", "Vendor Upload Pending"),
-        ("VENDOR_UPLOADED", "Vendor Uploaded"),
+        ("VENDOR_UPLOAD_PENDING", "PROCUREMENT Upload Pending"),
+        ("VENDOR_UPLOADED", "PROCUREMENT Uploaded"),
         ("AI_VALIDATION_PENDING", "AI Validation Pending"),
         ("AI_VALIDATION_FAILED", "AI Validation Failed"),
         ("MARKETING_REVIEW", "Marketing Review"),

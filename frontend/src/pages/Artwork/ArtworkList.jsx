@@ -2,7 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { listArtworkRequests } from '../../api/artworkApi';
-
+const STATUS_LABELS = {
+  VENDOR_UPLOAD_PENDING: 'PROCUREMENT UPLOAD PENDING',
+  VENDOR_UPLOADED: 'PROCUREMENT UPLOADED',
+};
 const STATUS_COLORS = {
   DRAFT: 'bg-gray-100 text-gray-700',
   VENDOR_UPLOAD_PENDING: 'bg-yellow-100 text-yellow-800',
@@ -143,7 +146,7 @@ function ArtworkList({ role }) {
                 <td className="px-4 py-3">{a.brand_name || '-'}</td>
                 <td className="px-4 py-3">
                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[a.status] || 'bg-gray-100'}`}>
-                    {a.status.replace(/_/g, ' ')}
+                   {STATUS_LABELS[a.status] || a.status.replace(/_/g, ' ')}
                   </span>
                 </td>
                 <td className="px-4 py-3 text-gray-500">{new Date(a.created_on).toLocaleDateString()}</td>

@@ -753,12 +753,22 @@ def upload_artwork_version(request, artwork_id):
 def act_on_artwork_approval(request, artwork_id):
     artwork = get_object_or_404(ArtworkRequest.objects.select_for_update(), artwork_id=artwork_id)
 
+    # Guard: approval actions are only valid while the artwork is
+    # actively in a review stage. Once ANY stage rejects (or the whole
+    # cycle finishes), no other stage can act — even if its row was
+    # pre-created as PENDING — until a fresh version is uploaded.
+    ACTIVE_REVIEW_STATUSES = ["MARKETING_REVIEW", "PPC_REVIEW", "TQM_REVIEW", "CUSTOMER_REVIEW"]
+    if artwork.status not in ACTIVE_REVIEW_STATUSES:
+        return Response(
+            {"error": f"Artwork is '{artwork.status}' — no approval action can be taken right now."},
+            status=http_status.HTTP_400_BAD_REQUEST,
+        )
+
     decision = request.data.get("decision")
     comments = request.data.get("comments", "")
 
     if decision not in ["APPROVED", "REJECTED"]:
         return Response({"error": "decision must be APPROVED or REJECTED."}, status=http_status.HTTP_400_BAD_REQUEST)
-
     current_version = artwork.versions.filter(is_active_version=True).first()
     pending = artwork.approvals.filter(decision="PENDING", version=current_version).order_by("sequence").first()
     if not pending:

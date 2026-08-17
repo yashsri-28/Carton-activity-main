@@ -11,6 +11,7 @@ import {
   getPackagingSpec,
   getProcurementList,
   assignProcurement,
+  exportArtworkExcel,
 } from '../../api/artworkApi';
 
 // Which role is allowed to act on which approval stage — mirrors
@@ -159,6 +160,22 @@ useEffect(() => {
     }
   };
 
+  const handleExportExcel = async () => {
+    try {
+      const res = await exportArtworkExcel(artworkId);
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${artwork.artwork_id}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error('Failed to export Excel file.');
+    }
+  };
+
   if (loading) return <div className="p-6 text-gray-400">Loading...</div>;
   if (!artwork) return <div className="p-6 text-gray-400">Artwork not found.</div>;
 
@@ -182,11 +199,19 @@ useEffect(() => {
         ← Back to list
       </button>
 
-      <div className="flex items-center justify-between mb-1">
+     <div className="flex items-center justify-between mb-1">
         <h1 className="text-xl font-semibold text-gray-800">{artwork.artwork_id} — {artwork.title}</h1>
-        <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-          {STATUS_LABELS[artwork.status] || artwork.status.replace(/_/g, ' ')}
-        </span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExportExcel}
+            className="text-xs font-medium border border-gray-300 rounded-md px-3 py-1.5 hover:bg-gray-50 flex items-center gap-1"
+          >
+            ⬇ Download Excel
+          </button>
+          <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+            {STATUS_LABELS[artwork.status] || artwork.status.replace(/_/g, ' ')}
+          </span>
+        </div>
       </div>
       <p className="text-sm text-gray-500 mb-6">
         SKU: {artwork.sku_code} · Brand: {artwork.brand_name || '-'} · Customer: {artwork.customer_name || '-'}

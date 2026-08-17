@@ -1103,3 +1103,102 @@ def assign_procurement(request, artwork_id):
     )
 
     return Response(_artwork_to_dict(artwork, request=request), status=http_status.HTTP_200_OK) 
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def export_artwork_excel(request, artwork_id):
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+    from django.http import HttpResponse
+
+    artwork = get_object_or_404(
+        ArtworkRequest.objects.prefetch_related("versions", "approvals", "comments"),
+        artwork_id=artwork_id,
+    )
+
+    if getattr(request.user, "role", None) == "PROCUREMENT" and artwork.assigned_vendor_id != request.user.id:
+        return Response({"error": "Not authorized."}, status=http_status.HTTP_403_FORBIDDEN)
+
+    wb = Workbook()
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="003366", end_color="003366", fill_type="solid")
+
+    def style_header(ws):
+        for cell in ws[1]:
+            cell.font = header_font
+            cell.fill = header_fill
+
+    # Sheet 1 — Overview
+    ws = wb.active
+    ws.title = "Overview"
+    ws.append(["Field", "Value"])
+    style_header(ws)
+    overview_rows = [
+        ("Artwork ID", artwork.artwork_id),
+        ("Title", artwork.title),
+        ("SKU Code", artwork.sku_code),
+        ("Brand", artwork.brand_name or ""),
+        ("Customer", artwork.customer_name or ""),
+        ("Material Code", artwork.material_code or ""),
+        ("PO Number", artwork.po_number or ""),
+        ("Status", artwork.status),
+        ("Assigned Procurement", artwork.assigned_vendor.username if artwork.assigned_vendor else ""),
+        ("Created By", artwork.created_by.username if artwork.created_by else ""),
+        ("Created On", artwork.created_on.strftime("%Y-%m-%d %H:%M") if artwork.created_on else ""),
+    ]
+    for row in overview_rows:
+        ws.append(row)
+    ws.column_dimensions["A"].width = 22
+    ws.column_dimensions["B"].width = 45
+
+    # Sheet 2 — Packaging Specification (if this artwork has one)
+    spec = getattr(artwork, "packaging_spec", None)
+    if spec:
+        ws2 = wb.create_sheet("Packaging Specification")
+        ws2.append(["Field", "Value"])
+        style_header(ws2)
+        ws2.append(["Category", spec.category])
+        for label, val in spec.spec_data.items():
+            if val:
+                ws2.append([label, val])
+        ws2.column_dimensions["A"].width = 32
+        ws2.column_dimensions["B"].width = 40
+
+    # Sheet 3 — Full Approval History (across all versions)
+    ws3 = wb.create_sheet("Approval History")
+    ws3.append(["Version", "Stage", "Decision", "Acted By", "Acted On", "Comments"])
+    style_header(ws3)
+    for a in artwork.approvals.select_related("acted_by", "version").order_by("version__version_number", "sequence"):
+        ws3.append([
+            a.version.version_number,
+            a.stage,
+            a.decision,
+            a.acted_by.username if a.acted_by else "",
+            a.acted_on.strftime("%Y-%m-%d %H:%M") if a.acted_on else "",
+            a.comments or "",
+        ])
+    for col, width in zip("ABCDEF", [10, 12, 12, 15, 18, 45]):
+        ws3.column_dimensions[col].width = width
+
+    # Sheet 4 — Comments & Attachments
+    ws4 = wb.create_sheet("Comments")
+    ws4.append(["Author", "Role", "Version", "Message", "Has Attachment", "Posted On"])
+    style_header(ws4)
+    for c in artwork.comments.select_related("author", "version").order_by("created_on"):
+        ws4.append([
+            c.author.username if c.author else "",
+            getattr(c.author, "role", "") if c.author else "",
+            c.version.version_number if c.version else "",
+            c.message,
+            "Yes" if c.attachment else "No",
+            c.created_on.strftime("%Y-%m-%d %H:%M"),
+        ])
+    for col, width in zip("ABCDEF", [15, 14, 10, 45, 15, 18]):
+        ws4.column_dimensions[col].width = width
+
+    response = HttpResponse(
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    response["Content-Disposition"] = f"attachment; filename={artwork.artwork_id}.xlsx"
+    wb.save(response)
+    return response

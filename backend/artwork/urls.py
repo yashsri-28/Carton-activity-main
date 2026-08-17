@@ -15,4 +15,5 @@ urlpatterns = [
     path("<str:artwork_id>/comments/add/", views.add_artwork_comment, name="add_artwork_comment"),
     path("<str:artwork_id>/spec/", views.get_packaging_spec, name="get_packaging_spec"),
     path("<str:artwork_id>/assign-procurement/", views.assign_procurement, name="assign_procurement"),
-]
+    path("<str:artwork_id>/export-excel/", views.export_artwork_excel, name="export_artwork_excel"),
+    ]

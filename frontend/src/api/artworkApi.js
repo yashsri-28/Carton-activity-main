@@ -53,3 +53,7 @@ export const getPackagingSpec = (artworkId) =>
 
 export const assignProcurement = (artworkId, vendorId) =>
   api.post(`/api/artwork/${artworkId}/assign-procurement/`, { vendor_id: vendorId });
+
+
+export const exportArtworkExcel = (artworkId) =>
+  api.get(`/api/artwork/${artworkId}/export-excel/`, { responseType: 'blob' });

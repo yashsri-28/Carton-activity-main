@@ -29,12 +29,7 @@ function CartonMainPPC() {
           const [day, month, year] = d.split('-');
           return new Date(`${year}-${month}-${day}`).getTime();
         };
-
-        return (
-          parse() 
-        //   ||
-        //   b.id - a.id
-        );
+parse(b.created_on) - parse(a.created_on);
       });
 
       setData(sorted);

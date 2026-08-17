@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Form from './Form';
 import Table from './Table';
@@ -13,7 +13,7 @@ function FormMain({ onBack }) {
     productCategory: "",
     companyName: '',
     customerName: '',
-    customerType: 'old',
+    customerType: 'old', // Add this for old/new toggle
     programName: '',
     customerProtocol: '',
     newOrShifted: '',
@@ -37,8 +37,7 @@ function FormMain({ onBack }) {
     separatorRequired: '',
     ribbonPacking: '',
     bellyBandPacking: '',
-    remark: '',
-    pcs_per_set: '',
+    
     // ===== BEDSHEET FIELDS =====
     fabric: '',
     folding: '',
@@ -59,7 +58,7 @@ function FormMain({ onBack }) {
     PolyFoldCondition: '',
     filled_product_gsm: '',
     Bagtype: '',
-
+    
     // ===== TERRY TOWEL FIELDS =====
     towelSizes: '',
     requiredPcsCartonSize: '',
@@ -69,7 +68,7 @@ function FormMain({ onBack }) {
     terryFoldingDetails: '',
     terryPcsPerPolybag: '',
     terrySpecialCartonDetails: '',
-
+    
     // ===== BATH ROBE FIELDS =====
     originalBathRobe: '',
     bathRobeSizes: '',
@@ -80,30 +79,6 @@ function FormMain({ onBack }) {
     bathRobePcsPerCarton: '',
     bathRobePolybagType: '',
     bathRobePolybagSizeCarton: '',
-
-    // ==================== NEW: GUSSET MODE & FIELDS ====================
-    formMode: "bedsheet",           // ← default is Standard Bedsheet
-    gussetWeave: '',
-    gussetProductGroup: '',
-    gussetSize: '',
-    gussetOtherSize: '',
-    gussetValueAdditionFlatSheet: '',
-    gussetValueAdditionDuvetCover: '',
-    gussetValueAdditionFittedSheet: '',
-    gussetValueAdditionPillowcase: '',
-    gussetFoldSizeInInches: '',
-    cardboardRequired: '',
-    cardboardFoldType: '',
-    cardboardPly: '',
-    cardboardFoldOnSide: '',
-    polybagRequired: '',
-    polybagMaterialType: '',
-    polybagOpeningType: '',
-    polybagOpeningOnSide: '',
-    polybagInlayOrBellyBand: '',
-    polybagType: '',
-    referenceProgram: '',
-    comments: '',
   });
 
   const [companies, setCompanies] = useState([]);
@@ -202,44 +177,6 @@ function FormMain({ onBack }) {
     }
   }, []);
 
-  // ==================== DYNAMIC GSM / TC LABEL ====================
-  const gsmLabel = useMemo(() => {
-    return formData.productCategory === 'Bedsheet' ? 'TC' : 'GSM';
-  }, [formData.productCategory]);
-
-  // ==================== DYNAMIC HEADERS ====================
-  const programHeaders = useMemo(() => [
-    { label: "Program", key: "program" },
-    { label: "Style", key: "style", hasAddBtn: true },
-    { label: "PC/Set", key: "pcs_per_set" },
-    { label: "W-In", key: "w_in" },
-    { label: "W-Cm", key: "w_cm" },
-    { label: "L-In", key: "l_in" },
-    { label: "L-Cm", key: "l_cm" },
-    { label: "Wt/Unit(gm)", key: "wt_unit" },
-    { label: gsmLabel, key: "gsm" },           // ← label changes, key stays "gsm"
-    { label: "Unit/Carton", key: "unit_carton" },
-    { label: "Inner Pack Unit Quantity", key: "inner_pack" },
-    { label: "Fold", key: "fold", tall: true },
-    { label: "Remark", key: "remark", tall: true },
-    { label: "", key: "actions" }
-  ], [gsmLabel]);
-
-  const sampleHeaders = useMemo(() => [
-    { label: "Sample", key: "col1", hasAddBtn: true },
-    { label: "Size", key: "col2" },
-    { label: "Program", key: "col3" },
-    { label: "Quality", key: "col4" },
-    { label: "LBS/DZ", key: "col5" },
-    { label: gsmLabel, key: "col6" },          // ← label changes, key stays "col6"
-    { label: "Shade", key: "col7" },
-    { label: "W-In", key: "col8" },
-    { label: "W-Cm", key: "col9" },
-    { label: "L-In", key: "col10" },
-    { label: "L-Cm", key: "col11" },
-    { label: "", key: "actions" }
-  ], [gsmLabel]);
-
   // ==================== HANDLERS ====================
   const handleInputChange = useCallback((e) => {
     const { name, value } = e.target;
@@ -269,13 +206,10 @@ function FormMain({ onBack }) {
   const createEmptyGroup = useCallback(() => ({
     program: formData.programName || '',
     unit_carton: '',
-    pcs_per_set: '',
     inner_pack: '',
     fold: '',
-    remark: '',
     variants: [{
       style: '',
-      pc_set: '',
       w_in: '',
       w_cm: '',
       l_in: '',
@@ -284,6 +218,36 @@ function FormMain({ onBack }) {
       gsm: '',
     }]
   }), [formData.programName]);
+
+  const programHeaders = [
+    { label: "Program", key: "program" },
+    { label: "Style", key: "style", hasAddBtn: true },
+    { label: "W-In", key: "w_in" },
+    { label: "W-Cm", key: "w_cm" },
+    { label: "L-In", key: "l_in" },
+    { label: "L-Cm", key: "l_cm" },
+    { label: "Wt/Unit", key: "wt_unit" },
+    { label: "GSM", key: "gsm" },
+    { label: "Unit/Carton", key: "unit_carton" },
+    { label: "Inner Pack Unit Quantity", key: "inner_pack" },
+    { label: "Fold", key: "fold" },
+    { label: "", key: "actions" }
+  ];
+
+  const sampleHeaders = [
+    { label: "Sample", key: "col1", hasAddBtn: true },
+    { label: "Size", key: "col2" },
+    { label: "Program", key: "col3" },
+    { label: "Quality", key: "col4" },
+    { label: "LBS/DZ", key: "col5" },
+    { label: "GSM", key: "col6" },
+    { label: "Shade", key: "col7" },
+    { label: "W-In", key: "col8" },
+    { label: "W-Cm", key: "col9" },
+    { label: "L-In", key: "col10" },
+    { label: "L-Cm", key: "col11" },
+    { label: "", key: "actions" }
+  ];
 
   // Table Action Handlers (Sets)
   const handleSetsActions = {
@@ -347,13 +311,10 @@ function FormMain({ onBack }) {
         return [{
           program: formData.programName || '',
           unit_carton: '',
-          pcs_per_set: '',
           inner_pack: '',
           fold: '',
-          remark: '',
           variants: [{
             style: '',
-            pc_set: '',
             w_in: '',
             w_cm: '',
             l_in: '',
@@ -383,6 +344,38 @@ function FormMain({ onBack }) {
           : group
       );
     });
+  };
+
+  const resetForm = () => {
+    setFormData(prev => ({
+      ...prev,
+      customerName: '',
+      programName: '',
+      customerProtocol: '',
+      newOrShifted: '',
+      original_towel: '',
+      polybagManualAuto: '',
+      polybag_type: '',
+      palletRequirement: '',
+      specialCarton: '',
+      sampleCarton: '',
+      singleOrMonsterPDQ: '',
+      pdqLayers: '',
+      commonPDQ: '',
+      smallPDQRequirement: '',
+      smallPDQQuantity: '',
+      warehouse_store_handling_method: '',
+      towel_folded_and_poly_packed_before_carton: '',
+      separatorRequired: '',
+      ribbonPacking: '',
+      bellyBandPacking: ''
+    }));
+    setSelectedFile(null);
+    setSetsTables([createEmptyGroup()]);
+    setUnitTables([createEmptyGroup()]);
+    setSampleRows([{}]);
+    setLastProgramId(null);
+    setSuccessMessage('');
   };
 
   // ==================== ATTACHMENT UPLOAD FUNCTION ====================
@@ -432,7 +425,7 @@ function FormMain({ onBack }) {
   // ==================== BUILD PRODUCT-SPECIFIC DETAILS ====================
   const buildProductDetails = () => {
     const programType = getProgramType();
-
+    
     if (programType === 'BEDSHEET') {
       return {
         bedsheet_details: {
@@ -452,11 +445,10 @@ function FormMain({ onBack }) {
           required_sets_per_carton: (formData.required_sets_per_carton) || 0,
           polyfold_condition: formData.PolyFoldCondition?.trim() || "",
           filled_product_gsm: (formData.filled_product_gsm) || 0,
-          // remark: (formData.remark) || "",
         }
       };
     }
-
+    
     if (programType === 'TERRY_TOWEL') {
       return {
         terry_details: {
@@ -468,11 +460,10 @@ function FormMain({ onBack }) {
           folding_details: formData.terryFoldingDetails?.trim() || "",
           required_pcs_per_polybag: Number(formData.terryPcsPerPolybag) || 0,
           special_carton_details: formData.terrySpecialCartonDetails?.trim() || "",
-          remark: (formData.remark) || "",
         }
       };
     }
-
+    
     if (programType === 'BATH_ROBE') {
       return {
         bathrobe_details: {
@@ -485,16 +476,16 @@ function FormMain({ onBack }) {
           required_pcs_per_carton: Number(formData.bathRobePcsPerCarton) || 0,
           polybag_type: formData.bathRobePolybagType?.trim() || "",
           polybag_size_carton: formData.bathRobePolybagSizeCarton?.trim() || "",
-          remark: (formData.remark) || "",
         }
       };
     }
-
+    
     return {};
   };
 
-  // ==================== MAIN SUBMIT ====================
+  // ==================== MAIN SUBMIT WITH SEQUENTIAL API CALLS ====================
   const handleSubmit = async (status = 'Pending') => {
+    // Validation
     if (!formData.programName?.trim() || !formData.customerName?.trim()) {
       setSubmitStatus('error');
       setErrorMessage('Program Name and Customer Name are required');
@@ -508,188 +499,136 @@ function FormMain({ onBack }) {
     setSuccessMessage('');
 
     try {
-      if (formData.formMode === "gusset") {
-        // ====================== GUSSET PAYLOAD ======================
-        const gussetPayload = {
+      const programType = getProgramType();
+      const productDetails = buildProductDetails();
+
+      // ========== STEP 1: BUILD BASE PAYLOAD ==========
+      const payload = {
+        activity_name: formData.activityName?.trim() || '',
+        program_name: formData.programName.trim(),
+        program_type: programType,
+        btn: status,
+        sent_to_user_id: selectedUserId,
+        
+        carton_program: {
           customer_name: formData.customerName.trim(),
-          program_name: formData.programName.trim(),
-          tc: formData.fabric?.trim() || "",
-          weave: formData.gussetWeave?.trim() || "",
-          product_group: formData.gussetProductGroup?.trim() || "",
-          size: formData.gussetSize?.trim() || "",
-          down: formData.gussetOtherSize?.trim() || "",
-          value_addition_flat_sheet: formData.gussetValueAdditionFlatSheet?.trim() || "",
-          value_addition_duvet_cover: formData.gussetValueAdditionDuvetCover?.trim() || "",
-          value_addition_fitted_sheet: formData.gussetValueAdditionFittedSheet?.trim() || "",
-          value_addition_pillowcase: formData.gussetValueAdditionPillowcase?.trim() || "",
-          fold_size_inches: formData.gussetFoldSizeInInches?.toString() || "",
-          cardboard_required: formData.cardboardRequired === "Yes",
-          fold_type: formData.cardboardFoldType?.trim() || "",
-          ply: formData.cardboardPly?.trim() || "",
-          fold_on_side: formData.cardboardFoldOnSide?.trim() || "",
-          reference_program: formData.referenceProgram?.trim() || "",
-          comments: formData.comments?.trim() || "",
-          polybag_required: formData.polybagRequired === "Yes",
-          material_type: formData.polybagMaterialType?.trim() || "",
-          opening_type: formData.polybagOpeningType?.trim() || "",
-          opening_on_side: formData.polybagOpeningOnSide?.trim() || "",
-          inlay_or_belly_band: formData.polybagInlayOrBellyBand?.trim() || "",
-          polybag_type: formData.polybagType?.trim() || "",
+          customer_protocol: formData.customerProtocol?.trim() || "",
+          confirm_new_or_shifted_from_vapi: formData.newOrShifted?.trim() || "",
+          original_towel: formData.original_towel?.trim() || "",
+          polybag_manual_or_automatic: formData.polybagManualAuto?.trim() || "",
+          polybag_type: formData.polybag_type?.trim() || "",
+          pallet_or_slipsheet_requirement: formData.palletRequirement === "True",
+          special_carton_required: formData.specialCarton === "True",
+          pdq_required: formData.specialPDQ === "True",
+          cdu_required: formData.specialCDU === "True",
+          sample_carton_arranged: formData.sampleCarton === "True",
+          pdq_arranged: formData.samplePDQ === "True",
+          cdu_arranged: formData.sampleCDU === "True",
+          shipped_as_single_pdq_or_monster_pdq: formData.singleOrMonsterPDQ?.trim() || "",
+          pdq_layers_stacking_details: formData.pdqLayers?.trim() || "",
+          common_pdq_same_dimension_for_all_sizes: formData.commonPDQ?.trim() || "",
+          small_pdq_on_pallet_or_slipsheet: formData.smallPDQRequirement?.trim() || "",
+          small_pdq_count_on_pallet_or_slipsheet: formData.smallPDQQuantity?.trim() || "",
+          warehouse_store_handling_method: formData.warehouse_store_handling_method?.trim() || "",
+          towel_folded_and_poly_packed_before_carton: formData.towel_folded_and_poly_packed_before_carton?.trim() || "",
+          separator_protector_stiffener_required: formData.separatorRequired?.trim() || "",
+          ribbon_packing_required: formData.ribbonPacking?.trim() || "",
+          belly_band_packing_required: formData.bellyBandPacking?.trim() || ""
+        },
 
-          program_specifications: [...setsTables, ...unitTables]
-            .flatMap(group =>
-              group.variants
-                .filter(v => v.style || v.w_in || v.gsm)
-                .map(v => ({
-                  program: group.program?.trim() || "",
-                  style: v.style?.trim() || "",
-                  width_in: Number(v.w_in) || 0,
-                  width_cm: Number(v.w_cm) || 0,
-                  length_in: Number(v.l_in) || 0,
-                  length_cm: Number(v.l_cm) || 0,
-                  wt_per_unit: Number(v.wt_unit) || 0,
-                  gsm: Number(v.gsm) || 0,
-                  unit_per_carton: Number(group.unit_carton)|| 0,
-                  inner_pack_unit_qty: group.inner_pack?.trim() || "",
-                  fold: group.fold?.trim() || ""
-                }))
-            ),
+        subprograms: [...setsTables, ...unitTables]
+          .filter(group => group.program?.trim())
+          .flatMap(group => {
+            return group.variants
+              .filter(variant =>
+                variant.style?.trim() ||
+                variant.w_in?.trim() ||
+                variant.w_cm?.trim() ||
+                variant.l_in?.trim() ||
+                variant.l_cm?.trim() ||
+                variant.wt_unit?.trim() ||
+                variant.gsm?.trim()
+              )
+              .map(variant => ({
+                program_name: group.program?.trim() || "",
+                style: variant.style?.trim() || "",
+                width_in: Number(variant.w_in) || 0,
+                width_cm: Number(variant.w_cm) || 0,
+                length_in: Number(variant.l_in) || 0,
+                length_cm: Number(variant.l_cm) || 0,
+                wt_per_unit: Number(variant.wt_unit) || 0,
+                gsm: Number(variant.gsm) || 0,
+                unit_per_carton: group.unit_carton?.trim() || "",
+                inner_pack_unit_qty: group.inner_pack?.trim() || "",
+                fold: group.fold?.trim() || ""
+              }));
+          }),
 
-          samples: sampleRows
-            .filter(r => r.col1 || r.col2)
-            .map(r => ({
-              program_name: r.col3?.trim() || "",
-              size: r.col2?.trim() || "",
-              sample: r.col1?.trim() || "",
-              quality: r.col4?.trim() || "",
-              lbs_per_dz: Number(r.col5) || 0,
-              gsm: Number(r.col6) || 0,
-              shade: r.col7?.trim() || "",
-              width_in: Number(r.col8) || 0,
-              length_in: Number(r.col10) || 0,
-              width_cm: Number(r.col9) || 0,
-              length_cm: Number(r.col11) || 0
-            }))
-        };
+        samples: sampleRows
+          .filter(row => row.col1 || row.col2)
+          .map(row => ({
+            program_name: row.col3?.trim() || "",
+            size: row.col2?.trim() || "",
+            sample: row.col1?.trim() || "",
+            quality: row.col4?.trim() || "",
+            lbs_per_dz: Number(row.col5) || 0,
+            gsm: Number(row.col6) || 0,
+            shade: row.col7?.trim() || "",
+            width_in: Number(row.col8) || 0,
+            width_cm: Number(row.col9) || 0,
+            length_in: Number(row.col10) || 0,
+            length_cm: Number(row.col11) || 0
+          })),
 
-        await api.post('/api/submit/', gussetPayload);
-        toast.success("Gusset Program Submitted Successfully");
-      } else {
-        const programType = getProgramType();
-        const productDetails = buildProductDetails();
-        const toBool = (val) => val === "True" || val === "Yes" || val === true;
+        // Add product-specific details
+        ...productDetails
+      };
 
-        const payload = {
-          activity_name: formData.activityName?.trim() || '',
-          program_name: formData.programName.trim(),
-          program_type: programType,
-          btn: status,
-          sent_to_user_id: selectedUserId,
-
-          carton_program: {
-            customer_name: formData.customerName.trim(),
-            customer_protocol: formData.customerProtocol?.trim() || "",
-            confirm_new_or_shifted_from_vapi: formData.newOrShifted?.trim() || "",
-            original_towel: formData.original_towel?.trim() || "",
-            polybag_manual_or_automatic: formData.polybagManualAuto?.trim() || "",
-            polybag_type: formData.polybag_type?.trim() || "",
-            special_carton_required: toBool(formData.specialCarton),
-            pdq_required: toBool(formData.specialPDQ),
-            cdu_required: toBool(formData.specialCDU),
-            sample_carton_arranged: toBool(formData.sampleCarton),
-            pdq_arranged: toBool(formData.samplePDQ),
-            cdu_arranged: toBool(formData.sampleCDU),
-            pallet_or_slipsheet_requirement: toBool(formData.palletRequirement),
-
-            shipped_as_single_pdq_or_monster_pdq: formData.singleOrMonsterPDQ?.trim() || "",
-            pdq_layers_stacking_details: formData.pdqLayers?.trim() || "",
-            common_pdq_same_dimension_for_all_sizes: formData.commonPDQ?.trim() || "",
-            small_pdq_on_pallet_or_slipsheet: formData.smallPDQRequirement?.trim() || "",
-            small_pdq_count_on_pallet_or_slipsheet: formData.smallPDQQuantity?.trim() || "",
-            warehouse_store_handling_method: formData.warehouse_store_handling_method?.trim() || "",
-            towel_folded_and_poly_packed_before_carton: formData.towel_folded_and_poly_packed_before_carton?.trim() || "",
-            separator_protector_stiffener_required: formData.separatorRequired?.trim() || "",
-            ribbon_packing_required: formData.ribbonPacking?.trim() || "",
-            belly_band_packing_required: formData.bellyBandPacking?.trim() || "",
-            remark: formData.remark?.trim() || ""
-          },
-
-          subprograms: [...setsTables, ...unitTables]
-            .filter(group => group.program?.trim())
-            .flatMap(group => {
-              return group.variants
-                .filter(variant =>
-                  variant.style?.trim() ||
-                  variant.w_in?.trim() ||
-                  variant.w_cm?.trim() ||
-                  variant.l_in?.trim() ||
-                  variant.l_cm?.trim() ||
-                  variant.wt_unit?.trim() ||
-                  variant.gsm?.trim()
-                )
-                .map(variant => ({
-                  program_name: group.program?.trim() || "",
-                  style: variant.style?.trim() || "",
-                  width_in: Number(variant.w_in) || 0,
-                  width_cm: Number(variant.w_cm) || 0,
-                  length_in: Number(variant.l_in) || 0,
-                  length_cm: Number(variant.l_cm) || 0,
-                  wt_per_unit: Number(variant.wt_unit) || 0,
-                  gsm: Number(variant.gsm) || 0,
-                  unit_per_carton: Number(group.unit_carton) || 0,
-                  pcs_per_set: Number(group.pcs_per_set) || 0,
-                  inner_pack_unit_qty: group.inner_pack?.trim() || "",
-                  fold: group.fold?.trim() || "",
-                  remark: group.remark?.trim() || ""
-                }));
-            }),
-
-          samples: sampleRows
-            .filter(row => row.col1 || row.col2)
-            .map(row => ({
-              program_name: row.col3?.trim() || "",
-              size: row.col2?.trim() || "",
-              sample: row.col1?.trim() || "",
-              quality: row.col4?.trim() || "",
-              lbs_per_dz: Number(row.col5) || 0,
-              gsm: Number(row.col6) || 0,
-              shade: row.col7?.trim() || "",
-              width_in: Number(row.col8) || 0,
-              width_cm: Number(row.col9) || 0,
-              length_in: Number(row.col10) || 0,
-              length_cm: Number(row.col11) || 0
-            })),
-
-          ...productDetails
-        };
-
-        const submitResponse = await api.post('/api/carton-program/submit/', payload, {
-          headers: { 'Content-Type': 'application/json' }
-        });
-
-        const { program_id } = submitResponse.data;
-        setLastProgramId(program_id);
-        localStorage.setItem('last_submitted_program_id', program_id);
-
-        let attachmentResult = null;
-        if (selectedFile && program_id) {
-          attachmentResult = await uploadAttachment(program_id, selectedFile);
+      const submitResponse = await api.post('/api/carton-program/submit/', payload, {
+        headers: {
+          'Content-Type': 'application/json',
         }
+      });
 
-        let successMsg = `Carton Program ${status === 'Draft' ? 'Saved as Draft' : 'Submitted'} Successfully`;
-        if (attachmentResult) {
-          successMsg += attachmentResult.success
-            ? ` • Attachment Uploaded`
-            : ` • Attachment upload failed: ${attachmentResult.message}`;
-        }
+      // Extract program_id from response
+      const { message: submitMessage, program_id } = submitResponse.data;
 
-        toast.success(successMsg);
+      // Store program_id
+      setLastProgramId(program_id);
+      localStorage.setItem('last_submitted_program_id', program_id);
+
+      // ========== STEP 2: UPLOAD ATTACHMENT (if exists) ==========
+      let attachmentResult = null;
+      if (selectedFile && program_id) {
+        console.log('📎 Uploading attachment...', selectedFile.name);
+        attachmentResult = await uploadAttachment(program_id, selectedFile);
       }
+
+      // ========== STEP 3: SUCCESS HANDLING ==========
+      let successMsg = `Carton Program ${status === 'Draft' ? 'Saved as Draft' : 'Submitted'} Successfully`;
+
+      if (attachmentResult) {
+        if (attachmentResult.success) {
+          successMsg += ` • Attachment Uploaded`;
+        } else {
+          successMsg += ` • Attachment upload failed: ${attachmentResult.message}`;
+        }
+      } else if (selectedFile) {
+        successMsg += ` • No attachment uploaded`;
+      }
+
+      toast.success(successMsg);
+
+      // Wait for user to see success message, then redirect
       setTimeout(() => navigate('/'), 1500);
 
     } catch (error) {
       console.error('❌ Submit failed:', error);
-      const errMsg = error.response?.data?.error || error.response?.data?.detail || error.message || 'Unknown error';
+      setSubmitStatus('error');
+      const errMsg = error.response?.data?.error
+        || error.response?.data?.detail
+        || error.message
+        || 'Unknown error';
       setErrorMessage(`Submission failed: ${errMsg}`);
       toast.error(`Submission failed: ${errMsg}`);
     } finally {
@@ -762,7 +701,8 @@ function FormMain({ onBack }) {
               Request Sent To
             </label>
             <select
-              className="w-full border border-gray-300 rounded-md p-3 bg-white text-gray-700 focus:outline-none focus:border-[#0f3460] focus:ring-1 focus:ring-[#0f3460] cursor-pointer"
+              className="w-full border border-gray-300 rounded-md p-3 bg-white text-gray-700
+             focus:outline-none focus:border-[#0f3460] focus:ring-1 focus:ring-[#0f3460] cursor-pointer"
               value={selectedUserId}
               onChange={(e) => setSelectedUserId(Number(e.target.value))}
               disabled={loading}
@@ -778,14 +718,22 @@ function FormMain({ onBack }) {
             <button
               onClick={() => handleSubmit('Save As Draft')}
               disabled={loading}
-              className={`px-10 mr-3 py-3 rounded-md font-semibold shadow-md hover:shadow-lg transition-all transform active:scale-95 cursor-pointer text-white ${loading ? 'bg-gray-400 cursor-not-allowed opacity-70' : 'bg-[#0f3460] hover:bg-[#0a2545]'}`}
+              className={`px-10 mr-3 py-3 rounded-md font-semibold shadow-md hover:shadow-lg
+                  transition-all transform active:scale-95 cursor-pointer text-white ${loading
+                  ? 'bg-gray-400 cursor-not-allowed opacity-70'
+                  : 'bg-[#0f3460] hover:bg-[#0a2545]'
+                }`}
             >
               {loading ? 'Saving Draft...' : 'Save as Draft'}
             </button>
             <button
               onClick={() => handleSubmit('Pending')}
               disabled={loading}
-              className={`px-10 py-3 rounded-md font-semibold shadow-md hover:shadow-lg transition-all transform active:scale-95 cursor-pointer text-white ${loading ? 'bg-gray-400 cursor-not-allowed opacity-70' : 'bg-[#0f3460] hover:bg-[#0a2545]'}`}
+              className={`px-10 py-3 rounded-md font-semibold shadow-md hover:shadow-lg
+                  transition-all transform active:scale-95 cursor-pointer text-white ${loading
+                  ? 'bg-gray-400 cursor-not-allowed opacity-70'
+                  : 'bg-[#0f3460] hover:bg-[#0a2545]'
+                }`}
             >
               {loading ? (
                 <span className="flex items-center gap-2">
@@ -821,72 +769,34 @@ export default FormMain;
 //     productCategory: "",
 //     companyName: '',
 //     customerName: '',
-//     customerType: 'old', // Add this for old/new toggle
 //     programName: '',
 //     customerProtocol: '',
 //     newOrShifted: '',
-//     original_towel: '',
+//     originalTowel: '',
 //     polybagManualAuto: '',
-//     polybag_type: '',
+//     polybagType: '',
 //     palletRequirement: '',
+//     // specialCarton: '',
+//     // sampleCarton: '',
 //     specialCarton: '',
 //     specialPDQ: '',
 //     specialCDU: '',
+
 //     sampleCarton: '',
 //     samplePDQ: '',
 //     sampleCDU: '',
+//     Fabric: '',
+
 //     singleOrMonsterPDQ: '',
 //     pdqLayers: '',
 //     commonPDQ: '',
 //     smallPDQRequirement: '',
 //     smallPDQQuantity: '',
-//     warehouse_store_handling_method: '',
-//     towel_folded_and_poly_packed_before_carton: '',
+//     warehouseHandling: '',
+//     towelFoldCondition: '',
 //     separatorRequired: '',
 //     ribbonPacking: '',
-//     bellyBandPacking: '',
-
-//     // ===== BEDSHEET FIELDS =====
-//     fabric: '',
-//     folding: '',
-//     required_pcs_per_polybag: '',
-//     polybagSize: '',
-//     productType: '',
-//     productRequirements: '',
-//     packingRequirements: '',
-//     PackingType: '',
-//     ProductDimension: '',
-//     FoldSize: '',
-//     pallet: '',
-//     BlisterPacking: '',
-//     BlisterRequired: '',
-//     BoxRequired: '',
-//     required_sets_per_carton: '',
-//     warehouse: '',
-//     PolyFoldCondition: '',
-//     filled_product_gsm: '',
-//     Bagtype: '',
-
-//     // ===== TERRY TOWEL FIELDS =====
-//     towelSizes: '',
-//     requiredPcsCartonSize: '',
-//     requiredPolybagsCartonSize: '',
-//     towelDimensions: '',
-//     towelWeightPerPiece: '',
-//     terryFoldingDetails: '',
-//     terryPcsPerPolybag: '',
-//     terrySpecialCartonDetails: '',
-
-//     // ===== BATH ROBE FIELDS =====
-//     originalBathRobe: '',
-//     bathRobeSizes: '',
-//     bathRobeDimensions: '',
-//     bathRobeWeight: '',
-//     bathRobeFoldingDetails: '',
-//     bathRobePcsPerPolybag: '',
-//     bathRobePcsPerCarton: '',
-//     bathRobePolybagType: '',
-//     bathRobePolybagSizeCarton: '',
+//     bellyBandPacking: ''
 //   });
 
 //   const [companies, setCompanies] = useState([]);
@@ -940,16 +850,19 @@ export default FormMain;
 //     const programName = formData.programName?.trim();
 //     if (!programName) return;
 
+//     // Update Sets Tables
 //     setSetsTables(prev => prev.map(group => ({
 //       ...group,
 //       program: programName
 //     })));
 
+//     // Update Unit Tables
 //     setUnitTables(prev => prev.map(group => ({
 //       ...group,
 //       program: programName
 //     })));
 
+//     // Update Sample Rows
 //     setSampleRows(prev => prev.map(row => ({
 //       ...row,
 //       col3: programName
@@ -1161,9 +1074,9 @@ export default FormMain;
 //       programName: '',
 //       customerProtocol: '',
 //       newOrShifted: '',
-//       original_towel: '',
+//       originalTowel: '',
 //       polybagManualAuto: '',
-//       polybag_type: '',
+//       polybagType: '',
 //       palletRequirement: '',
 //       specialCarton: '',
 //       sampleCarton: '',
@@ -1172,8 +1085,8 @@ export default FormMain;
 //       commonPDQ: '',
 //       smallPDQRequirement: '',
 //       smallPDQQuantity: '',
-//       warehouse_store_handling_method: '',
-//       towel_folded_and_poly_packed_before_carton: '',
+//       warehouseHandling: '',
+//       towelFoldCondition: '',
 //       separatorRequired: '',
 //       ribbonPacking: '',
 //       bellyBandPacking: ''
@@ -1216,81 +1129,6 @@ export default FormMain;
 //     }
 //   };
 
-//   // ==================== GET PROGRAM TYPE ====================
-//   const getProgramType = () => {
-//     switch (formData.productCategory) {
-//       case 'Bedsheet':
-//         return 'BEDSHEET';
-//       case 'Terry Towel':
-//         return 'TERRY_TOWEL';
-//       case 'Bath Robe':
-//         return 'BATH_ROBE';
-//       default:
-//         return 'TOWEL';
-//     }
-//   };
-
-//   // ==================== BUILD PRODUCT-SPECIFIC DETAILS ====================
-//   const buildProductDetails = () => {
-//     const programType = getProgramType();
-
-//     if (programType === 'BEDSHEET') {
-//       return {
-//         bedsheet_details: {
-//           fabric_tc: formData.fabric?.trim() || "",
-//           folding_details: formData.folding?.trim() || "",
-//           required_pcs_per_polybag: (formData.required_pcs_per_polybag) || 0,
-//           polybag_size: formData.polybagSize?.trim() || "",
-//           product_type: formData.productType?.trim() || "",
-//           special_packing_requirement: formData.packingRequirements?.trim() || "",
-//           packing_type: formData.PackingType?.trim() || "",
-//           product_dimension: formData.ProductDimension?.trim() || "",
-//           fold_size: formData.FoldSize?.trim() || "",
-//           blister_packing_required: formData.BlisterPacking === "Yes",
-//           blister_packing_details: formData.BlisterRequired?.trim() || "",
-//           bag_type: formData.Bagtype?.trim() || "",
-//           special_box_required: formData.BoxRequired?.trim() || "",
-//           required_sets_per_carton: (formData.required_sets_per_carton) || 0,
-//           polyfold_condition: formData.PolyFoldCondition?.trim() || "",
-//           filled_product_gsm: (formData.filled_product_gsm) || 0,
-//         }
-//       };
-//     }
-
-//     if (programType === 'TERRY_TOWEL') {
-//       return {
-//         terry_details: {
-//           towel_sizes: formData.towelSizes?.trim() || "",
-//           required_pcs_carton_size: formData.requiredPcsCartonSize?.trim() || "",
-//           required_polybags_carton_size: formData.requiredPolybagsCartonSize?.trim() || "",
-//           towel_dimensions: formData.towelDimensions?.trim() || "",
-//           towel_weight_per_piece: Number(formData.towelWeightPerPiece) || 0,
-//           folding_details: formData.terryFoldingDetails?.trim() || "",
-//           required_pcs_per_polybag: Number(formData.terryPcsPerPolybag) || 0,
-//           special_carton_details: formData.terrySpecialCartonDetails?.trim() || "",
-//         }
-//       };
-//     }
-
-//     if (programType === 'BATH_ROBE') {
-//       return {
-//         bathrobe_details: {
-//           original_bath_robe: formData.originalBathRobe?.trim() || "",
-//           bath_robe_sizes: formData.bathRobeSizes?.trim() || "",
-//           bath_robe_dimensions: formData.bathRobeDimensions?.trim() || "",
-//           bath_robe_weight: Number(formData.bathRobeWeight) || 0,
-//           folding_details: formData.bathRobeFoldingDetails?.trim() || "",
-//           required_pcs_per_polybag: Number(formData.bathRobePcsPerPolybag) || 0,
-//           required_pcs_per_carton: Number(formData.bathRobePcsPerCarton) || 0,
-//           polybag_type: formData.bathRobePolybagType?.trim() || "",
-//           polybag_size_carton: formData.bathRobePolybagSizeCarton?.trim() || "",
-//         }
-//       };
-//     }
-
-//     return {};
-//   };
-
 //   // ==================== MAIN SUBMIT WITH SEQUENTIAL API CALLS ====================
 //   const handleSubmit = async (status = 'Pending') => {
 //     // Validation
@@ -1307,54 +1145,64 @@ export default FormMain;
 //     setSuccessMessage('');
 
 //     try {
-//       const programType = getProgramType();
-//       const productDetails = buildProductDetails();
-//       const toBool = (val) => val === "True" || val === "Yes" || val === true;
-//       // ========== STEP 1: BUILD BASE PAYLOAD ==========
+//       // ========== STEP 1: SUBMIT CARTON PROGRAM ==========
 //       const payload = {
 //         activity_name: formData.activityName?.trim() || '',
 //         program_name: formData.programName.trim(),
-//         program_type: programType,
 //         btn: status,
+//         //      request_sample: true,
+//         // request_carton_sizing: true,
+//         // purchase_sent_to: 6,
 //         sent_to_user_id: selectedUserId,
-
 //         carton_program: {
 //           customer_name: formData.customerName.trim(),
 //           customer_protocol: formData.customerProtocol?.trim() || "",
 //           confirm_new_or_shifted_from_vapi: formData.newOrShifted?.trim() || "",
-//           original_towel: formData.original_towel?.trim() || "",
+//           original_towel: formData.originalTowel?.trim() || "",
 //           polybag_manual_or_automatic: formData.polybagManualAuto?.trim() || "",
-//           polybag_type: formData.polybag_type?.trim() || "",
-//           // pallet_or_slipsheet_requirement: formData.palletRequirement === "True",
-//           // special_carton_required: formData.specialCarton === "True",
-//           // pdq_required: formData.specialPDQ === "True",
-//           // cdu_required: formData.specialCDU === "True",
-//           // sample_carton_arranged: formData.sampleCarton === "True",
-//           // pdq_arranged: formData.samplePDQ === "True",
-//           // cdu_arranged: formData.sampleCDU === "True",
-//           special_carton_required: toBool(formData.specialCarton),
-//           pdq_required: toBool(formData.specialPDQ),
-//           cdu_required: toBool(formData.specialCDU),
-//           sample_carton_arranged: toBool(formData.sampleCarton),
-//           pdq_arranged: toBool(formData.samplePDQ),
-//           cdu_arranged: toBool(formData.sampleCDU),
-//           pallet_or_slipsheet_requirement: toBool(formData.palletRequirement),
+//           polybag_type: formData.polybagType?.trim() || "",
+//           pallet_or_slipsheet_requirement: formData.palletRequirement?.trim() || "False",
+//           // special_carton_pdq_cdu_required: formData.specialCarton?.trim() || "",
+//           // sample_arranged_for_special_carton_pdq_cdu: formData.sampleCarton?.trim() || "",
+//           special_carton_required: formData.specialCarton || "False",
+//           pdq_required: formData.specialPDQ || "False",
+//           cdu_required: formData.specialCDU || "False",
+
+//           sample_carton_arranged: formData.sampleCarton || "False",
+//           pdq_arranged: formData.samplePDQ || "False",
+//           cdu_arranged: formData.sampleCDU || "False",
 
 //           shipped_as_single_pdq_or_monster_pdq: formData.singleOrMonsterPDQ?.trim() || "",
 //           pdq_layers_stacking_details: formData.pdqLayers?.trim() || "",
 //           common_pdq_same_dimension_for_all_sizes: formData.commonPDQ?.trim() || "",
 //           small_pdq_on_pallet_or_slipsheet: formData.smallPDQRequirement?.trim() || "",
 //           small_pdq_count_on_pallet_or_slipsheet: formData.smallPDQQuantity?.trim() || "",
-//           warehouse_store_handling_method: formData.warehouse_store_handling_method?.trim() || "",
-//           towel_folded_and_poly_packed_before_carton: formData.towel_folded_and_poly_packed_before_carton?.trim() || "",
+//           warehouse_store_handling_method: formData.warehouseHandling?.trim() || "",
+//           towel_folded_and_poly_packed_before_carton: formData.towelFoldCondition?.trim() || "",
 //           separator_protector_stiffener_required: formData.separatorRequired?.trim() || "",
 //           ribbon_packing_required: formData.ribbonPacking?.trim() || "",
 //           belly_band_packing_required: formData.bellyBandPacking?.trim() || ""
 //         },
+//         // subprograms: [...setsTables, ...unitTables]
+//         //   .filter(group => group.program?.trim())
+//         //   .map(group => {
+//         //     const firstVariant = group.variants?.[0] || {};
+//         //     return {
+//         //       program_name: group.program?.trim() || "",
+//         //       style: firstVariant.style?.trim() || "",
+//         //       width_in: Number(firstVariant.w_in) || 0,
+//         //       length_in: Number(firstVariant.l_in) || 0,
+//         //       wt_per_unit: Number(firstVariant.wt_unit) || 0,
+//         //       gsm: Number(firstVariant.gsm) || 0,
+//         //       unit_per_carton: group.unit_carton?.trim() || firstVariant.unit_carton?.trim() || "",
+//         //       inner_pack_unit_qty: group.inner_pack?.trim() || firstVariant.inner_pack?.trim() || "",
+//         //       fold: group.fold?.trim() || ""
+//         //     };
+//         //   }),
 
 //         subprograms: [...setsTables, ...unitTables]
 //           .filter(group => group.program?.trim())
-//           .flatMap(group => {
+//           .flatMap(group => { // Use flatMap to send ALL variants in the group
 //             return group.variants
 //               .filter(variant =>
 //                 variant.style?.trim() ||
@@ -1394,12 +1242,10 @@ export default FormMain;
 //             width_cm: Number(row.col9) || 0,
 //             length_in: Number(row.col10) || 0,
 //             length_cm: Number(row.col11) || 0
-//           })),
-
-//         // Add product-specific details
-//         ...productDetails
+//           }))
 //       };
 
+//       console.log('📦 Submitting carton program...');
 //       const submitResponse = await api.post('/api/carton-program/submit/', payload, {
 //         headers: {
 //           'Content-Type': 'application/json',
@@ -1408,6 +1254,7 @@ export default FormMain;
 
 //       // Extract program_id from response
 //       const { message: submitMessage, program_id } = submitResponse.data;
+//       console.log(`✅ Program submitted. ID: ${program_id}, Message: ${submitMessage}`);
 
 //       // Store program_id
 //       setLastProgramId(program_id);
@@ -1433,6 +1280,8 @@ export default FormMain;
 //         successMsg += ` • No attachment uploaded`;
 //       }
 
+//       // setSuccessMessage(successMsg);
+//       // setSubmitStatus('success');
 //       toast.success(successMsg);
 
 //       // Wait for user to see success message, then redirect
@@ -1446,7 +1295,6 @@ export default FormMain;
 //         || error.message
 //         || 'Unknown error';
 //       setErrorMessage(`Submission failed: ${errMsg}`);
-//       toast.error(`Submission failed: ${errMsg}`);
 //     } finally {
 //       setLoading(false);
 //     }
@@ -1454,6 +1302,7 @@ export default FormMain;
 
 //   // ==================== RENDER ====================
 //   return (
+//     // <div className="min-h-screen bg-gray-50 font-sans text-sm">
 //     <div className="h-full overflow-y-auto bg-gray-50 font-sans text-sm">
 //       <div className="pb-4 pr-4 pl-4 max-w-7xl mx-auto">
 //         {/* Sticky Header */}
@@ -1471,6 +1320,7 @@ export default FormMain;
 //             <h1 className="text-xl font-bold text-gray-800">Fill Carton Program Details</h1>
 //           </div>
 //         </div>
+
 
 //         {/* Form */}
 //         <Form
@@ -1569,4 +1419,3 @@ export default FormMain;
 // }
 
 // export default FormMain;
-

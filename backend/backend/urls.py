@@ -49,7 +49,6 @@ urlpatterns = [
     path("api/", include("userManagement.urls")),
     path("api/pp-sample/", include("pp_sample.urls")),
     path("api/labdip/", include("labdip.urls")),
-    path("api/artwork/", include("artwork.urls")),
     
     path("api/saml/", include("saml_auth.urls")),
 

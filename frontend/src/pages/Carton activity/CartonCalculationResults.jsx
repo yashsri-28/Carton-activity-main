@@ -271,58 +271,59 @@ const ContainerCard = ({ type, quantity, icon, color }) => {
 };
 
 const CartonVisual = ({ dimensions }) => {
-  const maxDim = Math.max(dimensions.length, dimensions.width, dimensions.height);
+  // Safely parse numbers, fallback to 0
+  const length = Number(dimensions?.length) || 0;
+  const width = Number(dimensions?.width) || 0;
+  const height = Number(dimensions?.height) || 0;
+  const cbm = Number(dimensions?.cbm) || 0;
+
+  const maxDim = Math.max(length, width, height, 1); // avoid divide by 0
   const scale = 120 / maxDim;
-  
-  const scaledL = dimensions.length * scale;
-  const scaledW = dimensions.width * scale;
-  const scaledH = dimensions.height * scale;
+
+  const scaledL = length * scale;
+  const scaledW = width * scale;
+  const scaledH = height * scale;
 
   return (
     <div className="relative bg-white rounded-lg p-4 flex items-center justify-center" style={{ minHeight: '160px' }}>
       <svg width="200" height="140" viewBox="0 0 200 140" className="mx-auto">
-        {/* 3D Box representation */}
-        {/* Front face */}
-        <rect 
-          x={50} 
-          y={70 - scaledH} 
-          width={scaledL} 
-          height={scaledH} 
-          fill="#E3F2FD" 
-          stroke="#1976D2" 
+        <rect
+          x={50}
+          y={70 - scaledH}
+          width={scaledL}
+          height={scaledH}
+          fill="#E3F2FD"
+          stroke="#1976D2"
           strokeWidth="2"
         />
-        
-        {/* Top face (parallelogram) */}
-        <path 
+
+        <path
           d={`M ${50} ${70 - scaledH} L ${50 + scaledW * 0.5} ${60 - scaledH} L ${50 + scaledL + scaledW * 0.5} ${60 - scaledH} L ${50 + scaledL} ${70 - scaledH} Z`}
-          fill="#BBDEFB" 
-          stroke="#1976D2" 
+          fill="#BBDEFB"
+          stroke="#1976D2"
           strokeWidth="2"
         />
-        
-        {/* Right face (parallelogram) */}
-        <path 
+
+        <path
           d={`M ${50 + scaledL} ${70 - scaledH} L ${50 + scaledL + scaledW * 0.5} ${60 - scaledH} L ${50 + scaledL + scaledW * 0.5} ${60} L ${50 + scaledL} ${70} Z`}
-          fill="#90CAF9" 
-          stroke="#1976D2" 
+          fill="#90CAF9"
+          stroke="#1976D2"
           strokeWidth="2"
         />
-        
-        {/* Dimension labels */}
+
         <text x={50 + scaledL / 2} y={85} textAnchor="middle" fontSize="10" fill="#666" fontFamily="monospace">
-          L: {dimensions.length} cm
+          L: {length} cm
         </text>
         <text x={50 + scaledL + scaledW * 0.5 + 15} y={65} fontSize="10" fill="#666" fontFamily="monospace">
-          W: {dimensions.width} cm
+          W: {width} cm
         </text>
         <text x={35} y={70 - scaledH / 2} fontSize="10" fill="#666" fontFamily="monospace">
-          H: {dimensions.height} cm
+          H: {height} cm
         </text>
       </svg>
-      
+
       <div className="absolute bottom-2 right-2 text-xs text-gray-400 font-mono">
-        CBM: {dimensions.cbm.toFixed(6)} m³
+        CBM: {cbm.toFixed(6)} m³
       </div>
     </div>
   );

@@ -28,7 +28,6 @@ class User(AbstractUser):
     TOP = "TOP"
     TESTING = "TESTING"
     LAB = "LAB"
-    VENDOR = "VENDOR" 
 
     # --------------------------------------------------
     # Role Choices
@@ -45,8 +44,7 @@ class User(AbstractUser):
         (WAREHOUSE, "Warehouse"),
         (TOP, "Top"),
         (TESTING, "Testing"),
-        (LAB, "LAB"),
-        (VENDOR, "Vendor"), 
+        (LAB, "LAB")
 
 
     ]

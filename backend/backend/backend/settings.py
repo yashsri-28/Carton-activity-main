@@ -80,9 +80,8 @@ INSTALLED_APPS = [
     "activity_logs",
     "pp_sample",
     "labdip",
-    "artwork",
-    'saml_auth',
     
+    'saml_auth',
 ]
 
 MIDDLEWARE = [

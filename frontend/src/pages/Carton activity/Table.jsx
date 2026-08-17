@@ -166,10 +166,10 @@ function Table({
               {columns.map((col, idx) => (
                 <th
                   key={col.key || idx}
-                  className={`p-4 font-medium whitespace-nowrap
-                    ${idx === 0 && !enableSelection ? "rounded-tl-lg" : ""}
-                    ${idx === columns.length - 1 && !actions.length && !customActions ? "rounded-tr-lg" : ""}
-                  `}
+                  className={`p-4 font-medium whitespace-nowrap ${idx === columns.length - 1 && !actions.length && !customActions
+                      ? 'rounded-tr-lg'
+                      : ''
+                    }`}
                 >
                   {col.header}
                 </th>

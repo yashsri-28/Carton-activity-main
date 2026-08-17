@@ -12,34 +12,21 @@ const InputField = ({
   name,
   value,
   onChange,
-  type = "text",
-  isTextarea = false,   // 👈 new prop
-  rows = 3              // 👈 default rows
+  type = "text"   // 👈 default text
 }) => (
   <div className="flex flex-col gap-2 w-full">
     <label className="text-sm font-semibold text-gray-700">
       {label}
     </label>
 
-    {isTextarea ? (
-      <textarea
-        name={name}
-        value={value || ""}
-        onChange={onChange}
-        placeholder={placeholder}
-        rows={rows}
-        className="w-full border border-gray-200 rounded-md p-3 text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-sm resize-none"
-      />
-    ) : (
-      <input
-        type={type}
-        name={name}
-        value={value || ""}
-        onChange={onChange}
-        placeholder={placeholder}
-        className="w-full border border-gray-200 rounded-md p-3 text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-sm"
-      />
-    )}
+    <input
+      type={type}
+      name={name}
+      value={value || ""}
+      onChange={onChange}
+      placeholder={placeholder}
+      className="w-full border border-gray-200 rounded-md p-3 text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-sm"
+    />
   </div>
 );
 
@@ -76,6 +63,25 @@ const RadioField = ({ label, name, value, onChange }) => (
   </div>
 );
 
+// Reusable Select Component
+const SelectField = ({ label, name, value, onChange, options, placeholder }) => (
+  <div className="flex flex-col gap-2 w-full">
+    <label className="text-sm font-semibold text-gray-700">{label}</label>
+    <select
+      name={name}
+      value={value || ''}
+      onChange={onChange}
+      className="w-full border border-gray-200 rounded-md p-3 text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm appearance-none bg-white"
+    >
+      <option value="">{placeholder}</option>
+      {options.map((option) => (
+        <option key={option.id} value={option.company_name}>
+          {option.company_name}
+        </option>
+      ))}
+    </select>
+  </div>
+);
 
 // Wrapper
 const FormItem = ({ children }) => (
@@ -137,6 +143,11 @@ function Form({
           <BathRobeForm
             formData={formData}
             onInputChange={onInputChange}
+            selectedFile={selectedFile}
+            onFileChange={onFileChange}
+            onRemoveFile={onRemoveFile}
+            loading={loading}
+            hideAttachment={hideAttachment}
           />
         )}
 
@@ -146,15 +157,24 @@ function Form({
           <BathTerryForm
             formData={formData}
             onInputChange={onInputChange}
+            selectedFile={selectedFile}
+            onFileChange={onFileChange}
+            onRemoveFile={onRemoveFile}
+            loading={loading}
+            hideAttachment={hideAttachment}
           />
         )}
-
 
         {/* Bedsheet Form */}
         {formData.productCategory === "Bedsheet" && (
           <BedsheetForm
             formData={formData}
             onInputChange={onInputChange}
+            selectedFile={selectedFile}
+            onFileChange={onFileChange}
+            onRemoveFile={onRemoveFile}
+            loading={loading}
+            hideAttachment={hideAttachment}
           />
         )}
 
@@ -345,6 +365,14 @@ function Form({
           </FormItem>
 
           {/* Sample Section */}
+          <FormItem>
+            <RadioField
+              label="Sample Carton Arranged"
+              name="sampleCarton"
+              value={formData.sampleCarton}
+              onChange={onInputChange}
+            />
+          </FormItem>
 
           <FormItem>
             <RadioField
@@ -458,18 +486,6 @@ function Form({
               value={formData.bellyBandPacking}
               onChange={onInputChange}
               placeholder="Yes/No + Arrange samples"
-            />
-          </FormItem>
-
-          <FormItem>
-            <InputField
-              label="Remark"
-              name="remark"
-              value={formData.remark}
-              onChange={onInputChange}
-              placeholder="Enter Remark"
-              isTextarea={true}     // 👈 makes it big
-              rows={4}              // 👈 control height
             />
           </FormItem>
 

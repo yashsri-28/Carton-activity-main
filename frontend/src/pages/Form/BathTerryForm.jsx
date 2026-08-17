@@ -9,33 +9,17 @@ const InputField = ({
   value,
   onChange,
   type = "text",
-  isTextarea = false,   // 👈 new prop
-  rows = 3              // 👈 default rows
 }) => (
   <div className="flex flex-col gap-2 w-full">
-    <label className="text-sm font-semibold text-gray-700">
-      {label}
-    </label>
-
-    {isTextarea ? (
-      <textarea
-        name={name}
-        value={value || ""}
-        onChange={onChange}
-        placeholder={placeholder}
-        rows={rows}
-        className="w-full border border-gray-200 rounded-md p-3 text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-sm resize-none"
-      />
-    ) : (
-      <input
-        type={type}
-        name={name}
-        value={value || ""}
-        onChange={onChange}
-        placeholder={placeholder}
-        className="w-full border border-gray-200 rounded-md p-3 text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-sm"
-      />
-    )}
+    <label className="text-sm font-semibold text-gray-700">{label}</label>
+    <input
+      type={type}
+      name={name}
+      value={value || ""}
+      onChange={onChange}
+      placeholder={placeholder}
+      className="w-full border border-gray-200 rounded-md p-3 text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-sm"
+    />
   </div>
 );
 
@@ -281,16 +265,6 @@ function BathTerryForm({
         </FormItem>
 
         <FormItem>
-          <InputField
-            label="If Blister Packing Required"
-            name="BlisterRequired"
-            placeholder="sets / Blister"
-            value={formData.BlisterRequired}
-            onChange={onInputChange}
-          />
-        </FormItem>
-
-        <FormItem>
           <RadioField
             label="Special CDU Required"
             name="specialCDU"
@@ -299,14 +273,14 @@ function BathTerryForm({
           />
         </FormItem>
 
-        {/* <FormItem>
+        <FormItem>
           <RadioField
             label="Sample Carton Arranged"
             name="sampleCarton"
             value={formData.sampleCarton}
             onChange={onInputChange}
           />
-        </FormItem> */}
+        </FormItem>
 
         {/* PDQ & Warehouse Fields */}
         <FormItem>
@@ -408,17 +382,7 @@ function BathTerryForm({
             onChange={onInputChange}
           />
         </FormItem>
-        <FormItem>
-          <InputField
-            label="Remark"
-            name="remark"
-            value={formData.remark}
-            onChange={onInputChange}
-            placeholder="Enter Remark"
-            isTextarea={true}     // 👈 makes it big
-            rows={4}              // 👈 control height
-          />
-        </FormItem>
+
         {/* Attachment */}
         <Attachment
           selectedFile={selectedFile}

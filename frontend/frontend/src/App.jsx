@@ -21,6 +21,10 @@ import LabDipMarketing from './pages/Lab Dip/Lab_DipMarketing'
 import LabDipLab from './pages/Lab Dip/Lab_Dip_Lab'
 import LabDipView from './pages/Lab Dip/Lab_Dip_View'
 import GussetView from './pages/Carton activity/GussetView'
+import ArtworkList from './pages/Artwork/ArtworkList';
+import ArtworkForm from './pages/Artwork/ArtworkForm';
+import PackagingSpecForm from './pages/Artwork/PackagingSpecForm';
+import ArtworkDetails from './pages/Artwork/ArtworkDetails';
 
 function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -112,6 +116,7 @@ function App() {
                     role === 'ppc' ? <PPSamplePPC /> :
                       role === 'warehouse' ? <CartonMainWarehouse /> :
                         role === 'lab' ? <LabDipLab /> :
+                         role === 'procurement' ? <ArtworkList role={role} /> :
                           <CartonMain />
               }
             />
@@ -181,6 +186,10 @@ function App() {
             <Route path="/gusset/view/:id" element={<GussetView />} />
             <Route path="/lab-dip/view/:id" element={<LabDipView />} />
             <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="/artwork" element={<ArtworkList role={role} />} />
+            <Route path="/artwork/new" element={<ArtworkForm />} />
+            <Route path="/artwork/new-spec" element={<PackagingSpecForm />} />
+            <Route path="/artwork/:artworkId" element={<ArtworkDetails role={role} />} />
           </Routes>
 
         </main>

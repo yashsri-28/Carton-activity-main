@@ -40,6 +40,11 @@ function Sidebar({ collapsed, role }) {
       path: "/lab-dip"
     },
     {
+      name: 'Artwork Management',
+      iconSrc: "/iconImgs/carton_menu-icon.svg",   // temp icon, baad me apna svg daal dena
+      path: "/artwork"
+    },
+    {
       name: 'Container Booking',
       iconSrc: "/iconImgs/container_menu-icon.svg",
       path: "/container"
@@ -51,19 +56,25 @@ function Sidebar({ collapsed, role }) {
 
   if (['ttqm', 'warehouse', 'purchase'].includes(role.toLowerCase())) {
     filteredMenu = fullMenu.filter(
-      item => item.name === "Dashboard" || item.name === "Carton Activity"
+      item => item.name === "Dashboard" || item.name === "Carton Activity" || item.name === "Artwork Management"
     );
   }
 
   if (role.toLowerCase() === 'ppc') {
     filteredMenu = fullMenu.filter(
-      item => item.name === "Dashboard" || item.name === "Sample - Top/Testing Etc" || item.name === "TOP Activity" ||  item.name === "Carton View PPC"
+      item => item.name === "Dashboard" || item.name === "Sample - Top/Testing Etc" || item.name === "TOP Activity" ||  item.name === "Carton View PPC" || item.name === "Artwork Management"
     );
   }
 
   if (role.toLowerCase() === 'lab') {
     filteredMenu = fullMenu.filter(
       item => item.name === "Dashboard" || item.name === "Lab Dip" 
+    );
+  }
+
+  if (role.toLowerCase() === 'procurement') {
+    filteredMenu = fullMenu.filter(
+      item => item.name === "Artwork Management"
     );
   }
 

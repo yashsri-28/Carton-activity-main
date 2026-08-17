@@ -50,3 +50,6 @@ export const createArtworkWithSpec = (payload) =>
 
 export const getPackagingSpec = (artworkId) =>
   api.get(`/api/artwork/${artworkId}/spec/`);
+
+export const assignProcurement = (artworkId, vendorId) =>
+  api.post(`/api/artwork/${artworkId}/assign-procurement/`, { vendor_id: vendorId });

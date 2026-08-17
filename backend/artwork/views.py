@@ -1054,4 +1054,52 @@ def get_packaging_spec(request, artwork_id):
     return Response(
         {"category": spec.category, "spec_data": spec.spec_data},
         status=http_status.HTTP_200_OK,
+        
     )
+    
+   
+@swagger_auto_schema(method="post", operation_summary="Assign Procurement Contact")
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@transaction.atomic
+def assign_procurement(request, artwork_id):
+    artwork = get_object_or_404(ArtworkRequest, artwork_id=artwork_id)
+
+    if request.user.role not in ["MARKETING", "ADMIN"]:
+        return Response(
+            {"error": "Only Marketing or Admin can assign a procurement contact."},
+            status=http_status.HTTP_403_FORBIDDEN,
+        )
+
+    if artwork.status in ["RELEASED", "ARCHIVED", "OBSOLETE"]:
+        return Response(
+            {"error": f"Artwork is '{artwork.status}' — cannot reassign procurement now."},
+            status=http_status.HTTP_400_BAD_REQUEST,
+        )
+
+    vendor_id = request.data.get("vendor_id")
+    if not vendor_id:
+        return Response({"error": "vendor_id is required."}, status=http_status.HTTP_400_BAD_REQUEST)
+
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    try:
+        vendor_user = User.objects.get(id=vendor_id, role="PROCUREMENT")
+    except User.DoesNotExist:
+        return Response({"error": "Invalid procurement user."}, status=http_status.HTTP_400_BAD_REQUEST)
+
+    artwork.assigned_vendor = vendor_user
+    # A DRAFT artwork (never had anyone assigned) moves forward once
+    # a procurement contact is finally picked — same as if it had been
+    # assigned at creation time.
+    if artwork.status == "DRAFT":
+        artwork.status = "VENDOR_UPLOAD_PENDING"
+    artwork.updated_by = request.user
+    artwork.save(update_fields=["assigned_vendor", "status", "updated_by", "updated_on"])
+
+    _log_activity(
+        request, artwork, "Procurement Assigned",
+        f"{request.user.username} assigned procurement contact '{vendor_user.username}' to {artwork.artwork_id}.",
+    )
+
+    return Response(_artwork_to_dict(artwork, request=request), status=http_status.HTTP_200_OK) 

@@ -697,13 +697,23 @@ function ArtworkDetails({ role }) {
           <p className="text-sm text-gray-400 mb-3">No comments yet.</p>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
+   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
           {commentList.map((c) => (
             <div key={c.id} className="text-sm bg-gray-50 rounded-md p-3 border border-gray-200">
-              <div className="flex items-center justify-between mb-1">
-                <span className="font-medium text-gray-800">
-                  {c.author} <span className="text-gray-400 font-normal">({c.author_role})</span>
-                </span>
+              <div className="flex items-center justify-between mb-1 flex-wrap gap-1">
+                <span className="font-medium text-gray-800">{c.author}</span>
+                <div className="flex items-center gap-1">
+                  {c.author_role && (
+                    <span className="text-[10px] font-semibold uppercase tracking-wide bg-[#003366] text-white rounded-full px-2 py-0.5">
+                      {c.author_role}
+                    </span>
+                  )}
+                  {c.version_number && (
+                    <span className="text-[10px] font-semibold uppercase tracking-wide bg-amber-100 text-amber-800 rounded-full px-2 py-0.5">
+                      for v{c.version_number}
+                    </span>
+                  )}
+                </div>
               </div>
               <span className="text-xs text-gray-400">{new Date(c.created_on).toLocaleString()}</span>
               {c.message && <p className="text-gray-700 mt-1">{c.message}</p>}
@@ -716,6 +726,7 @@ function ArtworkDetails({ role }) {
           ))}
         </div>
 
+        
         <div className="space-y-2">
           <textarea
             placeholder="Ask a question, leave feedback, or add a reference remark..."

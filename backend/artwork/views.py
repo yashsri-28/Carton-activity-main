@@ -912,7 +912,7 @@ def list_artwork_comments(request, artwork_id):
     if getattr(request.user, "role", None) == "PROCUREMENT" and artwork.assigned_vendor_id != request.user.id:
         return Response({"error": "Not authorized to view this artwork."}, status=http_status.HTTP_403_FORBIDDEN)
 
-    comments = artwork.comments.select_related("author").order_by("created_on")
+    comments = artwork.comments.select_related("author","version").order_by("created_on")
     return Response(
         [
             {
@@ -921,6 +921,7 @@ def list_artwork_comments(request, artwork_id):
                 "author_role": getattr(c.author, "role", None),
                 "message": c.message,
                 "attachment_url": (request.build_absolute_uri(c.attachment.url) if c.attachment else None),
+                "version_number": c.version.version_number if c.version else None,
                 "created_on": c.created_on,
             }
             for c in comments
@@ -944,11 +945,17 @@ def add_artwork_comment(request, artwork_id):
     if not message and not attachment:
         return Response({"error": "Add a remark or an attachment (at least one)."}, status=http_status.HTTP_400_BAD_REQUEST)
 
+    # Tag this comment with whichever version is currently active —
+    # that's the design the person is actually looking at/discussing.
+    current_version = artwork.versions.filter(is_active_version=True).first()
+    
+    
     comment = ArtworkComment.objects.create(
         artwork=artwork,
         author=request.user,
         message=message,
         attachment=attachment,
+        version=current_version,
     )
 
     _log_activity(

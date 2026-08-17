@@ -300,6 +300,17 @@ class ArtworkComment(models.Model):
         null=True,
         related_name="artwork_comments_authored",
     )
+        # Which version this comment/attachment is about — so when there
+    # are multiple versions (v1 rejected, v2 re-uploaded), it's always
+    # clear which design the remark refers to. Nullable for backward
+    # compatibility with any comments made before this field existed.
+    version = models.ForeignKey(
+        "ArtworkVersion",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="comments",
+    )
 
     message = models.TextField(blank=True, default="")
 

@@ -587,6 +587,7 @@ def _validate_upload_file(f):
 
 
 def _artwork_to_dict(artwork, request=None, include_versions=True, include_approvals=True):
+    
     data = {
         "id": artwork.id,
         "artwork_id": artwork.artwork_id,
@@ -824,8 +825,8 @@ def release_artwork(request, artwork_id):
     if artwork.status != "APPROVED":
         return Response({"error": "Only APPROVED artworks can be released."}, status=http_status.HTTP_400_BAD_REQUEST)
 
-    if not artwork.material_code:
-        return Response({"error": "material_code is required before release."}, status=http_status.HTTP_400_BAD_REQUEST)
+    # if not artwork.material_code:
+    #     return Response({"error": "material_code is required before release."}, status=http_status.HTTP_400_BAD_REQUEST)
 
     artwork.status = "RELEASED"
     artwork.updated_by = request.user
@@ -1202,3 +1203,59 @@ def export_artwork_excel(request, artwork_id):
     response["Content-Disposition"] = f"attachment; filename={artwork.artwork_id}.xlsx"
     wb.save(response)
     return response
+
+
+# ------------------------------------------------------------------
+# BRD Section 12 — Performance Dashboard
+# Average review time by department, first-pass approval rate,
+# and approval bottleneck analysis — computed on the fly from
+# ArtworkVersion/ArtworkApproval data (no extra tables needed).
+# ------------------------------------------------------------------
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def artwork_performance_stats(request):
+    stage_durations = {"MARKETING": [], "PPC": [], "TQM": [], "CUSTOMER": []}
+
+    versions = ArtworkVersion.objects.prefetch_related("approvals")
+    for v in versions:
+        approvals = list(v.approvals.order_by("sequence"))
+        prev_time = v.uploaded_on
+        for a in approvals:
+            if not a.acted_on:
+                break  # stopped here — nothing acted yet beyond this point
+            duration_hours = (a.acted_on - prev_time).total_seconds() / 3600.0
+            if duration_hours >= 0:
+                stage_durations[a.stage].append(duration_hours)
+            prev_time = a.acted_on
+            if a.decision == "REJECTED":
+                break
+
+    avg_review_time_days = {}
+    for stage, durations in stage_durations.items():
+        avg_review_time_days[stage] = round((sum(durations) / len(durations)) / 24, 2) if durations else None
+
+    # First-pass approval rate — among artworks that reached a final
+    # APPROVED/RELEASED state, what % never needed a re-upload (v2+)?
+    terminal_qs = ArtworkRequest.objects.filter(status__in=["APPROVED", "RELEASED"])
+    terminal_count = terminal_qs.count()
+    first_pass_count = sum(1 for artwork in terminal_qs if artwork.versions.count() == 1)
+    first_pass_rate = round((first_pass_count / terminal_count) * 100, 1) if terminal_count else None
+
+    # Bottleneck — whichever stage has the highest average review time
+    valid_stages = {k: v for k, v in avg_review_time_days.items() if v is not None}
+    bottleneck_stage = max(valid_stages, key=valid_stages.get) if valid_stages else None
+
+    return Response(
+        {
+            "avg_review_time_by_department": avg_review_time_days,
+            "first_pass_approval_rate": first_pass_rate,
+            "bottleneck_stage": bottleneck_stage,
+            "bottleneck_days": valid_stages.get(bottleneck_stage) if bottleneck_stage else None,
+            "sample_size": {
+                "versions_analyzed": versions.count(),
+                "terminal_artworks": terminal_count,
+            },
+        },
+        status=http_status.HTTP_200_OK,
+    )

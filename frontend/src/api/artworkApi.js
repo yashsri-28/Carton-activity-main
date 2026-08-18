@@ -57,3 +57,6 @@ export const assignProcurement = (artworkId, vendorId) =>
 
 export const exportArtworkExcel = (artworkId) =>
   api.get(`/api/artwork/${artworkId}/export-excel/`, { responseType: 'blob' });
+
+export const getPerformanceStats = () =>
+  api.get('/api/artwork/performance-stats/');

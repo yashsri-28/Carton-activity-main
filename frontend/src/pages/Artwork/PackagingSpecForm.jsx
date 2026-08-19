@@ -592,7 +592,6 @@
 
 
 
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
@@ -616,12 +615,27 @@ const COMMON_FIELD_LABELS = ['PRODUCT', 'BUYER NAME', 'PROGRAM', 'COUNTRY'];
 
 const OTHER_SENTINEL = '__OTHER__';
 
-// Splits raw excel option strings into a clean, deduplicated list.
-// Handles two excel patterns:
-//   - "COTTON / POLYESTER / SPUN POLYESTER" (slash/comma separated)
-//   - "1) WOVEN  2)PRINTED" (numbered, no separator between items —
-//     split right before each "N)" marker instead)
+// Turns the raw excel option data into a clean list of choices.
+//
+// Two excel patterns exist:
+//  1. Multiple SEPARATE cells, one option per cell (e.g. PVC quality:
+//     "NON LHM" | "LHM" | "PHTHALTE FREE" | "EVA") — each is already
+//     one distinct choice. These must NOT be split further, because
+//     some option text legitimately contains a "/" as part of the
+//     name itself (e.g. "WOVEN TAFFETA/DAMASK" is one quality name,
+//     not two choices).
+//  2. ONE cell containing multiple choices packed together, separated
+//     by "/", "," or a numbered marker like "1) WOVEN  2)PRINTED" —
+//     this single string genuinely needs splitting.
 function flattenOptions(rawOptions) {
+  if (rawOptions.length > 1) {
+    // Already one choice per array entry — use as-is.
+    return [...new Set(
+      rawOptions
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0 && !/^other\b/i.test(s))
+    )];
+  }
   const choices = [];
   rawOptions.forEach((raw) => {
     raw
@@ -838,15 +852,13 @@ function PackagingSpecForm() {
         </select>
       </div>
 
-      {/* Step 3 — category-specific fields */}
+      {/* Step 3 — category-specific fields. No "select type first"
+          warning here on purpose — the TYPE field itself lives inside
+          the ungrouped fields below, so a warning above it would show
+          before the user has even seen the field. The matching
+          section simply appears naturally once TYPE is picked. */}
       {category && (
         <form onSubmit={handleSubmit}>
-          {hasTypeSelectorField && !selectedType && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-5 text-sm text-amber-700">
-              Select a "{typeFieldEntry.label.trim()}" option above first — its specific fields will appear here once chosen.
-            </div>
-          )}
-
           {grouped.map((group, gi) => (
             <div key={gi} className="mb-5 border border-gray-300 rounded overflow-hidden">
               {group.section && (

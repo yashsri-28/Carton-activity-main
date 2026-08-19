@@ -60,3 +60,12 @@ export const exportArtworkExcel = (artworkId) =>
 
 export const getPerformanceStats = () =>
   api.get('/api/artwork/performance-stats/');
+
+export const getArtworkNotifications = () =>
+  api.get('/api/artwork/notifications/');
+
+export const markNotificationRead = (notificationId) =>
+  api.post(`/api/artwork/notifications/${notificationId}/read/`);
+
+export const markAllNotificationsRead = () =>
+  api.post('/api/artwork/notifications/mark-all-read/');

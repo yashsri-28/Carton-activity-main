@@ -555,6 +555,7 @@ from drf_yasg.utils import swagger_auto_schema
 
 from .models import ArtworkRequest, ArtworkVersion, ArtworkApproval, ArtworkComment, PackagingSpecification
 from activity_logs.models import ActivityLog
+from .models import ArtworkRequest, ArtworkVersion, ArtworkApproval, ArtworkComment, PackagingSpecification, ArtworkNotification
 
 
 APPROVAL_STAGE_ORDER = ["MARKETING", "PPC", "TQM", "CUSTOMER"]
@@ -562,6 +563,28 @@ APPROVAL_STAGE_ORDER = ["MARKETING", "PPC", "TQM", "CUSTOMER"]
 MAX_UPLOAD_SIZE_MB = 25
 ALLOWED_EXTENSIONS = [".pdf", ".ai", ".eps", ".psd", ".png", ".jpg", ".jpeg", ".tiff"]
 
+# Helper function
+def _notify(user, artwork, message):
+    """Create one notification for a specific user."""
+    if not user:
+        return
+    ArtworkNotification.objects.create(recipient=user, artwork=artwork, message=message)
+
+
+def _notify_role(role, artwork, message, exclude_user=None):
+    """Create a notification for every user that has the given role
+    (used when the next reviewer isn't one specific assigned person,
+    e.g. PPC/TQM stages — any user with that role should be alerted)."""
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    users = User.objects.filter(role=role)
+    if exclude_user:
+        users = users.exclude(id=exclude_user.id)
+    for u in users:
+        ArtworkNotification.objects.create(recipient=u, artwork=artwork, message=message)
+        
+        
+        
 
 def _log_activity(request, artwork, action, message, old_value=None, new_value=None):
     ActivityLog.objects.create(
@@ -687,6 +710,9 @@ def create_artwork_request(request):
         f"Artwork request {artwork.artwork_id} created.",
         new_value=artwork.status,
     )
+    
+    if artwork.assigned_vendor:
+        _notify(artwork.assigned_vendor, artwork, f"New artwork request {artwork.artwork_id} assigned to you.")
 
     return Response(_artwork_to_dict(artwork, request=request), status=http_status.HTTP_201_CREATED)
 
@@ -743,6 +769,8 @@ def upload_artwork_version(request, artwork_id):
         f"Version {version.version_number} uploaded for {artwork.artwork_id}.",
         new_value=f"v{version.version_number}",
     )
+    if artwork.created_by:
+        _notify(artwork.created_by, artwork, f"{artwork.artwork_id} has a new version ready for your review.")
 
     return Response(_artwork_to_dict(artwork, request=request), status=http_status.HTTP_201_CREATED)
 
@@ -788,18 +816,44 @@ def act_on_artwork_approval(request, artwork_id):
     pending.acted_on = timezone.now()
     pending.save()
 
+    # if decision == "REJECTED":
+    #     artwork.status = "REJECTED"
+    # else:
+    #     next_pending = artwork.approvals.filter(decision="PENDING", version=current_version).order_by("sequence").first()
+    #     if next_pending:
+    #         artwork.status = f"{next_pending.stage}_REVIEW" if next_pending.stage != "CUSTOMER" else "CUSTOMER_REVIEW"
+    #     else:
+    #         artwork.status = "APPROVED"
+    #         active_version = artwork.versions.filter(is_active_version=True).first()
+    #         if active_version:
+    #             active_version.is_locked = True
+    #             active_version.save(update_fields=["is_locked"])
+    
     if decision == "REJECTED":
         artwork.status = "REJECTED"
+        if artwork.assigned_vendor:
+            _notify(
+                artwork.assigned_vendor, artwork,
+                f"{artwork.artwork_id} was rejected at {pending.stage} stage. Please revise and re-upload."
+                + (f" Reason: {comments}" if comments else ""),
+            )
     else:
         next_pending = artwork.approvals.filter(decision="PENDING", version=current_version).order_by("sequence").first()
         if next_pending:
             artwork.status = f"{next_pending.stage}_REVIEW" if next_pending.stage != "CUSTOMER" else "CUSTOMER_REVIEW"
+            next_role = ArtworkApproval.STAGE_ROLE_MAP.get(next_pending.stage)
+            if next_role:
+                _notify_role(next_role, artwork, f"{artwork.artwork_id} is ready for your {next_pending.stage} review.", exclude_user=request.user)
         else:
             artwork.status = "APPROVED"
             active_version = artwork.versions.filter(is_active_version=True).first()
             if active_version:
                 active_version.is_locked = True
                 active_version.save(update_fields=["is_locked"])
+            if artwork.assigned_vendor:
+                _notify(artwork.assigned_vendor, artwork, f"{artwork.artwork_id} has been fully approved.")
+            if artwork.created_by:
+                _notify(artwork.created_by, artwork, f"{artwork.artwork_id} has been fully approved.")
 
     artwork.updated_by = request.user
     artwork.save(update_fields=["status", "updated_by", "updated_on"])
@@ -1035,6 +1089,10 @@ def create_artwork_with_spec(request):
         f"Artwork request {artwork.artwork_id} created with {category} packaging specification.",
         new_value=artwork.status,
     )
+    
+    if artwork.assigned_vendor:
+        _notify(artwork.assigned_vendor, artwork, f"New artwork request {artwork.artwork_id} assigned to you.")
+
 
     return Response(_artwork_to_dict(artwork, request=request), status=http_status.HTTP_201_CREATED)
 
@@ -1102,6 +1160,7 @@ def assign_procurement(request, artwork_id):
         request, artwork, "Procurement Assigned",
         f"{request.user.username} assigned procurement contact '{vendor_user.username}' to {artwork.artwork_id}.",
     )
+    _notify(vendor_user, artwork, f"You have been assigned artwork {artwork.artwork_id}.")
 
     return Response(_artwork_to_dict(artwork, request=request), status=http_status.HTTP_200_OK) 
 
@@ -1259,3 +1318,46 @@ def artwork_performance_stats(request):
         },
         status=http_status.HTTP_200_OK,
     )
+    
+    
+# ------------------------------------------------------------------
+# Notification Bell — list + mark-read endpoints
+# ------------------------------------------------------------------
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def list_artwork_notifications(request):
+    notifications = ArtworkNotification.objects.filter(recipient=request.user).select_related("artwork")[:30]
+    unread_count = ArtworkNotification.objects.filter(recipient=request.user, is_read=False).count()
+    return Response(
+        {
+            "unread_count": unread_count,
+            "notifications": [
+                {
+                    "id": n.id,
+                    "artwork_id": n.artwork.artwork_id,
+                    "message": n.message,
+                    "is_read": n.is_read,
+                    "created_on": n.created_on,
+                }
+                for n in notifications
+            ],
+        },
+        status=http_status.HTTP_200_OK,
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def mark_notification_read(request, notification_id):
+    notif = get_object_or_404(ArtworkNotification, id=notification_id, recipient=request.user)
+    notif.is_read = True
+    notif.save(update_fields=["is_read"])
+    return Response({"status": "ok"}, status=http_status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def mark_all_notifications_read(request):
+    ArtworkNotification.objects.filter(recipient=request.user, is_read=False).update(is_read=True)
+    return Response({"status": "ok"}, status=http_status.HTTP_200_OK)    

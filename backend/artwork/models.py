@@ -378,3 +378,39 @@ class PackagingSpecification(models.Model):
 
     def __str__(self):
         return f"{self.artwork.artwork_id} - {self.category}" 
+    
+    
+
+# ============================================================
+# Notification Bell — whenever an artwork moves to a stage that
+# needs someone's action (created & assigned, uploaded, approved
+# to next stage, rejected), a notification row is created for the
+# relevant person(s). Read by the bell icon in the top bar.
+# ============================================================
+
+class ArtworkNotification(models.Model):
+
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="artwork_notifications",
+    )
+
+    artwork = models.ForeignKey(
+        ArtworkRequest,
+        on_delete=models.CASCADE,
+        related_name="notifications",
+    )
+
+    message = models.CharField(max_length=255)
+
+    is_read = models.BooleanField(default=False)
+
+    created_on = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "artwork_notification"
+        ordering = ["-created_on"]
+
+    def __str__(self):
+        return f"To {self.recipient} — {self.message}"

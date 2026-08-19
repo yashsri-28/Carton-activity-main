@@ -123,7 +123,9 @@ function ArtworkList({ role }) {
           onChange={(e) => setFilters({ ...filters, status: e.target.value })}
         >
           <option value="">All Statuses</option>
-          {Object.keys(STATUS_COLORS).map((s) => <option key={s} value={s}>{s}</option>)}
+          {Object.keys(STATUS_COLORS).map((s) => (
+            <option key={s} value={s}>{STATUS_LABELS[s] || s.replace(/_/g, ' ')}</option>
+          ))}
         </select>
       <button
         onClick={fetchArtworks}
@@ -146,16 +148,16 @@ function ArtworkList({ role }) {
               <th className="text-left px-4 py-3">Brand</th>
               <th className="text-left px-4 py-3">Status</th>
               <th className="text-left px-4 py-3">Ageing</th>
-              <th className="text-left px-4 py-3">Turnaround</th>
+              <th className="text-left px-4 py-3">TAT</th>
               <th className="text-left px-4 py-3">Created</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={6} className="text-center py-6 text-gray-400">Loading...</td></tr>
+              <tr><td colSpan={8} className="text-center py-6 text-gray-400">Loading...</td></tr>
             )}
             {!loading && artworks.length === 0 && (
-              <tr><td colSpan={6} className="text-center py-6 text-gray-400">No artwork requests found.</td></tr>
+              <tr><td colSpan={8} className="text-center py-6 text-gray-400">No artwork requests found.</td></tr>
             )}
             {!loading && artworks.map((a) => (
               <tr
@@ -167,14 +169,17 @@ function ArtworkList({ role }) {
                 <td className="px-4 py-3">{a.title}</td>
                 <td className="px-4 py-3">{a.sku_code}</td>
                 <td className="px-4 py-3">{a.brand_name || '-'}</td>
-              <td className="px-4 py-3">
-              <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[a.status] || 'bg-gray-100'}`}>
-                {a.status.replace(/_/g, ' ')}
-              </span>
-              </td>
+                <td className="px-4 py-3">
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[a.status] || 'bg-gray-100'}`}>
+                    {STATUS_LABELS[a.status] || a.status.replace(/_/g, ' ')}
+                  </span>
+                </td>
               <td className="px-4 py-3 text-gray-600">{getAgeing(a)}</td>
               <td className="px-4 py-3 text-gray-600">{getTurnaround(a)}</td>
-              <td className="px-4 py-3 text-gray-500">{new Date(a.created_on).toLocaleDateString()}</td>
+              {/* <td className="px-4 py-3 text-gray-500">{new Date(a.created_on).toLocaleString()}</td> */}
+              <td className="px-4 py-3 text-gray-500">
+                {new Date(a.created_on).toLocaleDateString()} {new Date(a.created_on).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </td>
               </tr>
             ))}
           </tbody>

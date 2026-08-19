@@ -88,6 +88,23 @@
         ]
       },
       {
+        "label": "WELDED BAG",
+        "section": "WELDED BAG",
+        "options": [
+          "Envelop bag / Bookfold Bag",
+          "CLOSING WITH WHITE BUTTON/ GOLDEN BUTTON /SILER BUTTON",
+          "CLOSING WITH ADHESIVE TAPE",
+          "CLOSING WITH VELCRO"
+        ]
+      },
+      {
+        "label": "STITCHING BAG STYLE",
+        "section": "STITCHING BAG STYLE",
+        "options": [
+          "SUITCASE STYLE /  SHEET SET"
+        ]
+      },
+      {
         "label": "ZIPPER & PULLER SIZE",
         "section": "STITCHING BAG STYLE",
         "options": [
@@ -120,6 +137,13 @@
         "section": "STITCHING BAG STYLE",
         "options": [
           "CLEAR /  BLACK / WHITE /  DTM/OTHER PLEASE SPECIFY"
+        ]
+      },
+      {
+        "label": "COMFORTOR BAG STYLE",
+        "section": "COMFORTOR BAG STYLE",
+        "options": [
+          "SUITCASE STYLE /  SHEET SET /OTHER PLEASE SPECIFY"
         ]
       },
       {
@@ -381,6 +405,11 @@
         ]
       },
       {
+        "label": "WOVEN",
+        "section": "WOVEN",
+        "options": []
+      },
+      {
         "label": "QUALITY",
         "section": "WOVEN",
         "options": [
@@ -392,6 +421,11 @@
           "35) WOVEN DAMASK HIGH DENSITY LABEL",
           "OTHER IF ANY SPECIFY"
         ]
+      },
+      {
+        "label": "PRINTED",
+        "section": "PRINTED",
+        "options": []
       },
       {
         "label": "QUALITY",
@@ -812,6 +846,11 @@
         ]
       },
       {
+        "label": "HANGER",
+        "section": "HANGER",
+        "options": []
+      },
+      {
         "label": "SIZE",
         "section": "HANGER",
         "options": []
@@ -838,6 +877,11 @@
       {
         "label": "WEIGHT  OF THE PRODUCT",
         "section": "HANGER",
+        "options": []
+      },
+      {
+        "label": "DORI",
+        "section": "DORI",
         "options": []
       },
       {
@@ -874,6 +918,11 @@
         ]
       },
       {
+        "label": "PLASTIC BAND",
+        "section": "PLASTIC BAND",
+        "options": []
+      },
+      {
         "label": "SIZE",
         "section": "PLASTIC BAND",
         "options": []
@@ -903,6 +952,11 @@
         "options": []
       },
       {
+        "label": "VELCRO",
+        "section": "VELCRO",
+        "options": []
+      },
+      {
         "label": "SIZE",
         "section": "VELCRO",
         "options": []
@@ -927,6 +981,11 @@
         "options": [
           "ROLL"
         ]
+      },
+      {
+        "label": "ZIPPER",
+        "section": "ZIPPER",
+        "options": []
       },
       {
         "label": "SIZE",
@@ -964,6 +1023,11 @@
         ]
       },
       {
+        "label": "PULLER",
+        "section": "PULLER",
+        "options": []
+      },
+      {
         "label": "SIZE",
         "section": "PULLER",
         "options": [
@@ -977,6 +1041,11 @@
           "ZINC DTM/ PLASTIC PULLER / RIBBON PULLER/ SLIDER WITHOUT PULLER",
           "SHOULD PASS THROUGH METAL DETECTOR"
         ]
+      },
+      {
+        "label": "LACES",
+        "section": "LACES",
+        "options": []
       },
       {
         "label": "SIZE",
@@ -1005,6 +1074,11 @@
         ]
       },
       {
+        "label": "LAMINATE BAG",
+        "section": "LAMINATE BAG",
+        "options": []
+      },
+      {
         "label": "SIZE",
         "section": "LAMINATE BAG",
         "options": []
@@ -1029,6 +1103,11 @@
         "options": [
           "ARTWORK"
         ]
+      },
+      {
+        "label": "BUTTON",
+        "section": "BUTTON",
+        "options": []
       },
       {
         "label": "SIZE / LINE",

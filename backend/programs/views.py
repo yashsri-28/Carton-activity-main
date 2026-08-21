@@ -1,16 +1,22 @@
-from rest_framework.decorators import api_view, permission_classes
+import logging
+
+from rest_framework.decorators import api_view, permission_classes, parser_classes
+from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
+
 from django.db import transaction
-from drf_yasg.utils import swagger_auto_schema
-from drf_yasg import openapi
-from rest_framework.decorators import api_view, permission_classes, parser_classes
-from rest_framework.parsers import MultiPartParser, FormParser
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from rest_framework import status
+
+from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
+
 from programs.services.carton_calculator import CartonCalculator
+from activity_logs.utils import create_log
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -44,7 +50,27 @@ from programs.services.notification_service import NotificationService
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 
+def clean_kwargs(model, data: dict) -> dict:
+    """
+    Filters a dict down to only the keys that are actual fields
+    on the given model, so stray/unexpected keys from the request
+    don't blow up .objects.create() with a TypeError.
+    """
+    if not isinstance(data, dict):
+        return {}
 
+    valid_fields = {f.name for f in model._meta.get_fields()}
+
+    return {
+        key: value
+        for key, value in data.items()
+        if key in valid_fields
+    }
+def clean_int(value):
+    """Convert '' or None to None, otherwise return the value as-is."""
+    if value in (None, "", "null"):
+        return None
+    return value
 # ------------------------------------------------------------------
 # API: Submit Carton Program
 # Description:
@@ -348,7 +374,6 @@ submit_carton_program_schema = openapi.Schema(
 @permission_classes([IsAuthenticated])
 @transaction.atomic
 def submit_carton_program(request):
-
     data = request.data
 
     activity_name = data.get("activity_name")
@@ -359,88 +384,69 @@ def submit_carton_program(request):
 
     if not activity_name:
         return Response({"error": "activity_name is required"}, status=400)
-
     if not program_name:
         return Response({"error": "program_name is required"}, status=400)
+
+    valid_types = {"TOWEL", "BEDSHEET", "TERRY_TOWEL", "BATH_ROBE"}
+    if program_type not in valid_types:
+        return Response({"error": f"invalid program_type: {program_type}"}, status=400)
 
     carton_program_data = data.get("carton_program", {})
     subprograms = data.get("subprograms", [])
     samples = data.get("samples", [])
 
-    # --------------------------------------------------
-    # 1️⃣ CREATE MAIN CARTON PROGRAM
-    # --------------------------------------------------
-
+    # 1️⃣ MAIN CARTON PROGRAM
     carton_program = CartonProgram.objects.create(
         program_type=program_type,
         program_name=program_name,
         created_by=request.user,
-
         remark=carton_program_data.get("remark"),
         customer_name=carton_program_data.get("customer_name"),
         customer_protocol=carton_program_data.get("customer_protocol"),
         confirm_new_or_shifted_from_vapi=carton_program_data.get("confirm_new_or_shifted_from_vapi"),
         original_towel=carton_program_data.get("original_towel"),
-
         polybag_manual_or_automatic=carton_program_data.get("polybag_manual_or_automatic"),
         polybag_type=carton_program_data.get("polybag_type"),
-
         pallet_or_slipsheet_requirement=carton_program_data.get("pallet_or_slipsheet_requirement", False),
         special_carton_required=carton_program_data.get("special_carton_required", False),
         pdq_required=carton_program_data.get("pdq_required", False),
         cdu_required=carton_program_data.get("cdu_required", False),
-
         sample_arranged_for_special_carton=carton_program_data.get("sample_carton_arranged", False),
         sample_arranged_for_special_carton_pdq=carton_program_data.get("pdq_arranged", False),
         sample_arranged_for_special_carton_cdu=carton_program_data.get("cdu_arranged", False),
-
         shipped_as_single_pdq_or_monster_pdq=carton_program_data.get("shipped_as_single_pdq_or_monster_pdq"),
         pdq_layers_stacking_details=carton_program_data.get("pdq_layers_stacking_details"),
         common_pdq_same_dimension_for_all_sizes=carton_program_data.get("common_pdq_same_dimension_for_all_sizes"),
-
         small_pdq_on_pallet_or_slipsheet=carton_program_data.get("small_pdq_on_pallet_or_slipsheet"),
         small_pdq_count_on_pallet_or_slipsheet=carton_program_data.get("small_pdq_count_on_pallet_or_slipsheet"),
         warehouse_store_handling_method=carton_program_data.get("warehouse_store_handling_method"),
-
         towel_folded_and_poly_packed_before_carton=carton_program_data.get("towel_folded_and_poly_packed_before_carton"),
         separator_protector_stiffener_required=carton_program_data.get("separator_protector_stiffener_required"),
         ribbon_packing_required=carton_program_data.get("ribbon_packing_required"),
         belly_band_packing_required=carton_program_data.get("belly_band_packing_required"),
     )
 
-    # --------------------------------------------------
     # 2️⃣ PRODUCT-SPECIFIC DETAILS
-    # --------------------------------------------------
-
     if program_type == "BEDSHEET":
         BedsheetProgramDetails.objects.create(
             carton_program=carton_program,
-            **data.get("bedsheet_details", {})
+            **clean_kwargs(BedsheetProgramDetails, data.get("bedsheet_details", {}))
         )
-
     elif program_type == "TERRY_TOWEL":
-        terry_data = data.get("terry_details", {}).copy()
-        terry_data.pop("remark", None)
         TerryTowelProgramDetails.objects.create(
             carton_program=carton_program,
-            **terry_data
+            **clean_kwargs(TerryTowelProgramDetails, data.get("terry_details", {}))
         )
-
-
     elif program_type == "BATH_ROBE":
-        bathrobe_data = data.get("bathrobe_details", {}).copy()
-        bathrobe_data.pop("remark", None)
         BathRobeProgramDetails.objects.create(
             carton_program=carton_program,
-            **bathrobe_data
+            **clean_kwargs(BathRobeProgramDetails, data.get("bathrobe_details", {}))
         )
+    # TOWEL: agar iska alag detail table hai to yahan add karo, warna fields
+    # already CartonProgram pe hain to isko yun hi chhod do.
 
-    # --------------------------------------------------
-    # 3️⃣ CREATE ACTIVITY STATUS
-    # --------------------------------------------------
-
+    # 3️⃣ ACTIVITY STATUS
     status_value = "Draft" if btn.lower() == "save as draft" else "Pending"
-
     ActivityProgramStatus.objects.create(
         activity=activity_name,
         program=carton_program,
@@ -449,68 +455,31 @@ def submit_carton_program(request):
         created_by=request.user
     )
 
-    # --------------------------------------------------
-    # 4️⃣ CREATE SUBPROGRAMS (Explicit Mapping - Safe)
-    # --------------------------------------------------
-
-    # for sp in subprograms:
-    #     CartonProgramSubProgram.objects.create(
-    #         carton_program=carton_program,
-    #         program_name=sp.get("program_name"),
-    #         style=sp.get("style"),
-    #         width_in=sp.get("width_in"),
-    #         length_in=sp.get("length_in"),
-    #         width_cm=sp.get("width_cm"),
-    #         length_cm=sp.get("length_cm"),
-    #         wt_per_unit=sp.get("wt_per_unit"),
-    #         gsm=sp.get("gsm"),
-    #         unit_per_carton=sp.get("unit_per_carton"),
-    #         inner_pack_unit_qty=sp.get("inner_pack_unit_qty"),
-    #         fold=sp.get("fold"),
-    #         pcs_per_set=sp.get("pcs_per_set"),
-    #         remark=sp.get("remark")
-    #     )
-
-
+    # 4️⃣ SUBPROGRAMS
     calc = CartonCalculator()
-
     for sp in subprograms:
-
         result = calc.compute(sp)
-
         CartonProgramSubProgram.objects.create(
             carton_program=carton_program,
-
             program_name=sp.get("program_name"),
             style=sp.get("style"),
-
             width_in=sp.get("width_in"),
             length_in=sp.get("length_in"),
-
             gsm=sp.get("gsm"),
             wt_per_unit=result["weight"],
-
             unit_per_carton=sp.get("unit_per_carton"),
             inner_pack_unit_qty=sp.get("inner_pack_unit_qty"),
-
             fold=sp.get("fold"),
             pcs_per_set=sp.get("pcs_per_set"),
             remark=sp.get("remark"),
-
-            # 🔥 NEW
             folded_length=result["folded_length"],
             folded_width=result["folded_width"],
-
-            # 🔥 CARTON AUTO
             carton_length=result["carton"]["length"],
             carton_width=result["carton"]["width"],
             carton_height=result["carton"]["height"],
         )
 
-    # --------------------------------------------------
-    # 5️⃣ CREATE SAMPLE PROGRAMS
-    # --------------------------------------------------
-
+    # 5️⃣ SAMPLE PROGRAMS
     for sm in samples:
         SampleProgram.objects.create(
             carton_program=carton_program,
@@ -526,31 +495,8 @@ def submit_carton_program(request):
             width_cm=sm.get("width_cm"),
             length_cm=sm.get("length_cm"),
         )
-        
-        
-    User = get_user_model()
 
-    notification = NotificationService()
-
-    # Send confirmation to creator (Marketing)
-    try:
-        notification.send_request_created(carton_program)
-    except Exception as e:
-        print("Email failed:", str(e))
-    
-    # If not draft → send to assigned user
-    if status_value != "Draft" and sent_to_user_id:
-        try:
-            assigned_user = User.objects.get(id=sent_to_user_id)
-            notification.send_tqm_notification(carton_program)
-        except User.DoesNotExist:
-            pass
-
-
-    # --------------------------------------------------
     # 6️⃣ LOGGING
-    # --------------------------------------------------
-
     create_log(
         module_name="Carton Program",
         record_id=carton_program.id,
@@ -559,31 +505,25 @@ def submit_carton_program(request):
         user=request.user
     )
 
-    # --------------------------------------------------
-    # 7️⃣ NOTIFICATIONS (Your Original Logic Restored)
-    # --------------------------------------------------
-
+    # 7️⃣ NOTIFICATIONS (ek hi baar bheji ja rahi hain, duplicate hata diya)
     User = get_user_model()
     notification = NotificationService()
 
-    # Send confirmation to creator
     try:
         notification.send_request_created(carton_program)
-    except Exception as e:
-        print("Email failed:", str(e))
+    except Exception:
+        logger.exception("Failed to send creation notification for program %s", carton_program.id)
 
-    # Send to assigned user if not draft
     if status_value != "Draft" and sent_to_user_id:
         try:
             assigned_user = User.objects.get(id=sent_to_user_id)
             notification.send_tqm_notification(carton_program)
         except User.DoesNotExist:
-            pass
+            logger.warning("sent_to_user_id %s not found for program %s", sent_to_user_id, carton_program.id)
+        except Exception:
+            logger.exception("Failed to send TQM notification for program %s", carton_program.id)
 
-    # --------------------------------------------------
-    # 8️⃣ FINAL RESPONSE
-    # --------------------------------------------------
-
+    # 8️⃣ RESPONSE
     return Response(
         {
             "message": "Carton Program Saved Successfully",
@@ -592,8 +532,6 @@ def submit_carton_program(request):
         },
         status=201
     )
-
-
 
 # def submit_carton_program(request):
 

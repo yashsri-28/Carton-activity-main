@@ -351,6 +351,7 @@ class CartonProgramSubProgram(models.Model):
     saved_pallet_per_20ft = models.PositiveIntegerField(null=True, blank=True)
     saved_pallet_per_40ft = models.PositiveIntegerField(null=True, blank=True)
     saved_cbm_per_carton = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
+    saved_net_wt_carton = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     
 
 

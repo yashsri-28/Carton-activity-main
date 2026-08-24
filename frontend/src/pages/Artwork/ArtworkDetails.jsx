@@ -528,7 +528,7 @@ const handleCommentPaste = (e) => {
       )}
 
       {/* FR006, FR028 — Comments / reference attachments (all roles) */}
-      {/* FR006, FR028 — Comments / reference attachments (all roles) */}
+
 <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
   <h2 className="font-medium text-gray-800 mb-3">Comments &amp; Reference Attachments</h2>
 

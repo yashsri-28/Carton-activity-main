@@ -82,12 +82,12 @@ function ArtworkList({ role }) {
         <h1 className="text-xl font-semibold text-gray-800">Packaging Artwork Management</h1>
         {canCreate && (
           <div className="flex gap-2">
-            <button
+            {/* <button
               onClick={() => navigate('/artwork/new')}
               className="bg-gray-100 text-gray-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-200"
             >
               + Quick Request
-            </button>
+            </button> */}
             <button
               onClick={() => navigate('/artwork/new-spec')}
               className="bg-[#003366] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#002a52]"

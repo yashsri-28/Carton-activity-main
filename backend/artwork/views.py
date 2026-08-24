@@ -967,7 +967,23 @@ def list_artwork_comments(request, artwork_id):
     if getattr(request.user, "role", None) == "PROCUREMENT" and artwork.assigned_vendor_id != request.user.id:
         return Response({"error": "Not authorized to view this artwork."}, status=http_status.HTTP_403_FORBIDDEN)
 
-    comments = artwork.comments.select_related("author","version").order_by("created_on")
+    # comments = artwork.comments.select_related("author","version").order_by("created_on")
+    # return Response(
+    #     [
+    #         {
+    #             "id": c.id,
+    #             "author": c.author.username if c.author else None,
+    #             "author_role": getattr(c.author, "role", None),
+    #             "message": c.message,
+    #             "attachment_url": (request.build_absolute_uri(c.attachment.url) if c.attachment else None),
+    #             "version_number": c.version.version_number if c.version else None,
+    #             "created_on": c.created_on,
+    #         }
+    #         for c in comments
+    #     ],
+    #     status=http_status.HTTP_200_OK,
+    # )
+    comments = artwork.comments.select_related("author", "version").order_by("created_on")
     return Response(
         [
             {
@@ -977,13 +993,13 @@ def list_artwork_comments(request, artwork_id):
                 "message": c.message,
                 "attachment_url": (request.build_absolute_uri(c.attachment.url) if c.attachment else None),
                 "version_number": c.version.version_number if c.version else None,
+                "is_initial_remark": c.is_initial_remark,
                 "created_on": c.created_on,
             }
             for c in comments
         ],
         status=http_status.HTTP_200_OK,
     )
-
 
 @swagger_auto_schema(method="post", operation_summary="Add Artwork Comment / Attachment")
 @api_view(["POST"])
@@ -994,23 +1010,43 @@ def add_artwork_comment(request, artwork_id):
     if getattr(request.user, "role", None) == "PROCUREMENT" and artwork.assigned_vendor_id != request.user.id:
         return Response({"error": "Not authorized to comment on this artwork."}, status=http_status.HTTP_403_FORBIDDEN)
 
+    # message = request.data.get("message", "").strip()
+    # attachment = request.FILES.get("attachment")
+
+    # if not message and not attachment:
+    #     return Response({"error": "Add a remark or an attachment (at least one)."}, status=http_status.HTTP_400_BAD_REQUEST)
+
+    # # Tag this comment with whichever version is currently active —
+    # # that's the design the person is actually looking at/discussing.
+    # current_version = artwork.versions.filter(is_active_version=True).first()
+    
+    
+    # comment = ArtworkComment.objects.create(
+    #     artwork=artwork,
+    #     author=request.user,
+    #     message=message,
+    #     attachment=attachment,
+    #     version=current_version,
+    # )
+    
+    
+    
     message = request.data.get("message", "").strip()
     attachment = request.FILES.get("attachment")
+    is_initial_remark = str(request.data.get("is_initial_remark", "")).lower() == "true"
 
     if not message and not attachment:
         return Response({"error": "Add a remark or an attachment (at least one)."}, status=http_status.HTTP_400_BAD_REQUEST)
 
-    # Tag this comment with whichever version is currently active —
-    # that's the design the person is actually looking at/discussing.
     current_version = artwork.versions.filter(is_active_version=True).first()
-    
-    
+
     comment = ArtworkComment.objects.create(
         artwork=artwork,
         author=request.user,
         message=message,
         attachment=attachment,
         version=current_version,
+        is_initial_remark=is_initial_remark,
     )
 
     _log_activity(

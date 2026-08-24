@@ -14,7 +14,7 @@ import {
   assignProcurement,
   exportArtworkExcel,
 } from '../../api/artworkApi';
-
+import Attachment from '../Form/Attachment';
 
 // Excel/Word paste normally carries its colors/borders as CSS CLASSES
 // defined in a <style> block (e.g. ".xl65{background:#4472C4}"), not
@@ -91,6 +91,7 @@ function ArtworkDetails({ role }) {
   // FR008 — packaging specification review
 
   const [packagingSpec, setPackagingSpec] = useState(null);
+  const [showAllComments, setShowAllComments] = useState(false);
 
   // Collapsible "Full Approval History" section — collapsed by default
   const [showHistory, setShowHistory] = useState(false);
@@ -326,25 +327,64 @@ const handleCommentPaste = (e) => {
      
 
 
+
+
       {/* FR008 — Packaging Specification review (full-width horizontal grid) */}
-      {packagingSpec && (
-        <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
-          <h2 className="font-medium text-gray-800 mb-1">Packaging Specification</h2>
-          <p className="text-xs text-gray-400 mb-3">Category: {packagingSpec.category}</p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-            {Object.entries(packagingSpec.spec_data).map(([label, val]) => (
-              val ? (
-                <div key={label} className="border border-gray-200 rounded-md p-2 bg-gray-50">
-                  <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide truncate" title={label}>
-                    {label}
-                  </p>
-                  <p className="text-sm text-gray-800 truncate" title={val}>{val}</p>
-                </div>
-              ) : null
-            ))}
+{packagingSpec && (
+  <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
+    <h2 className="font-medium text-gray-800 mb-1">Packaging Specification</h2>
+    <p className="text-xs text-gray-400 mb-3">Category: {packagingSpec.category}</p>
+    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+      {Object.entries(packagingSpec.spec_data).map(([label, val]) => (
+        val ? (
+          <div key={label} className="border border-gray-200 rounded-md p-2 bg-gray-50">
+            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide truncate" title={label}>
+              {label}
+            </p>
+            <p className="text-sm text-gray-800 truncate" title={val}>{val}</p>
+          </div>
+        ) : null
+      ))}
+    </div>
+
+    {commentList.filter((c) => c.is_initial_remark).map((c) => (
+      <div key={c.id} className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+        {/* Remark block */}
+        <div className="border border-gray-200 rounded-md bg-gray-50 overflow-hidden">
+          <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide px-3 pt-2">
+            Remark
+          </p>
+          <div className="px-3 pb-3 pt-1">
+            {c.message ? (
+              <div
+                className="text-sm text-gray-800 overflow-x-auto [&_table]:border [&_table]:border-collapse [&_table]:my-1 [&_table]:bg-white [&_td]:border [&_td]:border-gray-300 [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-gray-300 [&_th]:px-2 [&_th]:py-1"
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(c.message, { ADD_ATTR: ['style'] }) }}
+              />
+            ) : (
+              <p className="text-xs text-gray-400">No remark added.</p>
+            )}
           </div>
         </div>
-      )}
+
+        {/* Attachment block */}
+        <div className="border border-gray-200 rounded-md bg-gray-50 overflow-hidden">
+          <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide px-3 pt-2">
+            Attachment
+          </p>
+          <div className="px-3 pb-3 pt-1">
+            {c.attachment_url ? (
+              <a href={c.attachment_url} target="_blank" rel="noreferrer" className="text-[#003366] text-sm hover:underline inline-flex items-center gap-1">
+                📎 View attachment
+              </a>
+            ) : (
+              <p className="text-xs text-gray-400">No file attached.</p>
+            )}
+          </div>
+        </div>
+      </div>
+    ))}
+  </div>
+)}
 
  
 {/* Versions */}
@@ -488,96 +528,111 @@ const handleCommentPaste = (e) => {
       )}
 
       {/* FR006, FR028 — Comments / reference attachments (all roles) */}
-      <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
-        <h2 className="font-medium text-gray-800 mb-3">Comments &amp; Reference Attachments</h2>
+      {/* FR006, FR028 — Comments / reference attachments (all roles) */}
+<div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
+  <h2 className="font-medium text-gray-800 mb-3">Comments &amp; Reference Attachments</h2>
 
-        {commentList.length === 0 && (
-          <p className="text-sm text-gray-400 mb-3">No comments yet.</p>
-        )}
+  {(() => {
+    const generalComments = commentList
+      .filter((c) => !c.is_initial_remark)
+      .slice()
+      .sort((a, b) => new Date(b.created_on) - new Date(a.created_on));
 
-   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
-          {commentList.map((c) => (
-            <div key={c.id} className="text-sm bg-gray-50 rounded-md p-3 border border-gray-200">
-              <div className="flex items-center justify-between mb-1 flex-wrap gap-1">
-                <span className="font-medium text-gray-800">{c.author}</span>
-                <div className="flex items-center gap-1">
-                  {c.author_role && (
-                    <span className="text-[10px] font-semibold uppercase tracking-wide bg-[#003366] text-white rounded-full px-2 py-0.5">
-                      {c.author_role}
-                    </span>
-                  )}
-                  {c.version_number && (
-                    <span className="text-[10px] font-semibold uppercase tracking-wide bg-amber-100 text-amber-800 rounded-full px-2 py-0.5">
-                      for v{c.version_number}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <span className="text-xs text-gray-400">{new Date(c.created_on).toLocaleString()}</span>
-              {/* {c.message && <p className="text-gray-700 mt-1">{c.message}</p>} */}
-              {/* {c.message && (
-                <p className="text-gray-700 mt-1 whitespace-pre-wrap font-mono text-xs bg-gray-50 rounded p-2 border border-gray-100">
-                  {c.message}
-                </p>
-              )} */}
+    if (generalComments.length === 0) {
+      return <p className="text-sm text-gray-400 mb-3">No comments yet.</p>;
+    }
 
-              {c.message && (
-                <div
-                  className="mt-1 text-sm text-gray-700 overflow-x-auto [&_table]:border [&_table]:border-collapse [&_table]:my-1 [&_td]:border [&_td]:border-gray-300 [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-gray-300 [&_th]:px-2 [&_th]:py-1"
-                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(c.message, { ADD_ATTR: ['style'] }) }}
-                />
-              )}
-              {c.attachment_url && (
-                <a href={c.attachment_url} target="_blank" rel="noreferrer" className="text-[#003366] text-xs hover:underline mt-1 inline-block">
-                  📎 View attachment
-                </a>
-              )}
-            </div>
-          ))}
-        </div>
+    const [latest, ...older] = generalComments;
 
-
-        <div className="space-y-2">
-          {/* <textarea
-            placeholder="Ask a question, leave feedback, or add a reference remark..."
-            value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-            rows={6}
-          /> */}
-          {/* <div
-            ref={commentInputRef}
-            contentEditable
-            suppressContentEditableWarning
-            data-placeholder="Ask a question, leave feedback, or paste an Excel table here — its rows, columns and colors will be preserved..."
-            className="w-full min-h-[150px] max-h-80 overflow-y-auto border border-gray-300 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
-          /> */}
-
-          <div
-            ref={commentInputRef}
-            contentEditable
-            suppressContentEditableWarning
-            onPaste={handleCommentPaste}
-            data-placeholder="Ask a question, leave feedback, or paste an Excel table here — its rows, columns and colors will be preserved..."
-            className="w-full min-h-[150px] max-h-80 overflow-y-auto border border-gray-300 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
-          />
-          <div className="flex items-center gap-2">
-            <input
-              type="file"
-              onChange={(e) => setCommentAttachment(e.target.files[0])}
-              className="text-xs flex-1"
-            />
-            <button
-              onClick={handleAddComment}
-              // disabled={commentBusy || (!newComment.trim() && !commentAttachment)}
-              disabled={commentBusy}
-              className="bg-[#003366] text-white px-3 py-1.5 rounded-md text-sm hover:bg-[#002a52] disabled:opacity-50"
-            >
-              Send
-            </button>
+    const renderComment = (c, isLatest) => (
+      <div key={c.id} className={`text-sm rounded-md p-3 border ${isLatest ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'}`}>
+        <div className="flex items-center justify-between mb-1 flex-wrap gap-1">
+          <span className="font-medium text-gray-800">{c.author}</span>
+          <div className="flex items-center gap-1">
+            {isLatest && (
+              <span className="text-[10px] font-semibold uppercase tracking-wide bg-blue-600 text-white rounded-full px-2 py-0.5">
+                Latest
+              </span>
+            )}
+            {c.author_role && (
+              <span className="text-[10px] font-semibold uppercase tracking-wide bg-[#003366] text-white rounded-full px-2 py-0.5">
+                {c.author_role}
+              </span>
+            )}
+            {c.version_number && (
+              <span className="text-[10px] font-semibold uppercase tracking-wide bg-amber-100 text-amber-800 rounded-full px-2 py-0.5">
+                for v{c.version_number}
+              </span>
+            )}
           </div>
         </div>
+        <span className="text-xs text-gray-400">{new Date(c.created_on).toLocaleString()}</span>
+
+        {c.message && (
+          <div
+            className="mt-1 text-sm text-gray-700 overflow-x-auto [&_table]:border [&_table]:border-collapse [&_table]:my-1 [&_td]:border [&_td]:border-gray-300 [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-gray-300 [&_th]:px-2 [&_th]:py-1"
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(c.message, { ADD_ATTR: ['style'] }) }}
+          />
+        )}
+        {c.attachment_url && (
+          <a href={c.attachment_url} target="_blank" rel="noreferrer" className="text-[#003366] text-xs hover:underline mt-1 inline-block">
+            📎 View attachment
+          </a>
+        )}
       </div>
+    );
+
+    return (
+      <div className="mb-4">
+        {renderComment(latest, true)}
+
+        {older.length > 0 && (
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={() => setShowAllComments((prev) => !prev)}
+              className="text-xs text-[#003366] hover:underline flex items-center gap-1"
+            >
+              {showAllComments ? '▲ Hide' : '▼ View'} previous comments ({older.length})
+            </button>
+
+            {showAllComments && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
+                {older.map((c) => renderComment(c, false))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  })()}
+
+  <div className="space-y-2">
+  <div
+    ref={commentInputRef}
+    contentEditable
+    suppressContentEditableWarning
+    onPaste={handleCommentPaste}
+    data-placeholder="Ask a question, leave feedback, or paste an Excel table here — its rows, columns and colors will be preserved..."
+    className="w-full min-h-[76px] max-h-40 overflow-y-auto border border-gray-300 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+  />
+    <div className="flex items-center gap-2">
+      <Attachment
+        selectedFile={commentAttachment}
+        onFileChange={(e) => setCommentAttachment(e.target.files[0])}
+        onRemoveFile={() => setCommentAttachment(null)}
+        loading={commentBusy}
+      />
+      <button
+        onClick={handleAddComment}
+        disabled={commentBusy}
+        className="bg-[#003366] text-white px-3 py-1.5 rounded-md text-sm hover:bg-[#002a52] disabled:opacity-50"
+      >
+        Send
+      </button>
+    </div>
+  </div>
+</div>
 
       {canRelease && (
         <button onClick={handleRelease} disabled={busy}

@@ -311,6 +311,10 @@ class ArtworkComment(models.Model):
         blank=True,
         related_name="comments",
     )
+       # Marks the ONE remark/attachment added at request-creation time
+    # (via the Packaging Spec form) — permanently distinguishes it from
+    # any later comment, regardless of whether a version exists yet.
+    is_initial_remark = models.BooleanField(default=False)
 
     message = models.TextField(blank=True, default="")
 

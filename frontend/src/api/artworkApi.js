@@ -79,3 +79,20 @@ export const actOnWorkflowStep = (artworkId, decision, comments = '') =>
 
 export const generateMatcode = (artworkId) =>
   api.post(`/api/artwork/${artworkId}/generate-matcode/`);
+
+export const sendPhysicalSample = (artworkId, { attachment, dateSent, estArrivalDate, comments }) => {
+  const formData = new FormData();
+  if (attachment) formData.append('attachment', attachment);
+  if (dateSent) formData.append('date_sent', dateSent);
+  if (estArrivalDate) formData.append('est_arrival_date', estArrivalDate);
+  if (comments) formData.append('comments', comments);
+  return api.post(`/api/artwork/${artworkId}/physical-sample/send/`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
+
+export const receivePhysicalSample = (artworkId) =>
+  api.post(`/api/artwork/${artworkId}/physical-sample/receive/`);
+
+export const decidePhysicalSample = (artworkId, decision, comments = '') =>
+  api.post(`/api/artwork/${artworkId}/physical-sample/decide/`, { decision, comments });

@@ -15,7 +15,12 @@ import {
   exportArtworkExcel,
   actOnWorkflowStep,
   generateMatcode,
+  sendPhysicalSample,
+  receivePhysicalSample,
+  decidePhysicalSample,
 } from '../../api/artworkApi';
+
+
 import Attachment from '../Form/Attachment';
 
 // Excel/Word paste normally carries its colors/borders as CSS CLASSES
@@ -110,6 +115,15 @@ function ArtworkDetails({ role }) {
   const [workflowComments, setWorkflowComments] = useState('');
   // const [matcodeInput, setMatcodeInput] = useState('');
   const [workflowBusy, setWorkflowBusy] = useState(false);
+
+  // Physical Sample state (Procurement side — sending)
+  const [sampleAttachment, setSampleAttachment] = useState(null);
+  const [sampleDateSent, setSampleDateSent] = useState('');
+  const [sampleEstArrival, setSampleEstArrival] = useState('');
+  const [sampleComments, setSampleComments] = useState('');
+
+  // Physical Sample decision state (Marketing side — reviewing)
+  const [sampleDecisionComments, setSampleDecisionComments] = useState('');
 
   const fetchDetails = async () => {
     setLoading(true);
@@ -217,6 +231,56 @@ useEffect(() => {
     fetchDetails();
   } catch (err) {
     toast.error(err.response?.data?.error || 'Failed to generate matcode.');
+  } finally {
+    setWorkflowBusy(false);
+  }
+};
+
+
+const handleSendSample = async () => {
+  setWorkflowBusy(true);
+  try {
+    await sendPhysicalSample(artworkId, {
+      attachment: sampleAttachment,
+      dateSent: sampleDateSent,
+      estArrivalDate: sampleEstArrival,
+      comments: sampleComments,
+    });
+    toast.success('Physical sample sent.');
+    setSampleAttachment(null);
+    setSampleDateSent('');
+    setSampleEstArrival('');
+    setSampleComments('');
+    fetchDetails();
+  } catch (err) {
+    toast.error(err.response?.data?.error || 'Failed to send sample.');
+  } finally {
+    setWorkflowBusy(false);
+  }
+};
+
+const handleReceiveSample = async () => {
+  setWorkflowBusy(true);
+  try {
+    await receivePhysicalSample(artworkId);
+    toast.success('Sample marked as received.');
+    fetchDetails();
+  } catch (err) {
+    toast.error(err.response?.data?.error || 'Failed to mark as received.');
+  } finally {
+    setWorkflowBusy(false);
+  }
+};
+
+const handleSampleDecision = async (decision) => {
+  setWorkflowBusy(true);
+  try {
+    await decidePhysicalSample(artworkId, decision, sampleDecisionComments);
+    toast.success(`Sample ${decision.toLowerCase()}.`);
+    setSampleDecisionComments('');
+    fetchDetails();
+  } catch (err) {
+    toast.error(err.response?.data?.error || 'Action failed.');
   } finally {
     setWorkflowBusy(false);
   }
@@ -666,12 +730,109 @@ const handleCommentPaste = (e) => {
             </div>
           )} */}
 
+          {/* {canActOnCustomStep && customPendingStep.step_type === 'MATCODE' && (
+            <div className="mt-4">
+              <button onClick={handleGenerateMatcode} disabled={workflowBusy}
+                className="bg-[#003366] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#002a52] disabled:opacity-50">
+                {workflowBusy ? 'Generating...' : 'Generate Matcode for Production'}
+              </button>
+            </div>
+          )}
+        </div>
+      )} */}
+
           {canActOnCustomStep && customPendingStep.step_type === 'MATCODE' && (
             <div className="mt-4">
               <button onClick={handleGenerateMatcode} disabled={workflowBusy}
                 className="bg-[#003366] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#002a52] disabled:opacity-50">
                 {workflowBusy ? 'Generating...' : 'Generate Matcode for Production'}
               </button>
+            </div>
+          )}
+
+          {/* Procurement — send a physical sample */}
+          {canActOnCustomStep && customPendingStep.step_type === 'PHYSICAL_SAMPLE' && (
+            <div className="mt-4 space-y-3">
+              <Attachment
+                selectedFile={sampleAttachment}
+                onFileChange={(e) => setSampleAttachment(e.target.files[0])}
+                onRemoveFile={() => setSampleAttachment(null)}
+                loading={workflowBusy}
+              />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Date of Sending Sample</label>
+                  <input type="date" value={sampleDateSent} onChange={(e) => setSampleDateSent(e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Est. Time of Arrival</label>
+                  <input type="date" value={sampleEstArrival} onChange={(e) => setSampleEstArrival(e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm" />
+                </div>
+              </div>
+              <textarea
+                placeholder="Comments (optional)"
+                value={sampleComments}
+                onChange={(e) => setSampleComments(e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                rows={3}
+              />
+              <button onClick={handleSendSample} disabled={workflowBusy}
+                className="bg-[#003366] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#002a52] disabled:opacity-50">
+                {workflowBusy ? 'Sending...' : 'Send Physical Sample'}
+              </button>
+            </div>
+          )}
+
+          {/* Marketing — sample details, Receive button, and Approve/Reject */}
+          {artwork.latest_physical_sample && ['SAMPLE_SENT', 'SAMPLE_RECEIVED_REVIEW'].includes(artwork.status) && (
+            <div className="mt-4 border border-gray-200 rounded-md p-4 bg-gray-50">
+              <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Physical Sample Details</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm mb-3">
+                <div><span className="text-gray-500">Sent by:</span> {artwork.latest_physical_sample.sent_by || '-'}</div>
+                <div><span className="text-gray-500">Date sent:</span> {artwork.latest_physical_sample.date_sent || '-'}</div>
+                <div><span className="text-gray-500">Est. arrival:</span> {artwork.latest_physical_sample.est_arrival_date || '-'}</div>
+                {artwork.latest_physical_sample.attachment_url && (
+                  <div>
+                    <a href={artwork.latest_physical_sample.attachment_url} target="_blank" rel="noreferrer" className="text-[#003366] hover:underline">
+                      📎 View attachment
+                    </a>
+                  </div>
+                )}
+              </div>
+              {artwork.latest_physical_sample.comments && (
+                <p className="text-sm text-gray-600 italic mb-3">"{artwork.latest_physical_sample.comments}"</p>
+              )}
+
+              {role === 'marketing' && artwork.status === 'SAMPLE_SENT' && !artwork.latest_physical_sample.is_received && (
+                <button onClick={handleReceiveSample} disabled={workflowBusy}
+                  className="bg-emerald-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-emerald-700 disabled:opacity-50">
+                  {workflowBusy ? 'Marking...' : 'Mark Sample as Received'}
+                </button>
+              )}
+
+              {role === 'marketing' && artwork.status === 'SAMPLE_RECEIVED_REVIEW' && artwork.latest_physical_sample.is_received && (
+                <div className="space-y-2">
+                  <textarea
+                    placeholder="Comments / reason (optional, required for reject)"
+                    value={sampleDecisionComments}
+                    onChange={(e) => setSampleDecisionComments(e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                    rows={3}
+                  />
+                  <div className="flex gap-2">
+                    <button onClick={() => handleSampleDecision('APPROVED')} disabled={workflowBusy}
+                      className="bg-green-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-green-700 disabled:opacity-50">
+                      Approve Sample
+                    </button>
+                    <button onClick={() => handleSampleDecision('REJECTED')} disabled={workflowBusy}
+                      className="bg-red-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-red-700 disabled:opacity-50">
+                      Reject Sample
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -714,33 +714,6 @@ const handleCommentPaste = (e) => {
             </div>
           )}
 
-          {/* {canActOnCustomStep && customPendingStep.step_type === 'MATCODE' && (
-            <div className="mt-4 flex items-center gap-2">
-              <input
-                type="text"
-                placeholder="Enter Material Code"
-                value={matcodeInput}
-                onChange={(e) => setMatcodeInput(e.target.value)}
-                className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm"
-              />
-              <button onClick={handleGenerateMatcode} disabled={workflowBusy}
-                className="bg-[#003366] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#002a52] disabled:opacity-50">
-                Generate Matcode
-              </button>
-            </div>
-          )} */}
-
-          {/* {canActOnCustomStep && customPendingStep.step_type === 'MATCODE' && (
-            <div className="mt-4">
-              <button onClick={handleGenerateMatcode} disabled={workflowBusy}
-                className="bg-[#003366] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#002a52] disabled:opacity-50">
-                {workflowBusy ? 'Generating...' : 'Generate Matcode for Production'}
-              </button>
-            </div>
-          )}
-        </div>
-      )} */}
-
           {canActOnCustomStep && customPendingStep.step_type === 'MATCODE' && (
             <div className="mt-4">
               <button onClick={handleGenerateMatcode} disabled={workflowBusy}

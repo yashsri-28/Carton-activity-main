@@ -1003,17 +1003,7 @@ def act_on_workflow_step(request, artwork_id):
         artwork.status = "REJECTED"
         if artwork.assigned_vendor:
             _notify(artwork.assigned_vendor, artwork, f"{artwork.artwork_id} was rejected. Please revise and re-upload." + (f" Reason: {comments}" if comments else ""))
-    else:
-        # next_step = artwork.workflow_steps.filter(status="PENDING").order_by("sequence").first()
-        # if next_step:
-        #     if next_step.step_type == "MATCODE":
-        #         artwork.status = "MATCODE_PENDING"
-        #     else:
-        #         artwork.status = "MARKETING_REVIEW"
-        #     _notify_role(next_step.actor_role, artwork, f"{artwork.artwork_id} is ready for your '{next_step.step_label}' step.", exclude_user=request.user)
-        # else:
-        #     artwork.status = "APPROVED"
-        
+    else:  
         next_step = artwork.workflow_steps.filter(status="PENDING").order_by("sequence").first()
         if next_step:
             if next_step.step_type == "MATCODE":

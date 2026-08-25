@@ -66,7 +66,7 @@ function ArtworkList({ role }) {
   const canCreate = role === 'marketing';
 
   return (
-    <div className="p-6 overflow-y-auto">
+    <div className="p-6 h-full overflow-y-auto thin-scrollbar">
       {/* <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-semibold text-gray-800">Packaging Artwork Management</h1>
         {canCreate && (

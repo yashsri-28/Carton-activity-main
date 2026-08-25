@@ -13,6 +13,8 @@ import {
   getProcurementList,
   assignProcurement,
   exportArtworkExcel,
+  actOnWorkflowStep,
+  generateMatcode,
 } from '../../api/artworkApi';
 import Attachment from '../Form/Attachment';
 
@@ -67,6 +69,10 @@ function normalizeExcelPaste(html) {
 // Which role is allowed to act on which approval stage — mirrors
 // ArtworkApproval.STAGE_ROLE_MAP on the backend.
 const STAGE_ROLE_MAP = { MARKETING: 'marketing', PPC: 'ppc', TQM: 'ttqm', CUSTOMER: 'admin' };
+
+// Custom-workflow step actor_role values -> frontend role strings
+// (same idea as STAGE_ROLE_MAP above, but for WorkflowStep.actor_role)
+const WORKFLOW_ROLE_MAP = { MARKETING: 'marketing', PPC: 'ppc', TTQM: 'ttqm', PROCUREMENT: 'procurement', ADMIN: 'admin' };
 const STATUS_LABELS = {
   VENDOR_UPLOAD_PENDING: 'PROCUREMENT UPLOAD PENDING',
   VENDOR_UPLOADED: 'PROCUREMENT UPLOADED',
@@ -99,6 +105,11 @@ function ArtworkDetails({ role }) {
   const [procurementUsers, setProcurementUsers] = useState([]);
   const [selectedProcurementId, setSelectedProcurementId] = useState('');
   const [assigningProcurement, setAssigningProcurement] = useState(false);
+
+  // Custom-workflow (BW_STICKER, RIBBON, future categories) state
+  const [workflowComments, setWorkflowComments] = useState('');
+  // const [matcodeInput, setMatcodeInput] = useState('');
+  const [workflowBusy, setWorkflowBusy] = useState(false);
 
   const fetchDetails = async () => {
     setLoading(true);
@@ -155,19 +166,61 @@ useEffect(() => {
     }
   };
 
-  const handleDecision = async (decision) => {
-    setBusy(true);
+  // const handleDecision = async (decision) => {
+  //   setBusy(true);
+  //   try {
+  //     await actOnArtworkApproval(artworkId, decision, comments);
+  //     toast.success(`Stage ${decision.toLowerCase()}.`);
+  //     setComments('');
+  //     fetchDetails();
+  //   } catch (err) {
+  //     toast.error(err.response?.data?.error || 'Action failed.');
+  //   } finally {
+  //     setBusy(false);
+  //   }
+  // };
+
+    const handleWorkflowStepDecision = async (decision) => {
+    setWorkflowBusy(true);
     try {
-      await actOnArtworkApproval(artworkId, decision, comments);
-      toast.success(`Stage ${decision.toLowerCase()}.`);
-      setComments('');
+      await actOnWorkflowStep(artworkId, decision, workflowComments);
+      toast.success(`Step ${decision.toLowerCase()}.`);
+      setWorkflowComments('');
       fetchDetails();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Action failed.');
     } finally {
-      setBusy(false);
+      setWorkflowBusy(false);
     }
   };
+
+  // const handleGenerateMatcode = async () => {
+  //   if (!matcodeInput.trim()) { toast.error('Enter a material code.'); return; }
+  //   setWorkflowBusy(true);
+  //   try {
+  //     await generateMatcode(artworkId, matcodeInput.trim());
+  //     toast.success('Matcode generated.');
+  //     setMatcodeInput('');
+  //     fetchDetails();
+  //   } catch (err) {
+  //     toast.error(err.response?.data?.error || 'Failed to generate matcode.');
+  //   } finally {
+  //     setWorkflowBusy(false);
+  //   }
+  // };
+
+  const handleGenerateMatcode = async () => {
+  setWorkflowBusy(true);
+  try {
+    const res = await generateMatcode(artworkId);
+    toast.success(`Matcode generated: ${res.data.material_code}`);
+    fetchDetails();
+  } catch (err) {
+    toast.error(err.response?.data?.error || 'Failed to generate matcode.');
+  } finally {
+    setWorkflowBusy(false);
+  }
+};
 
   const handleRelease = async () => {
     setBusy(true);
@@ -263,6 +316,11 @@ const handleCommentPaste = (e) => {
     ? artwork.approvals?.find((a) => a.decision === 'PENDING')
     : null;
   const canActOnPending = pendingStage && STAGE_ROLE_MAP[pendingStage.stage] === role;
+  // Custom-workflow (non-STANDARD) equivalent of the above
+  const customPendingStep = artwork.workflow_key !== 'STANDARD'
+    ? artwork.workflow_steps?.find((s) => s.status === 'PENDING')
+    : null;
+  const canActOnCustomStep = customPendingStep && WORKFLOW_ROLE_MAP[customPendingStep.actor_role] === role;
   const canUpload = ['procurement', 'admin'].includes(role) && !['APPROVED', 'RELEASED', 'ARCHIVED', 'OBSOLETE'].includes(artwork.status);
   const canRelease = artwork.status === 'APPROVED' && ['ppc', 'admin'].includes(role);
 
@@ -288,10 +346,24 @@ const handleCommentPaste = (e) => {
           </span>
         </div>
       </div>
-      <p className="text-sm text-gray-500 mb-6">
+      {/* <p className="text-sm text-gray-500 mb-6">
         SKU: {artwork.sku_code} · Brand: {artwork.brand_name || '-'} · Customer: {artwork.customer_name || '-'}
       </p>
-    
+     */}
+
+
+     <p className="text-sm text-gray-500 mb-1">
+              SKU: {artwork.sku_code} · Brand: {artwork.brand_name || '-'} · Customer: {artwork.customer_name || '-'}
+            </p>
+            {artwork.material_code && (
+              <p className="text-sm mb-6">
+                <span className="text-gray-500">Material Code: </span>
+                <span className="font-mono font-semibold text-[#003366] bg-blue-50 border border-blue-200 rounded px-2 py-0.5">
+                  {artwork.material_code}
+                </span>
+              </p>
+            )}
+            {!artwork.material_code && <div className="mb-6" />}
     {/* Missing-assignment recovery — if no procurement contact was
           picked at creation time, this lets Marketing/Admin fix it
           later without ever needing a manual SQL update. */}
@@ -434,7 +506,7 @@ const handleCommentPaste = (e) => {
       </div>
 
       {/* Current Approval Workflow (active version only) — horizontal cards, full width */}
-      <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
+      {/* <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
         <h2 className="font-medium text-gray-800 mb-3">Approval Workflow</h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {artwork.approvals.map((a) => {
@@ -480,7 +552,130 @@ const handleCommentPaste = (e) => {
             </div>
           </div>
         )}
-      </div>
+      </div> */}
+
+              {/* Approval Workflow — STANDARD categories use the original box,
+    unchanged. Custom-workflow categories (BW_STICKER, RIBBON, etc.)
+    use a separate box below driven by artwork.workflow_steps. */}
+      {artwork.workflow_key === 'STANDARD' ? (
+        <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
+          <h2 className="font-medium text-gray-800 mb-3">Approval Workflow</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {artwork.approvals.map((a) => {
+              const isSkipped = rejectedStage && a.sequence > rejectedStage.sequence && a.decision === 'PENDING';
+              const displayDecision = isSkipped ? 'NOT REACHED' : a.decision;
+              const bgClass =
+                a.decision === 'APPROVED' ? 'bg-green-50 border-green-200' :
+                a.decision === 'REJECTED' ? 'bg-red-50 border-red-200' :
+                isSkipped ? 'bg-gray-50 border-gray-200' : 'bg-blue-50 border-blue-200';
+              const textClass =
+                a.decision === 'APPROVED' ? 'text-green-700' :
+                a.decision === 'REJECTED' ? 'text-red-700' :
+                isSkipped ? 'text-gray-400' : 'text-blue-700';
+              return (
+                <div key={a.stage} className={`border rounded-md p-3 ${bgClass}`}>
+                  <p className="text-xs font-semibold text-gray-600 uppercase">{a.stage}</p>
+                  <p className={`text-sm font-medium ${textClass}`}>{displayDecision}</p>
+                  {a.acted_by && <p className="text-xs text-gray-500 mt-1">— {a.acted_by}</p>}
+                  {a.comments && <p className="text-xs text-gray-500 mt-1 italic">"{a.comments}"</p>}
+                </div>
+              );
+            })}
+          </div>
+
+          {canActOnPending && (
+            <div className="mt-4 space-y-2">
+              <textarea
+                placeholder="Comments / reason (optional, required for reject)"
+                value={comments}
+                onChange={(e) => setComments(e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                rows={6}
+              />
+              <div className="flex gap-2">
+                <button onClick={() => handleDecision('APPROVED')} disabled={busy}
+                  className="bg-green-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-green-700 disabled:opacity-50">
+                  Approve
+                </button>
+                <button onClick={() => handleDecision('REJECTED')} disabled={busy}
+                  className="bg-red-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-red-700 disabled:opacity-50">
+                  Reject
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
+          <h2 className="font-medium text-gray-800 mb-3">Workflow ({artwork.workflow_key.replace(/_/g, ' ')})</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {(artwork.workflow_steps || []).map((s) => {
+              const bgClass =
+                s.status === 'DONE' ? 'bg-green-50 border-green-200' :
+                s.status === 'REJECTED' ? 'bg-red-50 border-red-200' : 'bg-blue-50 border-blue-200';
+              const textClass =
+                s.status === 'DONE' ? 'text-green-700' :
+                s.status === 'REJECTED' ? 'text-red-700' : 'text-blue-700';
+              return (
+                <div key={s.step_code} className={`border rounded-md p-3 ${bgClass}`}>
+                  <p className="text-xs font-semibold text-gray-600 uppercase">{s.step_label}</p>
+                  <p className={`text-sm font-medium ${textClass}`}>{s.status}</p>
+                  {s.acted_by && <p className="text-xs text-gray-500 mt-1">— {s.acted_by}</p>}
+                  {s.comments && <p className="text-xs text-gray-500 mt-1 italic">"{s.comments}"</p>}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Action UI depends on the current pending step's type */}
+          {canActOnCustomStep && customPendingStep.step_type === 'APPROVAL' && (
+            <div className="mt-4 space-y-2">
+              <textarea
+                placeholder="Comments / reason (optional, required for reject)"
+                value={workflowComments}
+                onChange={(e) => setWorkflowComments(e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                rows={4}
+              />
+              <div className="flex gap-2">
+                <button onClick={() => handleWorkflowStepDecision('APPROVED')} disabled={workflowBusy}
+                  className="bg-green-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-green-700 disabled:opacity-50">
+                  Approve
+                </button>
+                <button onClick={() => handleWorkflowStepDecision('REJECTED')} disabled={workflowBusy}
+                  className="bg-red-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-red-700 disabled:opacity-50">
+                  Reject
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* {canActOnCustomStep && customPendingStep.step_type === 'MATCODE' && (
+            <div className="mt-4 flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Enter Material Code"
+                value={matcodeInput}
+                onChange={(e) => setMatcodeInput(e.target.value)}
+                className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm"
+              />
+              <button onClick={handleGenerateMatcode} disabled={workflowBusy}
+                className="bg-[#003366] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#002a52] disabled:opacity-50">
+                Generate Matcode
+              </button>
+            </div>
+          )} */}
+
+          {canActOnCustomStep && customPendingStep.step_type === 'MATCODE' && (
+            <div className="mt-4">
+              <button onClick={handleGenerateMatcode} disabled={workflowBusy}
+                className="bg-[#003366] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#002a52] disabled:opacity-50">
+                {workflowBusy ? 'Generating...' : 'Generate Matcode for Production'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Full history across ALL versions — every reject/re-upload cycle */}
 

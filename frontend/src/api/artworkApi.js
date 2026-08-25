@@ -33,14 +33,7 @@ export const archiveArtwork = (artworkId) =>
 export const getArtworkComments = (artworkId) =>
   api.get(`/api/artwork/${artworkId}/comments/`);
 
-// export const addArtworkComment = (artworkId, message, attachment = null) => {
-//   const formData = new FormData();
-//   if (message) formData.append('message', message);
-//   if (attachment) formData.append('attachment', attachment);
-//   return api.post(`/api/artwork/${artworkId}/comments/add/`, formData, {
-//     headers: { 'Content-Type': 'multipart/form-data' },
-//   });
-// };
+
 
 export const addArtworkComment = (artworkId, message, attachment = null, isInitialRemark = false) => {
   const formData = new FormData();
@@ -79,3 +72,10 @@ export const markNotificationRead = (notificationId) =>
 
 export const markAllNotificationsRead = () =>
   api.post('/api/artwork/notifications/mark-all-read/');
+
+
+export const actOnWorkflowStep = (artworkId, decision, comments = '') =>
+  api.post(`/api/artwork/${artworkId}/act-workflow-step/`, { decision, comments });
+
+export const generateMatcode = (artworkId) =>
+  api.post(`/api/artwork/${artworkId}/generate-matcode/`);

@@ -1,7 +1,8 @@
 import React, { useRef } from 'react';
 import BathRobeForm from "./BathRobeForm";
-import BathTerryForm from "./BathTerryForm";
 import BedsheetForm from "./BedSheetForm"
+// import TerrySpecificFields from "./TerrySpecificFields";
+import TerrySpecificFields from "./TerrySpecificFields.jsx";
 
 
 
@@ -82,9 +83,47 @@ const SelectField = ({ label, name, value, onChange, options, placeholder }) => 
     </select>
   </div>
 );
+// Reusable Textarea Component with word limit
+const TextareaField = ({ label, name, value, onChange, placeholder, maxWords = 100 }) => {
+  const wordCount = (value || "").trim().split(/\s+/).filter(Boolean).length;
+  const isNearLimit = wordCount >= maxWords;
+
+  return (
+    <div className="flex flex-col gap-2 w-full">
+      <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700">
+        <svg className="w-4 h-4 text-[#0f3460]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+        </svg>
+        {label}
+      </label>
+      <div className="relative">
+        <textarea
+          name={name}
+          value={value || ""}
+          onChange={onChange}
+          placeholder={placeholder}
+          rows={3}
+          className={`w-full border rounded-lg p-3 text-gray-700 shadow-sm resize-none
+            transition-all duration-200
+            focus:outline-none focus:ring-2 focus:ring-[#0f3460]/20
+            ${isNearLimit ? 'border-red-300 focus:border-red-400' : 'border-gray-200 hover:border-[#0f3460]/40 focus:border-[#0f3460]'}`}
+        />
+      </div>
+      <div className="flex justify-end">
+        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+          isNearLimit ? 'bg-red-50 text-red-600' : 'bg-gray-50 text-gray-400'
+        }`}>
+          {wordCount}/{maxWords} words
+        </span>
+      </div>
+    </div>
+  );
+};
 
 // Wrapper
 const FormItem = ({ children }) => (
+// Wrapper
+// const FormItem = ({ children }) => (
   <div className="w-full md:w-1/2 lg:w-1/3 px-4 mb-6">
     {children}
   </div>
@@ -95,6 +134,7 @@ function Form({
   onInputChange,
   companies,
   onCompanyChange,
+  onRemarkChange,
   selectedFile,
   onFileChange,
   onRemoveFile,
@@ -131,11 +171,8 @@ function Form({
             <option value="">Towel</option>
             <option value="Bedsheet">Bedsheet</option>
             <option value="Bath Robe">Bath Robe</option>
-            <option value="Terry Towel">Terry Towel</option>
           </select>
         </div>
-
-
 
 
         {/* Bath Robe Form */}
@@ -143,6 +180,7 @@ function Form({
           <BathRobeForm
             formData={formData}
             onInputChange={onInputChange}
+            onRemarkChange={onRemarkChange}
             selectedFile={selectedFile}
             onFileChange={onFileChange}
             onRemoveFile={onRemoveFile}
@@ -152,18 +190,19 @@ function Form({
         )}
 
 
-        {/* Bath Terry Form */}
+        {/* Bath Terry Form
         {formData.productCategory === "Terry Towel" && (
           <BathTerryForm
             formData={formData}
             onInputChange={onInputChange}
+            onRemarkChange={onRemarkChange}
             selectedFile={selectedFile}
             onFileChange={onFileChange}
             onRemoveFile={onRemoveFile}
             loading={loading}
             hideAttachment={hideAttachment}
           />
-        )}
+        )} */}
 
         {/* Bedsheet Form */}
         {formData.productCategory === "Bedsheet" && (
@@ -287,6 +326,12 @@ function Form({
               placeholder="Enter Original Towel"
             />
           </FormItem>
+
+          {/* Terry Towel fields — merged into default Towel form */}
+          <TerrySpecificFields
+            formData={formData}
+            onInputChange={onInputChange}
+          />
 
           {/* Row 3 */}
           <FormItem>
@@ -472,15 +517,6 @@ function Form({
           </FormItem>
           <FormItem>
             <InputField
-              label="Ribbon Packing"
-              name="ribbonPacking"
-              value={formData.ribbonPacking}
-              onChange={onInputChange}
-              placeholder="Yes/No + Arrange samples"
-            />
-          </FormItem>
-          <FormItem>
-            <InputField
               label="Belly Band Packing"
               name="bellyBandPacking"
               value={formData.bellyBandPacking}
@@ -488,10 +524,31 @@ function Form({
               placeholder="Yes/No + Arrange samples"
             />
           </FormItem>
-
+          <div className="w-full md:w-1/2 lg:w-1/3 px-4 mb-6 self-start">
+            <InputField
+              label="Ribbon Packing"
+              name="ribbonPacking"
+              value={formData.ribbonPacking}
+              onChange={onInputChange}
+              placeholder="Yes/No + Arrange samples"
+            />
+          </div>
+          
+          {/* Remark - Common field for all product categories */}
+                   {/* Remark - Common field for all product categories */}
+          <div className="w-full md:w-1/2 lg:w-1/3 px-4 mb-6 self-start">
+            <TextareaField
+              label="Remark"
+              name="remark"
+              value={formData.remark}
+              onChange={onRemarkChange}
+              placeholder="Enter remark (max 100 words)"
+              maxWords={100}
+            />
+          </div>
           {/* Attachment (Full Width) */}
           {!hideAttachment && (
-            <div className="w-full md:w-2/3 lg:w-1/3 px-4 mb-6">
+            <div className="w-full md:w-2/3 lg:w-1/3 px-4 mb-6 self-start">
               <div className="flex flex-col gap-2 w-full h-full justify-end formAtachmnt">
                 <input
                   type="file"
@@ -551,6 +608,7 @@ function Form({
                 </div>
               </div>
             </div>
+            
           )}
         </div>)}
 

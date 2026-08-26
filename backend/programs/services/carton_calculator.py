@@ -4,6 +4,24 @@ from math import floor
 from programs.utils.container_config import CONTAINER_SPECS
 
 
+def safe_decimal(value, default="0"):
+    try:
+        if value in (None, ""):
+            return Decimal(default)
+        return Decimal(str(value))
+    except Exception:
+        return Decimal(default)
+
+
+def safe_int(value, default=0):
+    try:
+        if value in (None, ""):
+            return default
+        return int(float(value))
+    except Exception:
+        return default
+
+
 class CartonCalculator:
 
     # ----------------------------------------
@@ -45,6 +63,12 @@ class CartonCalculator:
     # 3. PACKING LOGIC (REAL)
     # ----------------------------------------
     def packing(self, folded_l, folded_w, thickness, pcs):
+
+        # Safety: never let folded_l / folded_w be zero (avoids division errors)
+        if not folded_l or folded_l <= 0:
+            folded_l = Decimal("1")
+        if not folded_w or folded_w <= 0:
+            folded_w = Decimal("1")
 
         # assume carton base ~ folded size multiples
         max_length = folded_l * 4
@@ -152,24 +176,31 @@ class CartonCalculator:
     # ----------------------------------------
     def compute(self, sp):
 
-        length = Decimal(sp.get("length_in"))
-        width = Decimal(sp.get("width_in"))
-        gsm = Decimal(sp.get("gsm"))
-        pcs = int(sp.get("unit_per_carton"))
+        length = safe_decimal(sp.get("length_in"))
+        width = safe_decimal(sp.get("width_in"))
+        gsm = safe_decimal(sp.get("gsm"))
+        pcs = safe_int(sp.get("unit_per_carton"), default=1)
         fold = sp.get("fold")
+
+        if pcs <= 0:
+            pcs = 1
 
         # 1. Fold
         folded_l, folded_w = self.apply_fold(length, width, fold)
 
-        if not folded_l or not folded_w:
-            raise ValueError("Invalid folded dimensions")
+        # Agar length/width khali/invalid ho to crash mat karo,
+        # safe minimum default maan kar aage badho
+        if not folded_l or folded_l <= 0:
+            folded_l = Decimal("1")
+        if not folded_w or folded_w <= 0:
+            folded_w = Decimal("1")
 
         # 2. Weight
         weight = sp.get("wt_per_unit")
         if not weight:
             weight = self.calculate_weight(length, width, gsm)
         else:
-            weight = Decimal(weight)
+            weight = safe_decimal(weight)
 
         # 3. Thickness
         thickness = round((Decimal(gsm) / Decimal(1000)) * Decimal("0.8"), 3)

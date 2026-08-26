@@ -555,7 +555,6 @@ from drf_yasg.utils import swagger_auto_schema
 
 from .models import ArtworkRequest, ArtworkVersion, ArtworkApproval, ArtworkComment, PackagingSpecification
 from activity_logs.models import ActivityLog
-from .models import ArtworkRequest, ArtworkVersion, ArtworkApproval, ArtworkComment, PackagingSpecification, ArtworkNotification
 
 
 APPROVAL_STAGE_ORDER = ["MARKETING", "PPC", "TQM", "CUSTOMER"]
@@ -563,28 +562,6 @@ APPROVAL_STAGE_ORDER = ["MARKETING", "PPC", "TQM", "CUSTOMER"]
 MAX_UPLOAD_SIZE_MB = 25
 ALLOWED_EXTENSIONS = [".pdf", ".ai", ".eps", ".psd", ".png", ".jpg", ".jpeg", ".tiff"]
 
-# Helper function
-def _notify(user, artwork, message):
-    """Create one notification for a specific user."""
-    if not user:
-        return
-    ArtworkNotification.objects.create(recipient=user, artwork=artwork, message=message)
-
-
-def _notify_role(role, artwork, message, exclude_user=None):
-    """Create a notification for every user that has the given role
-    (used when the next reviewer isn't one specific assigned person,
-    e.g. PPC/TQM stages — any user with that role should be alerted)."""
-    from django.contrib.auth import get_user_model
-    User = get_user_model()
-    users = User.objects.filter(role=role)
-    if exclude_user:
-        users = users.exclude(id=exclude_user.id)
-    for u in users:
-        ArtworkNotification.objects.create(recipient=u, artwork=artwork, message=message)
-        
-        
-        
 
 def _log_activity(request, artwork, action, message, old_value=None, new_value=None):
     ActivityLog.objects.create(
@@ -610,7 +587,6 @@ def _validate_upload_file(f):
 
 
 def _artwork_to_dict(artwork, request=None, include_versions=True, include_approvals=True):
-    
     data = {
         "id": artwork.id,
         "artwork_id": artwork.artwork_id,
@@ -710,9 +686,6 @@ def create_artwork_request(request):
         f"Artwork request {artwork.artwork_id} created.",
         new_value=artwork.status,
     )
-    
-    if artwork.assigned_vendor:
-        _notify(artwork.assigned_vendor, artwork, f"New artwork request {artwork.artwork_id} assigned to you.")
 
     return Response(_artwork_to_dict(artwork, request=request), status=http_status.HTTP_201_CREATED)
 
@@ -769,8 +742,6 @@ def upload_artwork_version(request, artwork_id):
         f"Version {version.version_number} uploaded for {artwork.artwork_id}.",
         new_value=f"v{version.version_number}",
     )
-    if artwork.created_by:
-        _notify(artwork.created_by, artwork, f"{artwork.artwork_id} has a new version ready for your review.")
 
     return Response(_artwork_to_dict(artwork, request=request), status=http_status.HTTP_201_CREATED)
 
@@ -816,44 +787,18 @@ def act_on_artwork_approval(request, artwork_id):
     pending.acted_on = timezone.now()
     pending.save()
 
-    # if decision == "REJECTED":
-    #     artwork.status = "REJECTED"
-    # else:
-    #     next_pending = artwork.approvals.filter(decision="PENDING", version=current_version).order_by("sequence").first()
-    #     if next_pending:
-    #         artwork.status = f"{next_pending.stage}_REVIEW" if next_pending.stage != "CUSTOMER" else "CUSTOMER_REVIEW"
-    #     else:
-    #         artwork.status = "APPROVED"
-    #         active_version = artwork.versions.filter(is_active_version=True).first()
-    #         if active_version:
-    #             active_version.is_locked = True
-    #             active_version.save(update_fields=["is_locked"])
-    
     if decision == "REJECTED":
         artwork.status = "REJECTED"
-        if artwork.assigned_vendor:
-            _notify(
-                artwork.assigned_vendor, artwork,
-                f"{artwork.artwork_id} was rejected at {pending.stage} stage. Please revise and re-upload."
-                + (f" Reason: {comments}" if comments else ""),
-            )
     else:
         next_pending = artwork.approvals.filter(decision="PENDING", version=current_version).order_by("sequence").first()
         if next_pending:
             artwork.status = f"{next_pending.stage}_REVIEW" if next_pending.stage != "CUSTOMER" else "CUSTOMER_REVIEW"
-            next_role = ArtworkApproval.STAGE_ROLE_MAP.get(next_pending.stage)
-            if next_role:
-                _notify_role(next_role, artwork, f"{artwork.artwork_id} is ready for your {next_pending.stage} review.", exclude_user=request.user)
         else:
             artwork.status = "APPROVED"
             active_version = artwork.versions.filter(is_active_version=True).first()
             if active_version:
                 active_version.is_locked = True
                 active_version.save(update_fields=["is_locked"])
-            if artwork.assigned_vendor:
-                _notify(artwork.assigned_vendor, artwork, f"{artwork.artwork_id} has been fully approved.")
-            if artwork.created_by:
-                _notify(artwork.created_by, artwork, f"{artwork.artwork_id} has been fully approved.")
 
     artwork.updated_by = request.user
     artwork.save(update_fields=["status", "updated_by", "updated_on"])
@@ -1089,10 +1034,6 @@ def create_artwork_with_spec(request):
         f"Artwork request {artwork.artwork_id} created with {category} packaging specification.",
         new_value=artwork.status,
     )
-    
-    if artwork.assigned_vendor:
-        _notify(artwork.assigned_vendor, artwork, f"New artwork request {artwork.artwork_id} assigned to you.")
-
 
     return Response(_artwork_to_dict(artwork, request=request), status=http_status.HTTP_201_CREATED)
 
@@ -1160,7 +1101,6 @@ def assign_procurement(request, artwork_id):
         request, artwork, "Procurement Assigned",
         f"{request.user.username} assigned procurement contact '{vendor_user.username}' to {artwork.artwork_id}.",
     )
-    _notify(vendor_user, artwork, f"You have been assigned artwork {artwork.artwork_id}.")
 
     return Response(_artwork_to_dict(artwork, request=request), status=http_status.HTTP_200_OK) 
 
@@ -1262,176 +1202,3 @@ def export_artwork_excel(request, artwork_id):
     response["Content-Disposition"] = f"attachment; filename={artwork.artwork_id}.xlsx"
     wb.save(response)
     return response
-
-
-# ------------------------------------------------------------------
-# BRD Section 12 — Performance Dashboard
-# Average review time by department, first-pass approval rate,
-# and approval bottleneck analysis — computed on the fly from
-# ArtworkVersion/ArtworkApproval data (no extra tables needed).
-# ------------------------------------------------------------------
-
-# @api_view(["GET"])
-# @permission_classes([IsAuthenticated])
-# def artwork_performance_stats(request):
-#     stage_durations = {"MARKETING": [], "PPC": [], "TQM": [], "CUSTOMER": []}
-
-#     versions = ArtworkVersion.objects.prefetch_related("approvals")
-#     for v in versions:
-#         approvals = list(v.approvals.order_by("sequence"))
-#         prev_time = v.uploaded_on
-#         for a in approvals:
-#             if not a.acted_on:
-#                 break  # stopped here — nothing acted yet beyond this point
-#             duration_hours = (a.acted_on - prev_time).total_seconds() / 3600.0
-#             if duration_hours >= 0:
-#                 stage_durations[a.stage].append(duration_hours)
-#             prev_time = a.acted_on
-#             if a.decision == "REJECTED":
-#                 break
-
-#     avg_review_time_days = {}
-#     for stage, durations in stage_durations.items():
-#         avg_review_time_days[stage] = round((sum(durations) / len(durations)) / 24, 2) if durations else None
-
-#     # First-pass approval rate — among artworks that reached a final
-#     # APPROVED/RELEASED state, what % never needed a re-upload (v2+)?
-#     terminal_qs = ArtworkRequest.objects.filter(status__in=["APPROVED", "RELEASED"])
-#     terminal_count = terminal_qs.count()
-#     first_pass_count = sum(1 for artwork in terminal_qs if artwork.versions.count() == 1)
-#     first_pass_rate = round((first_pass_count / terminal_count) * 100, 1) if terminal_count else None
-
-#     # Bottleneck — whichever stage has the highest average review time
-#     valid_stages = {k: v for k, v in avg_review_time_days.items() if v is not None}
-#     bottleneck_stage = max(valid_stages, key=valid_stages.get) if valid_stages else None
-
-#     return Response(
-#         {
-#             "avg_review_time_by_department": avg_review_time_days,
-#             "first_pass_approval_rate": first_pass_rate,
-#             "bottleneck_stage": bottleneck_stage,
-#             "bottleneck_days": valid_stages.get(bottleneck_stage) if bottleneck_stage else None,
-#             "sample_size": {
-#                 "versions_analyzed": versions.count(),
-#                 "terminal_artworks": terminal_count,
-#             },
-#         },
-#         status=http_status.HTTP_200_OK,
-#     )
-    
-    
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def artwork_performance_stats(request):
-    stage_durations = {"MARKETING": [], "PPC": [], "TQM": [], "CUSTOMER": []}
-
-    versions = ArtworkVersion.objects.prefetch_related("approvals")
-    for v in versions:
-        approvals = list(v.approvals.order_by("sequence"))
-        prev_time = v.uploaded_on
-        for a in approvals:
-            if not a.acted_on:
-                break
-            duration_hours = (a.acted_on - prev_time).total_seconds() / 3600.0
-            if duration_hours >= 0:
-                stage_durations[a.stage].append(duration_hours)
-            prev_time = a.acted_on
-            if a.decision == "REJECTED":
-                break
-
-    avg_review_time_days = {}
-    for stage, durations in stage_durations.items():
-        avg_review_time_days[stage] = round((sum(durations) / len(durations)) / 24, 2) if durations else None
-
-    # First-pass approval rate
-    terminal_qs = ArtworkRequest.objects.filter(status__in=["APPROVED", "RELEASED"])
-    terminal_count = terminal_qs.count()
-    first_pass_count = sum(1 for artwork in terminal_qs if artwork.versions.count() == 1)
-    first_pass_rate = round((first_pass_count / terminal_count) * 100, 1) if terminal_count else None
-
-    # Bottleneck stage
-    valid_stages = {k: v for k, v in avg_review_time_days.items() if v is not None}
-    bottleneck_stage = max(valid_stages, key=valid_stages.get) if valid_stages else None
-
-    # Vendor (Procurement) performance — avg turnaround days and
-    # average revision count (versions per artwork), grouped by the
-    # assigned procurement contact.
-    from collections import defaultdict
-    vendor_turnarounds = defaultdict(list)
-    vendor_version_counts = defaultdict(list)
-
-    for artwork in ArtworkRequest.objects.select_related("assigned_vendor").prefetch_related("versions"):
-        if not artwork.assigned_vendor:
-            continue
-        vendor_name = artwork.assigned_vendor.username
-        vendor_version_counts[vendor_name].append(artwork.versions.count())
-        if artwork.status in ["APPROVED", "RELEASED"]:
-            days = (artwork.updated_on - artwork.created_on).total_seconds() / 86400.0
-            vendor_turnarounds[vendor_name].append(days)
-
-    vendor_performance = []
-    all_vendors = set(vendor_version_counts.keys()) | set(vendor_turnarounds.keys())
-    for vendor_name in all_vendors:
-        turnarounds = vendor_turnarounds.get(vendor_name, [])
-        versions_list = vendor_version_counts.get(vendor_name, [])
-        vendor_performance.append({
-            "vendor": vendor_name,
-            "avg_turnaround_days": round(sum(turnarounds) / len(turnarounds), 1) if turnarounds else None,
-            "revisions": round(sum(versions_list) / len(versions_list), 1) if versions_list else 0,
-        })
-
-    return Response(
-        {
-            "avg_review_time_by_department": avg_review_time_days,
-            "first_pass_approval_rate": first_pass_rate,
-            "bottleneck_stage": bottleneck_stage,
-            "bottleneck_days": valid_stages.get(bottleneck_stage) if bottleneck_stage else None,
-            "vendor_performance": vendor_performance,
-            "sample_size": {
-                "versions_analyzed": versions.count(),
-                "terminal_artworks": terminal_count,
-            },
-        },
-        status=http_status.HTTP_200_OK,
-    )    
-# ------------------------------------------------------------------
-# Notification Bell — list + mark-read endpoints
-# ------------------------------------------------------------------
-
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def list_artwork_notifications(request):
-    notifications = ArtworkNotification.objects.filter(recipient=request.user).select_related("artwork")[:30]
-    unread_count = ArtworkNotification.objects.filter(recipient=request.user, is_read=False).count()
-    return Response(
-        {
-            "unread_count": unread_count,
-            "notifications": [
-                {
-                    "id": n.id,
-                    "artwork_id": n.artwork.artwork_id,
-                    "message": n.message,
-                    "is_read": n.is_read,
-                    "created_on": n.created_on,
-                }
-                for n in notifications
-            ],
-        },
-        status=http_status.HTTP_200_OK,
-    )
-
-
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def mark_notification_read(request, notification_id):
-    notif = get_object_or_404(ArtworkNotification, id=notification_id, recipient=request.user)
-    notif.is_read = True
-    notif.save(update_fields=["is_read"])
-    return Response({"status": "ok"}, status=http_status.HTTP_200_OK)
-
-
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def mark_all_notifications_read(request):
-    ArtworkNotification.objects.filter(recipient=request.user, is_read=False).update(is_read=True)
-    return Response({"status": "ok"}, status=http_status.HTTP_200_OK)    

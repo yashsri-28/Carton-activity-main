@@ -1,4 +1,5 @@
 import logging
+from decimal import Decimal
 
 from rest_framework.decorators import api_view, permission_classes, parser_classes
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -55,22 +56,49 @@ def clean_kwargs(model, data: dict) -> dict:
     Filters a dict down to only the keys that are actual fields
     on the given model, so stray/unexpected keys from the request
     don't blow up .objects.create() with a TypeError.
+
+    Also auto-converts any DecimalField values using to_decimal(),
+    so a plain int 0 / '' / None never reaches the SQL Server driver
+    and causes 'Invalid precision value (0)'.
     """
     if not isinstance(data, dict):
         return {}
 
-    valid_fields = {f.name for f in model._meta.get_fields()}
-
-    return {
-        key: value
-        for key, value in data.items()
-        if key in valid_fields
+    field_map = {
+        f.name: f
+        for f in model._meta.get_fields()
+        if hasattr(f, "get_internal_type")
     }
+
+    cleaned = {}
+    for key, value in data.items():
+        if key not in field_map:
+            continue
+
+        field = field_map[key]
+
+        if field.get_internal_type() == "DecimalField":
+            cleaned[key] = to_decimal(value)
+        else:
+            cleaned[key] = value
+
+    return cleaned
 def clean_int(value):
     """Convert '' or None to None, otherwise return the value as-is."""
     if value in (None, "", "null"):
         return None
     return value
+
+from decimal import Decimal, InvalidOperation
+
+def to_decimal(value, default="0.00"):
+    """Safely convert incoming value to Decimal, avoiding SQL Server precision errors."""
+    try:
+        if value in (None, ""):
+            return Decimal(default)
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return Decimal(default)
 # ------------------------------------------------------------------
 # API: Submit Carton Program
 # Description:
@@ -377,15 +405,13 @@ def submit_carton_program(request):
     data = request.data
 
     activity_name = data.get("activity_name")
-    program_name = data.get("program_name")
+    program_name = data.get("program_name") or ""
     program_type = data.get("program_type", "TOWEL")
     sent_to_user_id = data.get("sent_to_user_id")
     btn = data.get("btn", "")
 
     if not activity_name:
         return Response({"error": "activity_name is required"}, status=400)
-    if not program_name:
-        return Response({"error": "program_name is required"}, status=400)
 
     valid_types = {"TOWEL", "BEDSHEET", "TERRY_TOWEL", "BATH_ROBE"}
     if program_type not in valid_types:
@@ -428,22 +454,28 @@ def submit_carton_program(request):
 
     # 2️⃣ PRODUCT-SPECIFIC DETAILS
     if program_type == "BEDSHEET":
+        bedsheet_kwargs = clean_kwargs(BedsheetProgramDetails, data.get("bedsheet_details", {}))
+        bedsheet_kwargs["filled_product_gsm"] = to_decimal(bedsheet_kwargs.get("filled_product_gsm"))
         BedsheetProgramDetails.objects.create(
             carton_program=carton_program,
-            **clean_kwargs(BedsheetProgramDetails, data.get("bedsheet_details", {}))
+            **bedsheet_kwargs
         )
-    elif program_type == "TERRY_TOWEL":
+    elif program_type in ("TERRY_TOWEL", "TOWEL"):
+        # Terry Towel fields are merged into the default Towel form,
+        # so TOWEL programs also get a TerryTowelProgramDetails row.
+        terry_kwargs = clean_kwargs(TerryTowelProgramDetails, data.get("terry_details", {}))
+        terry_kwargs["towel_weight_per_piece"] = to_decimal(terry_kwargs.get("towel_weight_per_piece"))
         TerryTowelProgramDetails.objects.create(
             carton_program=carton_program,
-            **clean_kwargs(TerryTowelProgramDetails, data.get("terry_details", {}))
+            **terry_kwargs
         )
     elif program_type == "BATH_ROBE":
+        bathrobe_kwargs = clean_kwargs(BathRobeProgramDetails, data.get("bathrobe_details", {}))
+        bathrobe_kwargs["bath_robe_weight"] = to_decimal(bathrobe_kwargs.get("bath_robe_weight"))
         BathRobeProgramDetails.objects.create(
             carton_program=carton_program,
-            **clean_kwargs(BathRobeProgramDetails, data.get("bathrobe_details", {}))
+            **bathrobe_kwargs
         )
-    # TOWEL: agar iska alag detail table hai to yahan add karo, warna fields
-    # already CartonProgram pe hain to isko yun hi chhod do.
 
     # 3️⃣ ACTIVITY STATUS
     status_value = "Draft" if btn.lower() == "save as draft" else "Pending"
@@ -463,20 +495,47 @@ def submit_carton_program(request):
             carton_program=carton_program,
             program_name=sp.get("program_name"),
             style=sp.get("style"),
-            width_in=sp.get("width_in"),
-            length_in=sp.get("length_in"),
-            gsm=sp.get("gsm"),
-            wt_per_unit=result["weight"],
-            unit_per_carton=sp.get("unit_per_carton"),
+
+            width_in=to_decimal(sp.get("width_in")),
+            length_in=to_decimal(sp.get("length_in")),
+            width_cm=to_decimal(sp.get("width_cm")),
+            length_cm=to_decimal(sp.get("length_cm")),
+
+            gsm=to_decimal(sp.get("gsm")),
+            wt_per_unit=to_decimal(result.get("weight")),
+
+            unit_per_carton=sp.get("unit_per_carton") or 0,
             inner_pack_unit_qty=sp.get("inner_pack_unit_qty"),
             fold=sp.get("fold"),
-            pcs_per_set=sp.get("pcs_per_set"),
+            pcs_per_set=sp.get("pcs_per_set") or None,
             remark=sp.get("remark"),
-            folded_length=result["folded_length"],
-            folded_width=result["folded_width"],
-            carton_length=result["carton"]["length"],
-            carton_width=result["carton"]["width"],
-            carton_height=result["carton"]["height"],
+
+            folded_length=to_decimal(result.get("folded_length")),
+            folded_width=to_decimal(result.get("folded_width")),
+
+            carton_length=to_decimal(result.get("carton", {}).get("length")),
+            carton_width=to_decimal(result.get("carton", {}).get("width")),
+            carton_height=to_decimal(result.get("carton", {}).get("height")),
+
+            # TQM stage ke fields — abhi khali hain, isliye explicitly 0.00 do,
+            # None mat chodo warna SQL Server crash karega
+            pdq_length=to_decimal(sp.get("pdq_length")),
+            pdq_width=to_decimal(sp.get("pdq_width")),
+            pdq_height=to_decimal(sp.get("pdq_height")),
+            net_wt_pdq=to_decimal(sp.get("net_wt_pdq")),
+            pallet_wt_pdq=to_decimal(sp.get("pallet_wt_pdq")),
+
+            pallet_length=to_decimal(sp.get("pallet_length")),
+            pallet_width=to_decimal(sp.get("pallet_width")),
+            pallet_height=to_decimal(sp.get("pallet_height")),
+
+            packed_pb_length=to_decimal(sp.get("packed_pb_length")),
+            packed_pb_width=to_decimal(sp.get("packed_pb_width")),
+            packed_pb_height=to_decimal(sp.get("packed_pb_height")),
+
+            gross_wt_per_carton=to_decimal(sp.get("gross_wt_per_carton")),
+            saved_cbm_per_carton=to_decimal(sp.get("saved_cbm_per_carton")),
+            saved_net_wt_carton=to_decimal(sp.get("saved_net_wt_carton")),
         )
 
     # 5️⃣ SAMPLE PROGRAMS
@@ -487,13 +546,13 @@ def submit_carton_program(request):
             size=sm.get("size"),
             sample=sm.get("sample"),
             quality=sm.get("quality"),
-            lbs_per_dz=sm.get("lbs_per_dz"),
-            gsm=sm.get("gsm"),
+            lbs_per_dz=to_decimal(sm.get("lbs_per_dz")),
+            gsm=to_decimal(sm.get("gsm")),
             shade=sm.get("shade"),
-            width_in=sm.get("width_in"),
-            length_in=sm.get("length_in"),
-            width_cm=sm.get("width_cm"),
-            length_cm=sm.get("length_cm"),
+            width_in=to_decimal(sm.get("width_in")),
+            length_in=to_decimal(sm.get("length_in")),
+            width_cm=to_decimal(sm.get("width_cm")),
+            length_cm=to_decimal(sm.get("length_cm")),
         )
 
     # 6️⃣ LOGGING
@@ -1250,6 +1309,7 @@ def edit_carton_program(request):
     program.separator_protector_stiffener_required = carton_program_data.get("separator_protector_stiffener_required")
     program.ribbon_packing_required = carton_program_data.get("ribbon_packing_required")
     program.belly_band_packing_required = carton_program_data.get("belly_band_packing_required")
+    program.remark = carton_program_data.get("remark")   # NEW: save updated remark on edit
 
     program.updated_by = request.user
     program.save()
@@ -1264,7 +1324,7 @@ def edit_carton_program(request):
         if old_program_type == "BEDSHEET":
             BedsheetProgramDetails.objects.filter(carton_program=program).delete()
 
-        elif old_program_type == "TERRY_TOWEL":
+        elif old_program_type in ("TERRY_TOWEL", "TOWEL"):
             TerryTowelProgramDetails.objects.filter(carton_program=program).delete()
 
         elif old_program_type == "BATH_ROBE":
@@ -1299,7 +1359,7 @@ def edit_carton_program(request):
 
         details.save()
 
-    elif new_program_type == "TERRY_TOWEL":
+    elif new_program_type in ("TERRY_TOWEL", "TOWEL"):
 
         details, created = TerryTowelProgramDetails.objects.get_or_create(
             carton_program=program
@@ -1550,7 +1610,7 @@ def get_carton_program_details(request):
         except:
             bedsheet_details = {}
 
-    elif program_type == "TERRY_TOWEL":
+    elif program_type in ("TERRY_TOWEL", "TOWEL"):
         try:
             td = program.terry_details
             terry_details = {
@@ -1744,234 +1804,234 @@ def get_carton_program_details(request):
     }
 
     return Response(response_data)
-# ------------------------------------------------------------------
-# API: Recalculate Preview
-# Description:
-#   TQM "Recalculate" button action.
-#
-#   - Accepts CURRENT typed dimensions from frontend
-#   - SAVES them immediately to DB (carton/pdq/pallet dims, ribbon,
-#     belly_band, self_fabric_bag, remark, weight, folded dims, saved
-#     net weight/CBM overrides)
-#   - Computes container-fit numbers from the just-saved values
-#   - Marks every subprogram in the request as is_recalculated=True,
-#     which unlocks Tentative/Final submit
-# ------------------------------------------------------------------
+# # ------------------------------------------------------------------
+# # API: Recalculate Preview
+# # Description:
+# #   TQM "Recalculate" button action.
+# #
+# #   - Accepts CURRENT typed dimensions from frontend
+# #   - SAVES them immediately to DB (carton/pdq/pallet dims, ribbon,
+# #     belly_band, self_fabric_bag, remark, weight, folded dims, saved
+# #     net weight/CBM overrides)
+# #   - Computes container-fit numbers from the just-saved values
+# #   - Marks every subprogram in the request as is_recalculated=True,
+# #     which unlocks Tentative/Final submit
+# # ------------------------------------------------------------------
 
-recalculate_preview_schema = openapi.Schema(
-    type=openapi.TYPE_OBJECT,
-    required=["subprograms"],
-    properties={
-        "subprograms": openapi.Schema(
-            type=openapi.TYPE_ARRAY,
-            items=openapi.Schema(
-                type=openapi.TYPE_OBJECT,
-                required=["subprogram_id"],
-                properties={
-                    "subprogram_id": openapi.Schema(type=openapi.TYPE_INTEGER),
+# recalculate_preview_schema = openapi.Schema(
+#     type=openapi.TYPE_OBJECT,
+#     required=["subprograms"],
+#     properties={
+#         "subprograms": openapi.Schema(
+#             type=openapi.TYPE_ARRAY,
+#             items=openapi.Schema(
+#                 type=openapi.TYPE_OBJECT,
+#                 required=["subprogram_id"],
+#                 properties={
+#                     "subprogram_id": openapi.Schema(type=openapi.TYPE_INTEGER),
 
-                    "carton_length": openapi.Schema(type=openapi.TYPE_NUMBER),
-                    "carton_width": openapi.Schema(type=openapi.TYPE_NUMBER),
-                    "carton_height": openapi.Schema(type=openapi.TYPE_NUMBER),
+#                     "carton_length": openapi.Schema(type=openapi.TYPE_NUMBER),
+#                     "carton_width": openapi.Schema(type=openapi.TYPE_NUMBER),
+#                     "carton_height": openapi.Schema(type=openapi.TYPE_NUMBER),
 
-                    "pdq_length": openapi.Schema(type=openapi.TYPE_NUMBER),
-                    "pdq_width": openapi.Schema(type=openapi.TYPE_NUMBER),
-                    "pdq_height": openapi.Schema(type=openapi.TYPE_NUMBER),
+#                     "pdq_length": openapi.Schema(type=openapi.TYPE_NUMBER),
+#                     "pdq_width": openapi.Schema(type=openapi.TYPE_NUMBER),
+#                     "pdq_height": openapi.Schema(type=openapi.TYPE_NUMBER),
 
-                    "pallet_length": openapi.Schema(type=openapi.TYPE_NUMBER),
-                    "pallet_width": openapi.Schema(type=openapi.TYPE_NUMBER),
-                    "pallet_height": openapi.Schema(type=openapi.TYPE_NUMBER),
+#                     "pallet_length": openapi.Schema(type=openapi.TYPE_NUMBER),
+#                     "pallet_width": openapi.Schema(type=openapi.TYPE_NUMBER),
+#                     "pallet_height": openapi.Schema(type=openapi.TYPE_NUMBER),
 
-                    "folded_length": openapi.Schema(type=openapi.TYPE_NUMBER),
-                    "folded_width": openapi.Schema(type=openapi.TYPE_NUMBER),
+#                     "folded_length": openapi.Schema(type=openapi.TYPE_NUMBER),
+#                     "folded_width": openapi.Schema(type=openapi.TYPE_NUMBER),
 
-                    "wt_per_unit": openapi.Schema(type=openapi.TYPE_NUMBER),
-                    "weight_uom": openapi.Schema(
-                        type=openapi.TYPE_STRING,
-                        enum=["GM", "KG", "LB"]
-                    ),
+#                     "wt_per_unit": openapi.Schema(type=openapi.TYPE_NUMBER),
+#                     "weight_uom": openapi.Schema(
+#                         type=openapi.TYPE_STRING,
+#                         enum=["GM", "KG", "LB"]
+#                     ),
 
-                    "ribbon": openapi.Schema(type=openapi.TYPE_STRING, enum=["YES", "NO"]),
-                    "belly_band": openapi.Schema(type=openapi.TYPE_STRING, enum=["YES", "NO"]),
-                    "self_fabric_bag": openapi.Schema(type=openapi.TYPE_STRING, enum=["YES", "NO"]),
-                    "remark": openapi.Schema(type=openapi.TYPE_STRING),
+#                     "ribbon": openapi.Schema(type=openapi.TYPE_STRING, enum=["YES", "NO"]),
+#                     "belly_band": openapi.Schema(type=openapi.TYPE_STRING, enum=["YES", "NO"]),
+#                     "self_fabric_bag": openapi.Schema(type=openapi.TYPE_STRING, enum=["YES", "NO"]),
+#                     "remark": openapi.Schema(type=openapi.TYPE_STRING),
 
-                    # Manual overrides (editable Net Weight / CBM cells)
-                    "saved_net_wt_carton": openapi.Schema(type=openapi.TYPE_NUMBER),
-                    "saved_cbm_per_carton": openapi.Schema(type=openapi.TYPE_NUMBER),
-                }
-            )
-        )
-    }
-)
+#                     # Manual overrides (editable Net Weight / CBM cells)
+#                     "saved_net_wt_carton": openapi.Schema(type=openapi.TYPE_NUMBER),
+#                     "saved_cbm_per_carton": openapi.Schema(type=openapi.TYPE_NUMBER),
+#                 }
+#             )
+#         )
+#     }
+# )
 
-recalculate_preview_response = openapi.Schema(
-    type=openapi.TYPE_OBJECT,
-    properties={
-        "results": openapi.Schema(
-            type=openapi.TYPE_ARRAY,
-            items=openapi.Schema(type=openapi.TYPE_OBJECT)
-        )
-    }
-)
+# recalculate_preview_response = openapi.Schema(
+#     type=openapi.TYPE_OBJECT,
+#     properties={
+#         "results": openapi.Schema(
+#             type=openapi.TYPE_ARRAY,
+#             items=openapi.Schema(type=openapi.TYPE_OBJECT)
+#         )
+#     }
+# )
 
 
-@swagger_auto_schema(
-    method="post",
-    operation_summary="Recalculate (saves dimensions immediately, unlocks submit)",
-    operation_description="""
-    This IS the "Recalculate" button action:
+# @swagger_auto_schema(
+#     method="post",
+#     operation_summary="Recalculate (saves dimensions immediately, unlocks submit)",
+#     operation_description="""
+#     This IS the "Recalculate" button action:
 
-    1. Saves whatever dimensions/fields the TQM user has currently typed
-       for each subprogram straight to the DB.
-    2. Computes container-fit numbers (cartons/pdq/pallet per 20FT & 40FT)
-       and CBM from those just-saved values.
-    3. Sets is_recalculated=True and last_recalculated_on=now on every
-       subprogram included in the request.
+#     1. Saves whatever dimensions/fields the TQM user has currently typed
+#        for each subprogram straight to the DB.
+#     2. Computes container-fit numbers (cartons/pdq/pallet per 20FT & 40FT)
+#        and CBM from those just-saved values.
+#     3. Sets is_recalculated=True and last_recalculated_on=now on every
+#        subprogram included in the request.
 
-    Tentative/Final submit (bulk_update_tqm_subprogram) will reject the
-    submission if any subprogram is still is_recalculated=False - so this
-    endpoint must be called, with the latest dimensions, before submit.
+#     Tentative/Final submit (bulk_update_tqm_subprogram) will reject the
+#     submission if any subprogram is still is_recalculated=False - so this
+#     endpoint must be called, with the latest dimensions, before submit.
 
-    If dimensions are edited again after calling this, is_recalculated is
-    reset to False by bulk_update_tqm_subprogram's dims_changed check -
-    Recalculate must be called again before the next submit.
-    """,
-    request_body=recalculate_preview_schema,
-    responses={200: recalculate_preview_response},
-)
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-@transaction.atomic
-def recalculate_preview(request):
+#     If dimensions are edited again after calling this, is_recalculated is
+#     reset to False by bulk_update_tqm_subprogram's dims_changed check -
+#     Recalculate must be called again before the next submit.
+#     """,
+#     request_body=recalculate_preview_schema,
+#     responses={200: recalculate_preview_response},
+# )
+# @api_view(["POST"])
+# @permission_classes([IsAuthenticated])
+# @transaction.atomic
+# def recalculate_preview(request):
 
-    items = request.data.get("subprograms", [])
+#     items = request.data.get("subprograms", [])
 
-    if not items:
-        return Response(
-            {"error": "subprograms list is required"},
-            status=400
-        )
+#     if not items:
+#         return Response(
+#             {"error": "subprograms list is required"},
+#             status=400
+#         )
 
-    results = []
-    now = timezone.now()
+#     results = []
+#     now = timezone.now()
 
-    for item in items:
-        sp_id = item.get("subprogram_id")
+#     for item in items:
+#         sp_id = item.get("subprogram_id")
 
-        try:
-            sp = CartonProgramSubProgram.objects.get(id=sp_id)
-        except CartonProgramSubProgram.DoesNotExist:
-            continue
+#         try:
+#             sp = CartonProgramSubProgram.objects.get(id=sp_id)
+#         except CartonProgramSubProgram.DoesNotExist:
+#             continue
 
-        # -------- Yes/No dropdown validation --------
-        ribbon_val, err = _validate_yes_no(item.get("ribbon"), f"ribbon (subprogram {sp_id})")
-        if err:
-            return err
+#         # -------- Yes/No dropdown validation --------
+#         ribbon_val, err = _validate_yes_no(item.get("ribbon"), f"ribbon (subprogram {sp_id})")
+#         if err:
+#             return err
 
-        belly_band_val, err = _validate_yes_no(item.get("belly_band"), f"belly_band (subprogram {sp_id})")
-        if err:
-            return err
+#         belly_band_val, err = _validate_yes_no(item.get("belly_band"), f"belly_band (subprogram {sp_id})")
+#         if err:
+#             return err
 
-        self_fabric_bag_val, err = _validate_yes_no(item.get("self_fabric_bag"), f"self_fabric_bag (subprogram {sp_id})")
-        if err:
-            return err
+#         self_fabric_bag_val, err = _validate_yes_no(item.get("self_fabric_bag"), f"self_fabric_bag (subprogram {sp_id})")
+#         if err:
+#             return err
 
-        # -------- Save whatever was sent (partial-safe) --------
+#         # -------- Save whatever was sent (partial-safe) --------
 
-        if item.get("carton_length") is not None:
-            sp.carton_length = item.get("carton_length")
-        if item.get("carton_width") is not None:
-            sp.carton_width = item.get("carton_width")
-        if item.get("carton_height") is not None:
-            sp.carton_height = item.get("carton_height")
+#         if item.get("carton_length") is not None:
+#             sp.carton_length = item.get("carton_length")
+#         if item.get("carton_width") is not None:
+#             sp.carton_width = item.get("carton_width")
+#         if item.get("carton_height") is not None:
+#             sp.carton_height = item.get("carton_height")
 
-        if item.get("pdq_length") is not None:
-            sp.pdq_length = item.get("pdq_length")
-        if item.get("pdq_width") is not None:
-            sp.pdq_width = item.get("pdq_width")
-        if item.get("pdq_height") is not None:
-            sp.pdq_height = item.get("pdq_height")
+#         if item.get("pdq_length") is not None:
+#             sp.pdq_length = item.get("pdq_length")
+#         if item.get("pdq_width") is not None:
+#             sp.pdq_width = item.get("pdq_width")
+#         if item.get("pdq_height") is not None:
+#             sp.pdq_height = item.get("pdq_height")
 
-        if item.get("pallet_length") is not None:
-            sp.pallet_length = item.get("pallet_length")
-        if item.get("pallet_width") is not None:
-            sp.pallet_width = item.get("pallet_width")
-        if item.get("pallet_height") is not None:
-            sp.pallet_height = item.get("pallet_height")
+#         if item.get("pallet_length") is not None:
+#             sp.pallet_length = item.get("pallet_length")
+#         if item.get("pallet_width") is not None:
+#             sp.pallet_width = item.get("pallet_width")
+#         if item.get("pallet_height") is not None:
+#             sp.pallet_height = item.get("pallet_height")
 
-        if item.get("folded_length") is not None:
-            sp.folded_length = item.get("folded_length")
-        if item.get("folded_width") is not None:
-            sp.folded_width = item.get("folded_width")
+#         if item.get("folded_length") is not None:
+#             sp.folded_length = item.get("folded_length")
+#         if item.get("folded_width") is not None:
+#             sp.folded_width = item.get("folded_width")
 
-        if item.get("wt_per_unit") is not None:
-            sp.wt_per_unit = item.get("wt_per_unit")
-        if item.get("weight_uom"):
-            sp.weight_uom = item.get("weight_uom")
+#         if item.get("wt_per_unit") is not None:
+#             sp.wt_per_unit = item.get("wt_per_unit")
+#         if item.get("weight_uom"):
+#             sp.weight_uom = item.get("weight_uom")
 
-        if item.get("ribbon") is not None:
-            sp.ribbon = ribbon_val
-        if item.get("belly_band") is not None:
-            sp.belly_band = belly_band_val
-        if item.get("self_fabric_bag") is not None:
-            sp.self_fabric_bag = self_fabric_bag_val
-        if item.get("remark") is not None:
-            sp.remark = item.get("remark")
+#         if item.get("ribbon") is not None:
+#             sp.ribbon = ribbon_val
+#         if item.get("belly_band") is not None:
+#             sp.belly_band = belly_band_val
+#         if item.get("self_fabric_bag") is not None:
+#             sp.self_fabric_bag = self_fabric_bag_val
+#         if item.get("remark") is not None:
+#             sp.remark = item.get("remark")
 
-        # Manual overrides for editable Net Weight / CBM display cells
-        if item.get("saved_net_wt_carton") is not None:
-            sp.saved_net_wt_carton = item.get("saved_net_wt_carton")
-        if item.get("saved_cbm_per_carton") is not None:
-            sp.saved_cbm_per_carton = item.get("saved_cbm_per_carton")
+#         # Manual overrides for editable Net Weight / CBM display cells
+#         if item.get("saved_net_wt_carton") is not None:
+#             sp.saved_net_wt_carton = item.get("saved_net_wt_carton")
+#         if item.get("saved_cbm_per_carton") is not None:
+#             sp.saved_cbm_per_carton = item.get("saved_cbm_per_carton")
 
-        # -------- Mark as recalculated --------
-        sp.is_recalculated = True
-        sp.last_recalculated_on = now
+#         # -------- Mark as recalculated --------
+#         sp.is_recalculated = True
+#         sp.last_recalculated_on = now
 
-        sp.save()
+#         sp.save()
 
-        # -------- Build response using freshly-saved values --------
-        results.append({
-            "subprogram_id": sp_id,
+#         # -------- Build response using freshly-saved values --------
+#         results.append({
+#             "subprogram_id": sp_id,
 
-            "carton": {
-                "length": sp.carton_length,
-                "width": sp.carton_width,
-                "height": sp.carton_height,
-                "cbm": sp.saved_cbm_per_carton or sp.calculated_cbm_per_carton,
-            },
+#             "carton": {
+#                 "length": sp.carton_length,
+#                 "width": sp.carton_width,
+#                 "height": sp.carton_height,
+#                 "cbm": sp.saved_cbm_per_carton or sp.calculated_cbm_per_carton,
+#             },
 
-            "folded_length": sp.folded_length,
-            "folded_width": sp.folded_width,
+#             "folded_length": sp.folded_length,
+#             "folded_width": sp.folded_width,
 
-            "net_wt_carton": sp.saved_net_wt_carton or sp.calculated_net_wt_carton,
+#             "net_wt_carton": sp.saved_net_wt_carton or sp.calculated_net_wt_carton,
 
-            "cartons_per_20ft": sp.cartons_per_container("20FT"),
-            "cartons_per_40ft": sp.cartons_per_container("40FT"),
-            "pdq_per_20ft": sp.pdq_per_container("20FT"),
-            "pdq_per_40ft": sp.pdq_per_container("40FT"),
-            "pallet_per_20ft": sp.pallets_per_container("20FT"),
-            "pallet_per_40ft": sp.pallets_per_container("40FT"),
+#             "cartons_per_20ft": sp.cartons_per_container("20FT"),
+#             "cartons_per_40ft": sp.cartons_per_container("40FT"),
+#             "pdq_per_20ft": sp.pdq_per_container("20FT"),
+#             "pdq_per_40ft": sp.pdq_per_container("40FT"),
+#             "pallet_per_20ft": sp.pallets_per_container("20FT"),
+#             "pallet_per_40ft": sp.pallets_per_container("40FT"),
 
-            "ribbon": sp.ribbon,
-            "belly_band": sp.belly_band,
-            "self_fabric_bag": sp.self_fabric_bag,
-            "remark": sp.remark,
+#             "ribbon": sp.ribbon,
+#             "belly_band": sp.belly_band,
+#             "self_fabric_bag": sp.self_fabric_bag,
+#             "remark": sp.remark,
 
-            "is_recalculated": True,
-            "last_recalculated_on": now.strftime("%d-%m-%Y %H:%M:%S"),
-        })
+#             "is_recalculated": True,
+#             "last_recalculated_on": now.strftime("%d-%m-%Y %H:%M:%S"),
+#         })
 
-        create_log(
-            module_name="Sub Program",
-            record_id=sp.id,
-            action="Recalculated",
-            message="TQM clicked Recalculate - dimensions saved and container-fit recomputed",
-            user=request.user
-        )
+#         create_log(
+#             module_name="Sub Program",
+#             record_id=sp.id,
+#             action="Recalculated",
+#             message="TQM clicked Recalculate - dimensions saved and container-fit recomputed",
+#             user=request.user
+#         )
 
-    return Response({"results": results}, status=200)
+#     return Response({"results": results}, status=200)
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
@@ -2226,7 +2286,7 @@ def accept_program_ppc(request):
         return Response({"error": "Invalid record"}, status=404)
     
     try:
-        tqm_user = User.objects.get(id=3)
+        tqm_user = User.objects.get(id=5)
     except User.DoesNotExist:
         return Response({"error": "TQM user not found"}, status=404)
 
@@ -2512,6 +2572,7 @@ def recalculate_preview(request):
 
     items = request.data.get("subprograms", [])
     results = []
+    errors = []
 
     for item in items:
         sp_id = item.get("subprogram_id")
@@ -2521,7 +2582,8 @@ def recalculate_preview(request):
         except CartonProgramSubProgram.DoesNotExist:
             continue
 
-        # Update dimensions with whatever the user currently typed
+        # Update dimensions with whatever the user currently typed.
+        # Guard against zero/blank overwriting good data, same as before.
         sp.carton_length = item.get("carton_length") or sp.carton_length
         sp.carton_width = item.get("carton_width") or sp.carton_width
         sp.carton_height = item.get("carton_height") or sp.carton_height
@@ -2532,6 +2594,37 @@ def recalculate_preview(request):
         sp.pallet_width = item.get("pallet_width") or sp.pallet_width
         sp.pallet_height = item.get("pallet_height") or sp.pallet_height
 
+        # -------- SANITY CHECK: dimensions in cm should be reasonable --------
+        # A carton bigger than 1000 cm (10 metres) in any dimension is
+        # certainly a data-entry mistake (e.g. mm typed instead of cm),
+        # and would overflow saved_cbm_per_carton's DB column anyway.
+        MAX_REASONABLE_CM = 3000
+
+        dims_to_check = {
+            "carton_length": sp.carton_length,
+            "carton_width": sp.carton_width,
+            "carton_height": sp.carton_height,
+            "pdq_length": sp.pdq_length,
+            "pdq_width": sp.pdq_width,
+            "pdq_height": sp.pdq_height,
+            "pallet_length": sp.pallet_length,
+            "pallet_width": sp.pallet_width,
+            "pallet_height": sp.pallet_height,
+        }
+
+        bad_fields = [
+            name for name, val in dims_to_check.items()
+            if val is not None and val > MAX_REASONABLE_CM
+        ]
+
+        if bad_fields:
+            errors.append({
+                "subprogram_id": sp_id,
+                "error": f"Unrealistic dimension(s) — check these fields (max {MAX_REASONABLE_CM} cm): {', '.join(bad_fields)}",
+                "values": {k: str(dims_to_check[k]) for k in bad_fields}
+            })
+            continue  # skip saving/calculating this subprogram
+
         # Compute the container-fit numbers
         cartons_20 = sp.cartons_per_container("20FT")
         cartons_40 = sp.cartons_per_container("40FT")
@@ -2541,7 +2634,16 @@ def recalculate_preview(request):
         pallet_40 = sp.pallets_per_container("40FT")
         cbm = sp.calculated_cbm_per_carton
 
-        # 🆕 SAVE the computed values into the DB immediately
+        # Extra safety net: even if dims passed the check above, cap CBM
+        # so it can never exceed what the DB column can hold
+        # (max_digits=10, decimal_places=4 -> max 999999.9999).
+        if cbm is not None and cbm > Decimal("999999"):
+            errors.append({
+                "subprogram_id": sp_id,
+                "error": "Calculated CBM is too large to save — check carton dimensions."
+            })
+            continue
+
         sp.saved_cartons_per_20ft = cartons_20
         sp.saved_cartons_per_40ft = cartons_40
         sp.saved_pdq_per_20ft = pdq_20
@@ -2549,11 +2651,19 @@ def recalculate_preview(request):
         sp.saved_pallet_per_20ft = pallet_20
         sp.saved_pallet_per_40ft = pallet_40
         sp.saved_cbm_per_carton = cbm
+        sp.is_recalculated = True
+        sp.last_recalculated_on = timezone.now()
 
         sp.save()
 
         results.append({
             "subprogram_id": sp_id,
+            "carton": {
+                "length": sp.carton_length,
+                "width": sp.carton_width,
+                "height": sp.carton_height,
+                "cbm": cbm,
+            },
             "cartons_per_20ft": cartons_20,
             "cartons_per_40ft": cartons_40,
             "pdq_per_20ft": pdq_20,
@@ -2562,9 +2672,13 @@ def recalculate_preview(request):
             "pallet_per_40ft": pallet_40,
             "cbm_per_carton": cbm,
             "net_wt_per_carton": sp.calculated_net_wt_carton,
+            "is_recalculated": True,
         })
 
-    return Response({"results": results})
+    if errors and not results:
+        return Response({"error": "Recalculation failed", "details": errors}, status=400)
+
+    return Response({"results": results, "errors": errors})
 
 
 @swagger_auto_schema(

@@ -1,5 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
-import DOMPurify from 'dompurify';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import {
@@ -14,55 +13,6 @@ import {
   assignProcurement,
   exportArtworkExcel,
 } from '../../api/artworkApi';
-
-
-// Excel/Word paste normally carries its colors/borders as CSS CLASSES
-// defined in a <style> block (e.g. ".xl65{background:#4472C4}"), not
-// as inline styles on each cell. Since we strip <style> tags for
-// security, we first "bake" those class rules directly into each
-// cell's inline style attribute — so the formatting survives even
-// after the <style> block and class names are removed.
-function normalizeExcelPaste(html) {
-  try {
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, 'text/html');
-
-    const classRules = {};
-    doc.querySelectorAll('style').forEach((styleTag) => {
-      const cssText = styleTag.textContent || '';
-      const ruleRegex = /([^{}]+)\{([^{}]+)\}/g;
-      let match;
-      while ((match = ruleRegex.exec(cssText)) !== null) {
-        const selectors = match[1].split(',').map((s) => s.trim());
-        const declarations = match[2].trim();
-        selectors.forEach((sel) => {
-          if (sel.startsWith('.')) {
-            const className = sel.slice(1);
-            classRules[className] = (classRules[className] || '') + declarations + ';';
-          }
-        });
-      }
-    });
-
-    doc.querySelectorAll('[class]').forEach((el) => {
-      const classes = el.getAttribute('class').split(/\s+/);
-      let extraStyle = '';
-      classes.forEach((c) => {
-        if (classRules[c]) extraStyle += classRules[c];
-      });
-      if (extraStyle) {
-        el.setAttribute('style', (el.getAttribute('style') || '') + ';' + extraStyle);
-      }
-      el.removeAttribute('class');
-    });
-
-    doc.querySelectorAll('style, head, meta, link, xml').forEach((el) => el.remove());
-
-    return doc.body.innerHTML;
-  } catch (err) {
-    return html;
-  }
-}
 
 // Which role is allowed to act on which approval stage — mirrors
 // ArtworkApproval.STAGE_ROLE_MAP on the backend.
@@ -86,7 +36,6 @@ function ArtworkDetails({ role }) {
   const [newComment, setNewComment] = useState('');
   const [commentAttachment, setCommentAttachment] = useState(null);
   const [commentBusy, setCommentBusy] = useState(false);
-  const commentInputRef = useRef(null);
 
   // FR008 — packaging specification review
 
@@ -181,44 +130,21 @@ useEffect(() => {
     }
   };
 
-
-
   const handleAddComment = async () => {
-  const el = commentInputRef.current;
-  const plainText = el ? el.innerText.trim() : '';
-  if (!plainText && !commentAttachment) return;
+    if (!newComment.trim() && !commentAttachment) return;
+    setCommentBusy(true);
+    try {
+      await addArtworkComment(artworkId, newComment.trim(), commentAttachment);
+      setNewComment('');
+      setCommentAttachment(null);
+      fetchComments();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to post comment.');
+    } finally {
+      setCommentBusy(false);
+    }
+  };
 
-  // Capture the pasted content AS HTML (so Excel's table structure,
-  // colors, borders survive) — sanitized to strip anything unsafe.
-  const rawHtml = el ? el.innerHTML : '';
-  const cleanHtml = DOMPurify.sanitize(rawHtml, { ADD_ATTR: ['style'] });
-
-  setCommentBusy(true);
-  try {
-    await addArtworkComment(artworkId, cleanHtml, commentAttachment);
-    if (el) el.innerHTML = '';
-    setCommentAttachment(null);
-    fetchComments();
-  } catch (err) {
-    toast.error(err.response?.data?.error || 'Failed to post comment.');
-  } finally {
-    setCommentBusy(false);
-  }
-};
-
-const handleCommentPaste = (e) => {
-  e.preventDefault();
-  const html = e.clipboardData.getData('text/html');
-  const text = e.clipboardData.getData('text/plain');
-
-  if (html) {
-    const normalized = normalizeExcelPaste(html);
-    const clean = DOMPurify.sanitize(normalized, { ADD_ATTR: ['style'] });
-    document.execCommand('insertHTML', false, clean);
-  } else {
-    document.execCommand('insertText', false, text);
-  }
-};
   const handleAssignProcurement = async () => {
     if (!selectedProcurementId) { toast.error('Choose a procurement contact first.'); return; }
     setAssigningProcurement(true);
@@ -426,7 +352,7 @@ const handleCommentPaste = (e) => {
               value={comments}
               onChange={(e) => setComments(e.target.value)}
               className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-              rows={6}
+              rows={2}
             />
             <div className="flex gap-2">
               <button onClick={() => handleDecision('APPROVED')} disabled={busy}
@@ -514,19 +440,7 @@ const handleCommentPaste = (e) => {
                 </div>
               </div>
               <span className="text-xs text-gray-400">{new Date(c.created_on).toLocaleString()}</span>
-              {/* {c.message && <p className="text-gray-700 mt-1">{c.message}</p>} */}
-              {/* {c.message && (
-                <p className="text-gray-700 mt-1 whitespace-pre-wrap font-mono text-xs bg-gray-50 rounded p-2 border border-gray-100">
-                  {c.message}
-                </p>
-              )} */}
-
-              {c.message && (
-                <div
-                  className="mt-1 text-sm text-gray-700 overflow-x-auto [&_table]:border [&_table]:border-collapse [&_table]:my-1 [&_td]:border [&_td]:border-gray-300 [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-gray-300 [&_th]:px-2 [&_th]:py-1"
-                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(c.message, { ADD_ATTR: ['style'] }) }}
-                />
-              )}
+              {c.message && <p className="text-gray-700 mt-1">{c.message}</p>}
               {c.attachment_url && (
                 <a href={c.attachment_url} target="_blank" rel="noreferrer" className="text-[#003366] text-xs hover:underline mt-1 inline-block">
                   📎 View attachment
@@ -538,28 +452,12 @@ const handleCommentPaste = (e) => {
 
 
         <div className="space-y-2">
-          {/* <textarea
+          <textarea
             placeholder="Ask a question, leave feedback, or add a reference remark..."
             value={newComment}
             onChange={(e) => setNewComment(e.target.value)}
             className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-            rows={6}
-          /> */}
-          {/* <div
-            ref={commentInputRef}
-            contentEditable
-            suppressContentEditableWarning
-            data-placeholder="Ask a question, leave feedback, or paste an Excel table here — its rows, columns and colors will be preserved..."
-            className="w-full min-h-[150px] max-h-80 overflow-y-auto border border-gray-300 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
-          /> */}
-
-          <div
-            ref={commentInputRef}
-            contentEditable
-            suppressContentEditableWarning
-            onPaste={handleCommentPaste}
-            data-placeholder="Ask a question, leave feedback, or paste an Excel table here — its rows, columns and colors will be preserved..."
-            className="w-full min-h-[150px] max-h-80 overflow-y-auto border border-gray-300 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+            rows={2}
           />
           <div className="flex items-center gap-2">
             <input
@@ -569,8 +467,7 @@ const handleCommentPaste = (e) => {
             />
             <button
               onClick={handleAddComment}
-              // disabled={commentBusy || (!newComment.trim() && !commentAttachment)}
-              disabled={commentBusy}
+              disabled={commentBusy || (!newComment.trim() && !commentAttachment)}
               className="bg-[#003366] text-white px-3 py-1.5 rounded-md text-sm hover:bg-[#002a52] disabled:opacity-50"
             >
               Send

@@ -12,6 +12,7 @@ function FormMain({ onBack }) {
   const [formData, setFormData] = useState({
     productCategory: "",
     companyName: '',
+     remark: '',
     customerName: '',
     customerType: 'old', // Add this for old/new toggle
     programName: '',
@@ -96,6 +97,7 @@ function FormMain({ onBack }) {
 
   // User dropdown
   const [users, setUsers] = useState([]);
+  const [selectedRole, setSelectedRole] = useState(''); 
   const [selectedUserId, setSelectedUserId] = useState('');
 
   // ==================== EFFECTS ====================
@@ -163,25 +165,35 @@ function FormMain({ onBack }) {
   }, []);
 
   const fetchUsers = useCallback(async () => {
-    try {
-      const response = await api.get('/api/users/list/');
-      const filteredUsers = response.data.filter(
-        user => user.username !== 'admin'
-      );
-      setUsers(filteredUsers);
-      if (filteredUsers.length > 0) {
-        setSelectedUserId(filteredUsers[0].id);
-      }
-    } catch (error) {
-      console.error('Failed to fetch users:', error);
-    }
-  }, []);
+  try {
+    const response = await api.get('/api/users/list/');
+    // Exclude admin user from the dropdown list
+    const filteredUsers = response.data.filter(
+      user => user.username !== 'admin'
+    );
+    setUsers(filteredUsers);
+    // Note: No default user is auto-selected anymore.
+    // User must first select a Role, then a User.
+  } catch (error) {
+    console.error('Failed to fetch users:', error);
+  }
+}, []);
 
   // ==================== HANDLERS ====================
   const handleInputChange = useCallback((e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   }, []);
+
+  const handleRemarkChange = useCallback((e) => {
+  const { value } = e.target;
+  const wordCount = value.trim().split(/\s+/).filter(Boolean).length;
+
+  // Block further typing once word limit is reached
+  if (wordCount <= 100) {
+    setFormData(prev => ({ ...prev, remark: value }));
+  }
+}, []);
 
   const handleCompanyChange = useCallback((e) => {
     const companyName = e.target.value;
@@ -219,7 +231,26 @@ function FormMain({ onBack }) {
     }]
   }), [formData.programName]);
 
-  const programHeaders = [
+  // const programHeaders = [
+  //   { label: "Program", key: "program" },
+  //   { label: "Style", key: "style", hasAddBtn: true },
+  //   { label: "W-In", key: "w_in" },
+  //   { label: "W-Cm", key: "w_cm" },
+  //   { label: "L-In", key: "l_in" },
+  //   { label: "L-Cm", key: "l_cm" },
+  //   { label: "Wt/Unit", key: "wt_unit" },
+  //   { label: "GSM", key: "gsm" },
+  //   { label: "Unit/Carton", key: "unit_carton" },
+  //   { label: "Inner Pack Unit Quantity", key: "inner_pack" },
+  //   { label: "Fold", key: "fold" },
+  //   { label: "", key: "actions" }
+  // ];
+
+  const isStandardBedsheet =
+    formData.productCategory === "Bedsheet" &&
+    (formData.formMode ?? "gusset") === "bedsheet";
+
+const programHeaders = [
     { label: "Program", key: "program" },
     { label: "Style", key: "style", hasAddBtn: true },
     { label: "W-In", key: "w_in" },
@@ -227,12 +258,12 @@ function FormMain({ onBack }) {
     { label: "L-In", key: "l_in" },
     { label: "L-Cm", key: "l_cm" },
     { label: "Wt/Unit", key: "wt_unit" },
-    { label: "GSM", key: "gsm" },
+    { label: isStandardBedsheet ? "TC" : "GSM", key: "gsm" },
     { label: "Unit/Carton", key: "unit_carton" },
     { label: "Inner Pack Unit Quantity", key: "inner_pack" },
     { label: "Fold", key: "fold" },
     { label: "", key: "actions" }
-  ];
+];
 
   const sampleHeaders = [
     { label: "Sample", key: "col1", hasAddBtn: true },
@@ -274,6 +305,9 @@ function FormMain({ onBack }) {
   };
 
   const handleUpdateSetsCell = useCallback((groupIdx, variantIdx, field, value) => {
+    if (field === 'wt_unit' && value !== '' && !/^\d*\.?\d*$/.test(value)) {
+      return;
+    }
     setSetsTables(prev => prev.map((group, gIdx) => {
       if (gIdx !== groupIdx) return group;
       if (variantIdx === null) {
@@ -287,6 +321,9 @@ function FormMain({ onBack }) {
   }, []);
 
   const handleUpdateUnitCell = useCallback((groupIdx, variantIdx, field, value) => {
+    if (field === 'wt_unit' && value !== '' && !/^\d*\.?\d*$/.test(value)) {
+      return;
+    }
     setUnitTables(prev => prev.map((group, gIdx) => {
       if (gIdx !== groupIdx) return group;
       if (variantIdx === null) {
@@ -361,6 +398,7 @@ function FormMain({ onBack }) {
       sampleCarton: '',
       singleOrMonsterPDQ: '',
       pdqLayers: '',
+       remark: '',
       commonPDQ: '',
       smallPDQRequirement: '',
       smallPDQQuantity: '',
@@ -425,7 +463,24 @@ function FormMain({ onBack }) {
   // ==================== BUILD PRODUCT-SPECIFIC DETAILS ====================
   const buildProductDetails = () => {
     const programType = getProgramType();
-    
+
+    // Terry Towel fields are now merged into the default Towel form,
+    // so send terry_details whenever it's a TOWEL program too.
+    if (programType === 'TOWEL') {
+      return {
+        terry_details: {
+          towel_sizes: formData.towelSizes?.trim() || "",
+          required_pcs_carton_size: formData.requiredPcsCartonSize?.trim() || "",
+          required_polybags_carton_size: formData.requiredPolybagsCartonSize?.trim() || "",
+          towel_dimensions: formData.towelDimensions?.trim() || "",
+          towel_weight_per_piece: Number(formData.towelWeightPerPiece) || 0,
+          folding_details: formData.terryFoldingDetails?.trim() || "",
+          required_pcs_per_polybag: Number(formData.terryPcsPerPolybag) || 0,
+          special_carton_details: formData.terrySpecialCartonDetails?.trim() || "",
+        }
+      };
+    }
+
     if (programType === 'BEDSHEET') {
       return {
         bedsheet_details: {
@@ -486,13 +541,52 @@ function FormMain({ onBack }) {
   // ==================== MAIN SUBMIT WITH SEQUENTIAL API CALLS ====================
   const handleSubmit = async (status = 'Pending') => {
     // Validation
-    if (!formData.programName?.trim() || !formData.customerName?.trim()) {
+    if (!formData.customerName?.trim()) {
       setSubmitStatus('error');
-      setErrorMessage('Program Name and Customer Name are required');
+      setErrorMessage('Customer Name is required');
       setTimeout(() => setSubmitStatus(null), 5000);
       return;
     }
+       const allVariantGroups = [...setsTables, ...unitTables];
+    for (const group of allVariantGroups) {
+      for (const variant of group.variants) {
+        const hasAnyData =
+          variant.style?.trim() ||
+          variant.w_in?.trim() ||
+          variant.w_cm?.trim() ||
+          variant.l_in?.trim() ||
+          variant.l_cm?.trim() ||
+          variant.wt_unit?.trim() ||
+          variant.gsm?.trim();
 
+        if (hasAnyData) {
+          const wt = variant.wt_unit?.trim();
+
+          if (!wt) {
+            setSubmitStatus('error');
+            setErrorMessage('Wt/Unit is required for all Program Specification rows');
+            toast.error('Wt/Unit is required for all Program Specification rows');
+            setTimeout(() => setSubmitStatus(null), 5000);
+            return;
+          }
+
+          if (isNaN(Number(wt))) {
+            setSubmitStatus('error');
+            setErrorMessage('Wt/Unit must be a valid number');
+            toast.error('Wt/Unit must be a valid number');
+            setTimeout(() => setSubmitStatus(null), 5000);
+            return;
+          }
+        }
+      }
+    }
+    // NEW: Validate that a user has been selected to receive the request
+    if (!selectedUserId) {
+      setSubmitStatus('error');
+      setErrorMessage('Please select a role and a user to send the request');
+      setTimeout(() => setSubmitStatus(null), 5000);
+      return;
+    }
     setLoading(true);
     setSubmitStatus(null);
     setErrorMessage('');
@@ -509,9 +603,11 @@ function FormMain({ onBack }) {
         program_type: programType,
         btn: status,
         sent_to_user_id: selectedUserId,
+        // remark: formData.remark?.trim() || '',  
         
         carton_program: {
           customer_name: formData.customerName.trim(),
+          remark: formData.remark?.trim() || '',
           customer_protocol: formData.customerProtocol?.trim() || "",
           confirm_new_or_shifted_from_vapi: formData.newOrShifted?.trim() || "",
           original_towel: formData.original_towel?.trim() || "",
@@ -635,7 +731,20 @@ function FormMain({ onBack }) {
       setLoading(false);
     }
   };
+   const uniqueRoles = [...new Set(users.map(user => user.role))];
 
+  // Handles when user selects a role from the "Select Role" dropdown
+  const handleRoleChange = (e) => {
+    const role = e.target.value;
+    setSelectedRole(role);
+    setSelectedUserId('');
+  };
+
+  // Filters users list to only show users matching the selected role
+  const usersForSelectedRole = users.filter(user => user.role === selectedRole);
+
+  // ==================== RENDER ====================
+ 
   // ==================== RENDER ====================
   return (
     <div className="h-full overflow-y-auto bg-gray-50 font-sans text-sm">
@@ -660,6 +769,7 @@ function FormMain({ onBack }) {
         <Form
           formData={formData}
           onInputChange={handleInputChange}
+          onRemarkChange={handleRemarkChange}
           onCompanyChange={handleCompanyChange}
           companies={companies}
           selectedFile={selectedFile}
@@ -696,23 +806,67 @@ function FormMain({ onBack }) {
 
         {/* Footer */}
         <div className="bg-white p-6 my-12 rounded-lg shadow-sm border border-gray-100 flex justify-between items-end">
-          <div className="w-72">
-            <label className="block text-xs font-bold text-gray-700 mb-2 uppercase tracking-wide">
-              Request Sent To
-            </label>
-            <select
-              className="w-full border border-gray-300 rounded-md p-3 bg-white text-gray-700
-             focus:outline-none focus:border-[#0f3460] focus:ring-1 focus:ring-[#0f3460] cursor-pointer"
-              value={selectedUserId}
-              onChange={(e) => setSelectedUserId(Number(e.target.value))}
-              disabled={loading}
-            >
-              {users.map(user => (
-                <option key={user.id} value={user.id}>
-                  {user.username} ({user.role})
-                </option>
-              ))}
-            </select>
+          <div className="flex gap-4 bg-gradient-to-br from-[#f8faff] to-[#eef3fb] p-4 rounded-xl border border-[#0f3460]/10">
+            {/* Role Dropdown */}
+            <div className="w-56">
+              <label className="flex items-center gap-1.5 text-xs font-bold text-[#0f3460] mb-2 uppercase tracking-wide">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-8a4 4 0 11-8 0 4 4 0 018 0zm6 3a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+                Select Role
+              </label>
+              <div className="relative">
+                <select
+                  className="w-full appearance-none border border-gray-300 rounded-lg py-3 pl-3 pr-9 bg-white text-gray-700 font-medium
+                 focus:outline-none focus:border-[#0f3460] focus:ring-2 focus:ring-[#0f3460]/20 cursor-pointer
+                 transition-all duration-200 shadow-sm hover:border-[#0f3460]/50"
+                  value={selectedRole}
+                  onChange={handleRoleChange}
+                  disabled={loading}
+                >
+                  <option value="">-- Select Role --</option>
+                  {uniqueRoles.map(role => (
+                    <option key={role} value={role}>
+                      {role}
+                    </option>
+                  ))}
+                </select>
+                <svg className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </div>
+
+            {/* User Dropdown - enabled only after a role is selected */}
+            <div className="w-56">
+              <label className="flex items-center gap-1.5 text-xs font-bold text-[#0f3460] mb-2 uppercase tracking-wide">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+                Request Sent To
+              </label>
+              <div className="relative">
+                <select
+                  className="w-full appearance-none border border-gray-300 rounded-lg py-3 pl-3 pr-9 bg-white text-gray-700 font-medium
+                 focus:outline-none focus:border-[#0f3460] focus:ring-2 focus:ring-[#0f3460]/20 cursor-pointer
+                 transition-all duration-200 shadow-sm hover:border-[#0f3460]/50
+                 disabled:bg-gray-100 disabled:cursor-not-allowed disabled:hover:border-gray-300"
+                  value={selectedUserId}
+                  onChange={(e) => setSelectedUserId(Number(e.target.value))}
+                  disabled={loading || !selectedRole}
+                >
+                  <option value="">-- Select User --</option>
+                  {usersForSelectedRole.map(user => (
+                    <option key={user.id} value={user.id}>
+                      {user.username}
+                    </option>
+                  ))}
+                </select>
+                <svg className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </div>
           </div>
           <div>
             <button

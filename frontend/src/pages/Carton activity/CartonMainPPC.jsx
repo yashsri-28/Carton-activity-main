@@ -14,6 +14,41 @@ function CartonMainPPC() {
   const [selectedRows, setSelectedRows] = useState([]);
   const [recallingIds, setRecallingIds] = useState(new Set());
 
+  const formatDateTime = (dateTime) => {
+  if (!dateTime) return "-";
+
+  const [datePart, timePart] = dateTime.trim().split(" ");
+  if (!datePart) return "-";
+
+  const [day, month, year] = datePart.split("-");
+
+  if (!timePart) return `${day}-${month}-${year}`;
+
+  // Backend UTC mein data deta hai, isliye Date object UTC treat karke banao
+  const utcDate = new Date(`${year}-${month}-${day}T${timePart}Z`); // 👈 'Z' = UTC marker
+
+  if (isNaN(utcDate.getTime())) return `${day}-${month}-${year}`;
+
+  // Ab is UTC date ko IST (Asia/Kolkata) mein format karo
+  const istOptions = {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "Asia/Kolkata",
+  };
+
+  const formatted = new Intl.DateTimeFormat("en-GB", istOptions).format(utcDate);
+  // en-GB format deta hai: "25/08/2026, 02:23 pm" — usko apne format mein convert karo
+
+  const [datePartOut, timePartOut] = formatted.split(", ");
+  const [d, m, y] = datePartOut.split("/");
+
+  return `${d}-${m}-${y}, ${timePartOut.toUpperCase()}`;
+};
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -23,14 +58,33 @@ function CartonMainPPC() {
         ? response.data
         : response.data?.results || [];
 
-      const sorted = [...list].sort((a, b) => {
-        const parse = (d) => {
-          if (!d) return 0;
-          const [day, month, year] = d.split('-');
-          return new Date(`${year}-${month}-${day}`).getTime();
-        };
-parse(b.created_on) - parse(a.created_on);
-      });
+      // const sorted = [...list].sort((a, b) => {
+      //   const parse = (d) => {
+      //     if (!d) return 0;
+      //     const [day, month, year] = d.split('-');
+      //     return new Date(`${year}-${month}-${day}`).getTime();
+      //   };
+      //       return parse(b.created_on) - parse(a.created_on); 
+      // });
+
+ const sorted = [...list].sort((a, b) => {
+    const parse = (d) => {
+      if (!d) return 0;
+
+      // agar date + time dono hain (space se separated), to alag karo
+      const [datePart, timePart] = d.trim().split(' ');
+      const [day, month, year] = datePart.split('-');
+
+      // agar time nahi hai to 00:00:00 use karo
+      const isoString = `${year}-${month}-${day}T${timePart || '00:00:00'}`;
+      const parsed = new Date(isoString).getTime();
+
+      // agar parsing fail ho jaye (invalid date), to 0 return karo
+      return isNaN(parsed) ? 0 : parsed;
+    };
+
+    return parse(b.created_on) - parse(a.created_on);
+});
 
       setData(sorted);
       setError(null);
@@ -177,17 +231,17 @@ parse(b.created_on) - parse(a.created_on);
         </span>
       ),
     },
-    {
-      key: 'created_on',
-      header: 'Created Date',
-      className: 'text-gray-500 whitespace-nowrap',
-      render: (row) => (
-        <div className="flex items-center gap-2">
-          <Calendar size={14} className="text-gray-400" />
-          {row.created_on || '-'}
-        </div>
-      ),
-    }
+   {
+  key: 'created_on',
+  header: 'Created Date',
+  className: 'text-gray-500 whitespace-nowrap',
+  render: (row) => (
+    <div className="flex items-center gap-2">
+      <Calendar size={14} className="text-gray-400" />
+      {formatDateTime(row.created_on)}
+    </div>
+  ),
+}
   ];
 
   const getActions = (row) => {

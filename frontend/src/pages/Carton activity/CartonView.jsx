@@ -920,7 +920,6 @@
 
 
 
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../api/axiosInstance';
@@ -1022,12 +1021,12 @@ function CartonView() {
               pallet_width: sp.pallet_width ?? '',
               pallet_height: sp.pallet_height ?? '',
               pallet_wt_pdq: sp.pallet_wt_pdq ?? '',
-              cartons_per_20ft: sp.cartons_per_20ft ?? '',
-              cartons_per_40ft: sp.cartons_per_40ft ?? '',
-              pdq_per_20ft: sp.pdq_per_20ft ?? '',
-              pdq_per_40ft: sp.pdq_per_40ft ?? '',
-              pallet_per_20ft: sp.pallet_per_20ft ?? '',
-              pallet_per_40ft: sp.pallet_per_40ft ?? '',
+              cartons_per_20ft: sp.saved_cartons_per_20ft ?? sp.cartons_per_20ft ?? '',
+              cartons_per_40ft: sp.saved_cartons_per_40ft ?? sp.cartons_per_40ft ?? '',
+              pdq_per_20ft: sp.saved_pdq_per_20ft ?? sp.pdq_per_20ft ?? '',
+              pdq_per_40ft: sp.saved_pdq_per_40ft ?? sp.pdq_per_40ft ?? '',
+              pallet_per_20ft: sp.saved_pallet_per_20ft ?? sp.pallet_per_20ft ?? '',
+              pallet_per_40ft: sp.saved_pallet_per_40ft ?? sp.pallet_per_40ft ?? '',
               saved_cartons_per_20ft: sp.saved_cartons_per_20ft ?? '',
               saved_cartons_per_40ft: sp.saved_cartons_per_40ft ?? '',
               saved_pdq_per_20ft: sp.saved_pdq_per_20ft ?? '',
@@ -1051,7 +1050,8 @@ function CartonView() {
   }, [id]);
 
   const handleAttachmentClick = async (attachment, index) => {
-    const fileUrl = attachment.file_url;
+    // const fileUrl = attachment.file_url;
+    const fileUrl = attachment.file_url?.replace(/^http:\/\//i, 'https://');
     const attachmentId = attachment.id || index;
     if (!fileUrl) return;
     setCheckingLink(attachmentId);
@@ -1151,9 +1151,13 @@ function CartonView() {
       const response = await api.post('/api/subprogram/recalculate-preview/', payload);
       const results = response.data.results || [];
 
-      setSubprograms(prev => prev.map(sp => {
+            setSubprograms(prev => prev.map(sp => {
         const match = results.find(r => r.subprogram_id === sp.subprogram_id);
         if (!match) return sp;
+
+        // Helper: true if user hasn't manually typed a value yet
+        const isEmpty = (v) => v === '' || v === null || v === undefined;
+
         return {
           ...sp,
           carton_length: match.carton.length ?? sp.carton_length,
@@ -1161,12 +1165,13 @@ function CartonView() {
           carton_height: match.carton.height ?? sp.carton_height,
           saved_cbm_per_carton: match.carton.cbm ?? sp.saved_cbm_per_carton,
           saved_net_wt_carton: match.net_wt_carton ?? sp.saved_net_wt_carton,
-          cartons_per_20ft: match.cartons_per_20ft,
-          cartons_per_40ft: match.cartons_per_40ft,
-          pdq_per_20ft: match.pdq_per_20ft,
-          pdq_per_40ft: match.pdq_per_40ft,
-          pallet_per_20ft: match.pallet_per_20ft,
-          pallet_per_40ft: match.pallet_per_40ft,
+          // Only fill from Recalculate if user hasn't already typed a value manually
+          cartons_per_20ft: isEmpty(sp.cartons_per_20ft) ? match.cartons_per_20ft : sp.cartons_per_20ft,
+          cartons_per_40ft: isEmpty(sp.cartons_per_40ft) ? match.cartons_per_40ft : sp.cartons_per_40ft,
+          pdq_per_20ft: isEmpty(sp.pdq_per_20ft) ? match.pdq_per_20ft : sp.pdq_per_20ft,
+          pdq_per_40ft: isEmpty(sp.pdq_per_40ft) ? match.pdq_per_40ft : sp.pdq_per_40ft,
+          pallet_per_20ft: isEmpty(sp.pallet_per_20ft) ? match.pallet_per_20ft : sp.pallet_per_20ft,
+          pallet_per_40ft: isEmpty(sp.pallet_per_40ft) ? match.pallet_per_40ft : sp.pallet_per_40ft,
           ribbon: match.ribbon ?? sp.ribbon,
           belly_band: match.belly_band ?? sp.belly_band,
           remark: match.remark ?? sp.remark,
@@ -1217,12 +1222,12 @@ function CartonView() {
           pallet_width: parseFloat(sp.pallet_width) || 0,
           pallet_height: parseFloat(sp.pallet_height) || 0,
           pallet_wt_pdq: parseFloat(sp.pallet_wt_pdq) || 0,
-          saved_cartons_per_20ft: parseInt(sp.saved_cartons_per_20ft) || parseInt(sp.cartons_per_20ft) || null,
-          saved_cartons_per_40ft: parseInt(sp.saved_cartons_per_40ft) || parseInt(sp.cartons_per_40ft) || null,
-          saved_pdq_per_20ft: parseInt(sp.saved_pdq_per_20ft) || parseInt(sp.pdq_per_20ft) || null,
-          saved_pdq_per_40ft: parseInt(sp.saved_pdq_per_40ft) || parseInt(sp.pdq_per_40ft) || null,
-          saved_pallet_per_20ft: parseInt(sp.saved_pallet_per_20ft) || parseInt(sp.pallet_per_20ft) || null,
-          saved_pallet_per_40ft: parseInt(sp.saved_pallet_per_40ft) || parseInt(sp.pallet_per_40ft) || null,
+          saved_cartons_per_20ft: sp.cartons_per_20ft !== '' && sp.cartons_per_20ft != null ? parseInt(sp.cartons_per_20ft) : null,
+          saved_cartons_per_40ft: sp.cartons_per_40ft !== '' && sp.cartons_per_40ft != null ? parseInt(sp.cartons_per_40ft) : null,
+          saved_pdq_per_20ft: sp.pdq_per_20ft !== '' && sp.pdq_per_20ft != null ? parseInt(sp.pdq_per_20ft) : null,
+          saved_pdq_per_40ft: sp.pdq_per_40ft !== '' && sp.pdq_per_40ft != null ? parseInt(sp.pdq_per_40ft) : null,
+          saved_pallet_per_20ft: sp.pallet_per_20ft !== '' && sp.pallet_per_20ft != null ? parseInt(sp.pallet_per_20ft) : null,
+          saved_pallet_per_40ft: sp.pallet_per_40ft !== '' && sp.pallet_per_40ft != null ? parseInt(sp.pallet_per_40ft) : null,
           saved_cbm_per_carton: parseFloat(sp.saved_cbm_per_carton) || null,
           saved_net_wt_carton: parseFloat(sp.saved_net_wt_carton) || null,
         }))
@@ -1274,12 +1279,12 @@ function CartonView() {
           pallet_width: parseFloat(sp.pallet_width) || 0,
           pallet_height: parseFloat(sp.pallet_height) || 0,
           pallet_wt_pdq: parseFloat(sp.pallet_wt_pdq) || 0,
-          saved_cartons_per_20ft: parseInt(sp.saved_cartons_per_20ft) || parseInt(sp.cartons_per_20ft) || null,
-          saved_cartons_per_40ft: parseInt(sp.saved_cartons_per_40ft) || parseInt(sp.cartons_per_40ft) || null,
-          saved_pdq_per_20ft: parseInt(sp.saved_pdq_per_20ft) || parseInt(sp.pdq_per_20ft) || null,
-          saved_pdq_per_40ft: parseInt(sp.saved_pdq_per_40ft) || parseInt(sp.pdq_per_40ft) || null,
-          saved_pallet_per_20ft: parseInt(sp.saved_pallet_per_20ft) || parseInt(sp.pallet_per_20ft) || null,
-          saved_pallet_per_40ft: parseInt(sp.saved_pallet_per_40ft) || parseInt(sp.pallet_per_40ft) || null,
+          saved_cartons_per_20ft: sp.cartons_per_20ft !== '' && sp.cartons_per_20ft != null ? parseInt(sp.cartons_per_20ft) : null,
+          saved_cartons_per_40ft: sp.cartons_per_40ft !== '' && sp.cartons_per_40ft != null ? parseInt(sp.cartons_per_40ft) : null,
+          saved_pdq_per_20ft: sp.pdq_per_20ft !== '' && sp.pdq_per_20ft != null ? parseInt(sp.pdq_per_20ft) : null,
+          saved_pdq_per_40ft: sp.pdq_per_40ft !== '' && sp.pdq_per_40ft != null ? parseInt(sp.pdq_per_40ft) : null,
+          saved_pallet_per_20ft: sp.pallet_per_20ft !== '' && sp.pallet_per_20ft != null ? parseInt(sp.pallet_per_20ft) : null,
+          saved_pallet_per_40ft: sp.pallet_per_40ft !== '' && sp.pallet_per_40ft != null ? parseInt(sp.pallet_per_40ft) : null,
           saved_cbm_per_carton: parseFloat(sp.saved_cbm_per_carton) || null,
           saved_net_wt_carton: parseFloat(sp.saved_net_wt_carton) || null,
         }))
@@ -1395,7 +1400,9 @@ function CartonView() {
       );
     }
 
-    if (programType === 'TERRY_TOWEL' && details.terry_details) {
+    // if (programType === 'TERRY_TOWEL' && details.terry_details) {
+    //   const terry = details.terry_details;
+        if ((programType === 'TERRY_TOWEL' || programType === 'TOWEL') && details.terry_details) {
       const terry = details.terry_details;
       return (
         <div className="bg-green-50 p-5 rounded-lg border border-green-100 mt-4">
@@ -1605,8 +1612,8 @@ function CartonView() {
                           disabled={isChecking || noUrl}
                           onClick={() => handleAttachmentClick(attachment, index)}
                           className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all cursor-pointer border ${noUrl
-                              ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                              : 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-100'
+                            ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                            : 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-100'
                             }`}
                         >
                           {isChecking ? (
@@ -1864,12 +1871,66 @@ function CartonView() {
 
                         {showCartonSizing && (
                           <>
-                            <td className="px-4 py-3">{sp.cartons_per_20ft ?? "-"}</td>
-                            <td className="px-4 py-3">{sp.cartons_per_40ft ?? "-"}</td>
-                            <td className="px-4 py-3">{sp.pdq_per_20ft ?? "-"}</td>
-                            <td className="px-4 py-3">{sp.pdq_per_40ft ?? "-"}</td>
-                            <td className="px-4 py-3">{sp.pallet_per_20ft ?? "-"}</td>
-                            <td className="px-4 py-3">{sp.pallet_per_40ft ?? "-"}</td>
+                            <td className="px-4 py-3">
+                              {isCalculationActive ? (
+                                <input
+                                  type="number"
+                                  value={sp.cartons_per_20ft ?? ''}
+                                  onChange={(e) => updateCalculationField(index, 'cartons_per_20ft', e.target.value)}
+                                  className="border px-2 py-1 rounded w-20 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                />
+                              ) : (sp.saved_cartons_per_20ft ?? sp.cartons_per_20ft ?? "-")}
+                            </td>
+                            <td className="px-4 py-3">
+                              {isCalculationActive ? (
+                                <input
+                                  type="number"
+                                  value={sp.cartons_per_40ft ?? ''}
+                                  onChange={(e) => updateCalculationField(index, 'cartons_per_40ft', e.target.value)}
+                                  className="border px-2 py-1 rounded w-20 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                />
+                              ) : (sp.saved_cartons_per_40ft ?? sp.cartons_per_40ft ?? "-")}
+                            </td>
+                            <td className="px-4 py-3">
+                              {isCalculationActive ? (
+                                <input
+                                  type="number"
+                                  value={sp.pdq_per_20ft ?? ''}
+                                  onChange={(e) => updateCalculationField(index, 'pdq_per_20ft', e.target.value)}
+                                  className="border px-2 py-1 rounded w-20 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                />
+                              ) : (sp.saved_pdq_per_20ft ?? sp.pdq_per_20ft ?? "-")}
+                            </td>
+                            <td className="px-4 py-3">
+                              {isCalculationActive ? (
+                                <input
+                                  type="number"
+                                  value={sp.pdq_per_40ft ?? ''}
+                                  onChange={(e) => updateCalculationField(index, 'pdq_per_40ft', e.target.value)}
+                                  className="border px-2 py-1 rounded w-20 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                />
+                              ) : (sp.saved_pdq_per_40ft ?? sp.pdq_per_40ft ?? "-")}
+                            </td>
+                            <td className="px-4 py-3">
+                              {isCalculationActive ? (
+                                <input
+                                  type="number"
+                                  value={sp.pallet_per_20ft ?? ''}
+                                  onChange={(e) => updateCalculationField(index, 'pallet_per_20ft', e.target.value)}
+                                  className="border px-2 py-1 rounded w-20 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                />
+                              ) : (sp.saved_pallet_per_20ft ?? sp.pallet_per_20ft ?? "-")}
+                            </td>
+                            <td className="px-4 py-3">
+                              {isCalculationActive ? (
+                                <input
+                                  type="number"
+                                  value={sp.pallet_per_40ft ?? ''}
+                                  onChange={(e) => updateCalculationField(index, 'pallet_per_40ft', e.target.value)}
+                                  className="border px-2 py-1 rounded w-20 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                />
+                              ) : (sp.saved_pallet_per_40ft ?? sp.pallet_per_40ft ?? "-")}
+                            </td>
                           </>
                         )}
                       </tr>
@@ -1920,27 +1981,24 @@ function CartonView() {
               <button
                 onClick={handleRecalculate}
                 disabled={recalculating}
-                className={`px-6 py-2 rounded text-white transition-colors ${
-                  recalculating ? 'bg-gray-400 cursor-not-allowed' : 'bg-orange-600 hover:bg-orange-700 cursor-pointer'
-                }`}
+                className={`px-6 py-2 rounded text-white transition-colors ${recalculating ? 'bg-gray-400 cursor-not-allowed' : 'bg-orange-600 hover:bg-orange-700 cursor-pointer'
+                  }`}
               >
                 {recalculating ? 'Recalculating...' : 'Recalculate'}
               </button>
               <button
                 onClick={handleSubmitTentative}
                 disabled={!allRecalculated}
-                className={`px-6 py-2 rounded text-white transition-colors ${
-                  allRecalculated ? 'bg-[#0f3460] hover:bg-[#0a2545] cursor-pointer' : 'bg-gray-300 cursor-not-allowed'
-                }`}
+                className={`px-6 py-2 rounded text-white transition-colors ${allRecalculated ? 'bg-[#0f3460] hover:bg-[#0a2545] cursor-pointer' : 'bg-gray-300 cursor-not-allowed'
+                  }`}
               >
                 Submit Tentative
               </button>
               <button
                 onClick={handleSubmitFinal}
                 disabled={!allRecalculated}
-                className={`px-6 py-2 rounded text-white transition-colors ${
-                  allRecalculated ? 'bg-[#0f3460] hover:bg-[#0a2545] cursor-pointer' : 'bg-gray-300 cursor-not-allowed'
-                }`}
+                className={`px-6 py-2 rounded text-white transition-colors ${allRecalculated ? 'bg-[#0f3460] hover:bg-[#0a2545] cursor-pointer' : 'bg-gray-300 cursor-not-allowed'
+                  }`}
               >
                 Submit Final
               </button>

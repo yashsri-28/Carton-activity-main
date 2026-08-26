@@ -330,13 +330,24 @@ function CartonMainTTQM() {
         ? response.data
         : response.data?.results || [];
 
+      // const parseDateTime = (dateTime) => {
+      //   if (!dateTime) return 0;
+
+      //   const [datePart, timePart] = dateTime.split(" ");
+      //   const [day, month, year] = datePart.split("-");
+
+      //   return new Date(`${year}-${month}-${day}T${timePart}`).getTime();
+      // };
       const parseDateTime = (dateTime) => {
         if (!dateTime) return 0;
 
-        const [datePart, timePart] = dateTime.split(" ");
+        const [datePart, timePart] = dateTime.trim().split(" ");
         const [day, month, year] = datePart.split("-");
 
-        return new Date(`${year}-${month}-${day}T${timePart}`).getTime();
+        const isoString = `${year}-${month}-${day}T${timePart || "00:00:00"}`;
+        const parsed = new Date(isoString).getTime();
+
+        return isNaN(parsed) ? 0 : parsed;
       };
 
       const sorted = [...list].sort(
@@ -362,14 +373,14 @@ function CartonMainTTQM() {
     fetchData();
   }, []);
 
-const formatDateOnly = (dateTime) => {
-  if (!dateTime) return "-";
+  const formatDateOnly = (dateTime) => {
+    if (!dateTime) return "-";
 
-  const [datePart] = dateTime.split(" ");
-  const [day, month, year] = datePart.split("-");
+    const [datePart] = dateTime.split(" ");
+    const [day, month, year] = datePart.split("-");
 
-  return `${day}-${month}-${year}`;
-};
+    return `${day}-${month}-${year}`;
+  };
 
 
   // Row styling

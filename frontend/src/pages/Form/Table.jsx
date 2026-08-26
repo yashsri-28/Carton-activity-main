@@ -81,7 +81,7 @@ function Table({
         case 'program':
         case 'style':
         case 'fold':
-          return 'Only letters and spaces allowed';
+          return '';
 
         case 'w_in':
         case 'w_cm':

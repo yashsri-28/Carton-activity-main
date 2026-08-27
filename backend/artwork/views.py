@@ -782,6 +782,19 @@ def export_artwork_excel(request, artwork_id):
     ws.column_dimensions["B"].width = 45
 
     # Sheet 2 — Packaging Specification (if this artwork has one)
+    # spec = getattr(artwork, "packaging_spec", None)
+    # if spec:
+    #     ws2 = wb.create_sheet("Packaging Specification")
+    #     ws2.append(["Field", "Value"])
+    #     style_header(ws2)
+    #     ws2.append(["Category", spec.category])
+    #     for label, val in spec.spec_data.items():
+    #         if val:
+    #             ws2.append([label, val])
+    #     ws2.column_dimensions["A"].width = 32
+    #     ws2.column_dimensions["B"].width = 40
+    
+        # Sheet 2 — Packaging Specification (if this artwork has one)
     spec = getattr(artwork, "packaging_spec", None)
     if spec:
         ws2 = wb.create_sheet("Packaging Specification")
@@ -791,8 +804,28 @@ def export_artwork_excel(request, artwork_id):
         for label, val in spec.spec_data.items():
             if val:
                 ws2.append([label, val])
+
+        # The creation-time remark/attachment (posted as a comment with
+        # is_initial_remark=True) — shown here to match how it appears
+        # in the UI's Packaging Specification box.
+        import re
+        initial_remark = artwork.comments.filter(is_initial_remark=True).first()
+        if initial_remark:
+            if initial_remark.message:
+                plain_text = re.sub(r"<[^>]+>", " ", initial_remark.message).strip()
+                plain_text = re.sub(r"\s+", " ", plain_text)
+                ws2.append(["Remark", plain_text])
+            if initial_remark.attachment:
+                row_num = ws2.max_row + 1
+                ws2.append(["Attachment URL", ""])
+                cell = ws2.cell(row=row_num, column=2)
+                attachment_url = request.build_absolute_uri(initial_remark.attachment.url)
+                cell.value = attachment_url
+                cell.hyperlink = attachment_url
+                cell.font = Font(color="0563C1", underline="single")
+
         ws2.column_dimensions["A"].width = 32
-        ws2.column_dimensions["B"].width = 40
+        ws2.column_dimensions["B"].width = 50
 
     # Sheet 3 — Full Approval History (across all versions)
     ws3 = wb.create_sheet("Approval History")
@@ -811,20 +844,51 @@ def export_artwork_excel(request, artwork_id):
         ws3.column_dimensions[col].width = width
 
     # Sheet 4 — Comments & Attachments
+    # ws4 = wb.create_sheet("Comments")
+    # ws4.append(["Author", "Role", "Version", "Message", "Has Attachment", "Posted On"])
+    # style_header(ws4)
+    # for c in artwork.comments.select_related("author", "version").order_by("created_on"):
+    #     ws4.append([
+    #         c.author.username if c.author else "",
+    #         getattr(c.author, "role", "") if c.author else "",
+    #         c.version.version_number if c.version else "",
+    #         c.message,
+    #         "Yes" if c.attachment else "No",
+    #         c.created_on.strftime("%Y-%m-%d %H:%M"),
+    #     ])
+    # for col, width in zip("ABCDEF", [15, 14, 10, 45, 15, 18]):
+    #     ws4.column_dimensions[col].width = width
+    
+    
+        # Sheet 4 — Comments & Attachments
+    import re
     ws4 = wb.create_sheet("Comments")
-    ws4.append(["Author", "Role", "Version", "Message", "Has Attachment", "Posted On"])
+    ws4.append(["Author", "Role", "Version", "Message", "Attachment URL", "Posted On"])
     style_header(ws4)
     for c in artwork.comments.select_related("author", "version").order_by("created_on"):
+        plain_message = re.sub(r"<[^>]+>", " ", c.message).strip() if c.message else ""
+        plain_message = re.sub(r"\s+", " ", plain_message)
+
+        row_num = ws4.max_row + 1
         ws4.append([
             c.author.username if c.author else "",
             getattr(c.author, "role", "") if c.author else "",
             c.version.version_number if c.version else "",
-            c.message,
-            "Yes" if c.attachment else "No",
+            plain_message,
+            "",
             c.created_on.strftime("%Y-%m-%d %H:%M"),
         ])
-    for col, width in zip("ABCDEF", [15, 14, 10, 45, 15, 18]):
+        if c.attachment:
+            cell = ws4.cell(row=row_num, column=5)
+            attachment_url = request.build_absolute_uri(c.attachment.url)
+            cell.value = attachment_url
+            cell.hyperlink = attachment_url
+            cell.font = Font(color="0563C1", underline="single")
+
+    for col, width in zip("ABCDEF", [15, 14, 10, 45, 40, 18]):
         ws4.column_dimensions[col].width = width
+        
+        
 
     response = HttpResponse(
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"

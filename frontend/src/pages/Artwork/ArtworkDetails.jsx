@@ -227,7 +227,7 @@ useEffect(() => {
   setWorkflowBusy(true);
   try {
     const res = await generateMatcode(artworkId);
-    toast.success(`Matcode generated: ${res.data.material_code}`);
+    toast.success(`Reference Code generated: ${res.data.material_code}`);
     fetchDetails();
   } catch (err) {
     toast.error(err.response?.data?.error || 'Failed to generate matcode.');
@@ -421,7 +421,7 @@ const handleCommentPaste = (e) => {
             </p>
             {artwork.material_code && (
               <p className="text-sm mb-6">
-                <span className="text-gray-500">Material Code: </span>
+                <span className="text-gray-500">Reference Code: </span>
                 <span className="font-mono font-semibold text-[#003366] bg-blue-50 border border-blue-200 rounded px-2 py-0.5">
                   {artwork.material_code}
                 </span>
@@ -718,7 +718,7 @@ const handleCommentPaste = (e) => {
             <div className="mt-4">
               <button onClick={handleGenerateMatcode} disabled={workflowBusy}
                 className="bg-[#003366] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#002a52] disabled:opacity-50">
-                {workflowBusy ? 'Generating...' : 'Generate Matcode for Production'}
+                {workflowBusy ? 'Generating...' : 'Generate Reference Code for Production'}
               </button>
             </div>
           )}
@@ -759,7 +759,7 @@ const handleCommentPaste = (e) => {
           )}
 
           {/* Marketing — sample details, Receive button, and Approve/Reject */}
-          {artwork.latest_physical_sample && ['SAMPLE_SENT', 'SAMPLE_RECEIVED_REVIEW'].includes(artwork.status) && (
+          {/* {artwork.latest_physical_sample && ['SAMPLE_SENT', 'SAMPLE_RECEIVED_REVIEW'].includes(artwork.status) && (
             <div className="mt-4 border border-gray-200 rounded-md p-4 bg-gray-50">
               <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Physical Sample Details</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm mb-3">
@@ -776,7 +776,44 @@ const handleCommentPaste = (e) => {
               </div>
               {artwork.latest_physical_sample.comments && (
                 <p className="text-sm text-gray-600 italic mb-3">"{artwork.latest_physical_sample.comments}"</p>
-              )}
+              )} */}
+
+              {/* Marketing — sample details, Receive button, and Approve/Reject */}
+              {artwork.latest_physical_sample && ['SAMPLE_SENT', 'SAMPLE_RECEIVED_REVIEW'].includes(artwork.status) && (
+                <div className="mt-4 border border-gray-200 rounded-md p-4 bg-gray-50">
+                  <p className="text-xs font-semibold text-gray-500 uppercase mb-3">Physical Sample Details</p>
+                <div className="space-y-2 mb-3">
+                  <p className="text-sm">
+                    <span className="font-semibold text-gray-600">Sent By: </span>
+                    <span className="text-gray-800">{artwork.latest_physical_sample.sent_by || '-'}</span>
+                  </p>
+
+                  <p className="text-sm">
+                    <span className="font-semibold text-gray-600">Date Sent: </span>
+                    <span className="text-gray-800">{artwork.latest_physical_sample.date_sent || '-'}</span>
+                  </p>
+
+                  <p className="text-sm">
+                    <span className="font-semibold text-gray-600">Est. Arrival: </span>
+                    <span className="text-gray-800">{artwork.latest_physical_sample.est_arrival_date || '-'}</span>
+                  </p>
+
+                  <p className="text-sm">
+                    <span className="font-semibold text-gray-600">Attachment: </span>
+                    {artwork.latest_physical_sample.attachment_url ? (
+                      <a href={artwork.latest_physical_sample.attachment_url} target="_blank" rel="noreferrer" className="text-[#003366] hover:underline">
+                        📎 View attachment
+                      </a>
+                    ) : (
+                      <span className="text-gray-400">No file attached.</span>
+                    )}
+                  </p>
+
+                  <p className="text-sm">
+                    <span className="font-semibold text-gray-600">Comment: </span>
+                    <span className="text-gray-800">{artwork.latest_physical_sample.comments || '-'}</span>
+                  </p>
+                </div>
 
               {role === 'marketing' && artwork.status === 'SAMPLE_SENT' && !artwork.latest_physical_sample.is_received && (
                 <button onClick={handleReceiveSample} disabled={workflowBusy}

@@ -769,7 +769,8 @@ def export_artwork_excel(request, artwork_id):
         ("SKU Code", artwork.sku_code),
         ("Brand", artwork.brand_name or ""),
         ("Customer", artwork.customer_name or ""),
-        ("Material Code", artwork.material_code or ""),
+        # ("Material Code", artwork.material_code or ""),
+        ("Reference Code", artwork.material_code or ""),
         ("PO Number", artwork.po_number or ""),
         ("Status", artwork.status),
         ("Assigned Procurement", artwork.assigned_vendor.username if artwork.assigned_vendor else ""),
@@ -896,6 +897,8 @@ def export_artwork_excel(request, artwork_id):
     response["Content-Disposition"] = f"attachment; filename={artwork.artwork_id}.xlsx"
     wb.save(response)
     return response
+
+
 
 
 # ------------------------------------------------------------------
@@ -1132,7 +1135,8 @@ def generate_matcode(request, artwork_id):
         if active_version:
             active_version.is_locked = True
             active_version.save(update_fields=["is_locked"])
-        _notify_role("PPC", artwork, f"{artwork.artwork_id} has matcode {material_code} generated and is ready for release.", exclude_user=request.user)
+        # _notify_role("PPC", artwork, f"{artwork.artwork_id} has matcode {material_code} generated and is ready for release.", exclude_user=request.user)
+        _notify_role("PPC", artwork, f"{artwork.artwork_id} has reference code {material_code} generated and is ready for release.", exclude_user=request.user)
 
     artwork.updated_by = request.user
     artwork.save(update_fields=["status", "material_code", "updated_by", "updated_on"])

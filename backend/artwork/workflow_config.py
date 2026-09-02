@@ -22,13 +22,15 @@ WORKFLOW_DEFINITIONS = {
         {"code": "MARKETING_ARTWORK_APPROVAL", "type": "APPROVAL", "role": "MARKETING", "label": "Marketing — Artwork Approval"},
         {"code": "PHYSICAL_SAMPLE", "type": "PHYSICAL_SAMPLE", "role": "PROCUREMENT", "label": "Procurement — Physical Sample"},
         {"code": "MARKETING_SAMPLE_APPROVAL", "type": "SAMPLE_APPROVAL", "role": "MARKETING", "label": "Marketing — Sample Approval"},
-        {"code": "MATCODE_GENERATION", "type": "MATCODE", "role": "PROCUREMENT", "label": "Procurement — Matcode Generation"},
+        # {"code": "MATCODE_GENERATION", "type": "MATCODE", "role": "PROCUREMENT", "label": "Procurement — Matcode Generation"},
+        {"code": "MATCODE_GENERATION", "type": "MATCODE", "role": "PROCUREMENT", "label": "Procurement — Reference Code Generation"},
     ],
     
     
     "BW_STICKER_MATCODE_FLOW": [
         {"code": "MARKETING_ARTWORK_APPROVAL", "type": "APPROVAL", "role": "MARKETING", "label": "Marketing — Artwork Approval"},
-        {"code": "MATCODE_GENERATION", "type": "MATCODE", "role": "PROCUREMENT", "label": "Procurement — Matcode Generation"},
+        # {"code": "MATCODE_GENERATION", "type": "MATCODE", "role": "PROCUREMENT", "label": "Procurement — Matcode Generation"},
+        {"code": "MATCODE_GENERATION", "type": "MATCODE", "role": "PROCUREMENT", "label": "Procurement — Reference Code Generation"},
     ],
 
     # Future example — copy this pattern for any new category:

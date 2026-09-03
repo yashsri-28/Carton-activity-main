@@ -228,7 +228,8 @@ function ArtworkForm() {
               className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Material Code</label>
+            {/* <label className="block text-sm font-medium text-gray-700 mb-1">Material Code</label> */}
+            <label className="block text-sm font-medium text-gray-700 mb-1">Reference Code</label>
             <input name="material_code" value={form.material_code} onChange={handleChange}
               placeholder="Required before release"
               className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm" />

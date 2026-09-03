@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
+import DOMPurify from 'dompurify';
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import {
@@ -12,14 +13,81 @@ import {
   getProcurementList,
   assignProcurement,
   exportArtworkExcel,
+  actOnWorkflowStep,
+  generateMatcode,
+  sendPhysicalSample,
+  receivePhysicalSample,
+  decidePhysicalSample,
 } from '../../api/artworkApi';
+import Attachment from '../Form/Attachment';
 
-// Which role is allowed to act on which approval stage — mirrors
-// ArtworkApproval.STAGE_ROLE_MAP on the backend.
+// Excel/Word paste normally carries its colors/borders as CSS CLASSES
+// defined in a <style> block — we "bake" those class rules directly
+// into each cell's inline style before sanitizing, so formatting
+// survives even after the <style> block/class names are stripped.
+function normalizeExcelPaste(html) {
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+
+    const classRules = {};
+    doc.querySelectorAll('style').forEach((styleTag) => {
+      const cssText = styleTag.textContent || '';
+      const ruleRegex = /([^{}]+)\{([^{}]+)\}/g;
+      let match;
+      while ((match = ruleRegex.exec(cssText)) !== null) {
+        const selectors = match[1].split(',').map((s) => s.trim());
+        const declarations = match[2].trim();
+        selectors.forEach((sel) => {
+          if (sel.startsWith('.')) {
+            const className = sel.slice(1);
+            classRules[className] = (classRules[className] || '') + declarations + ';';
+          }
+        });
+      }
+    });
+
+    doc.querySelectorAll('[class]').forEach((el) => {
+      const classes = el.getAttribute('class').split(/\s+/);
+      let extraStyle = '';
+      classes.forEach((c) => {
+        if (classRules[c]) extraStyle += classRules[c];
+      });
+      if (extraStyle) {
+        el.setAttribute('style', (el.getAttribute('style') || '') + ';' + extraStyle);
+      }
+      el.removeAttribute('class');
+    });
+
+    doc.querySelectorAll('style, head, meta, link, xml').forEach((el) => el.remove());
+
+    return doc.body.innerHTML;
+  } catch (err) {
+    return html;
+  }
+}
+
+// Which role is allowed to act on which STANDARD-flow approval stage.
 const STAGE_ROLE_MAP = { MARKETING: 'marketing', PPC: 'ppc', TQM: 'ttqm', CUSTOMER: 'admin' };
+
+// Custom-workflow step actor_role -> frontend role strings.
+const WORKFLOW_ROLE_MAP = { MARKETING: 'marketing', PPC: 'ppc', TTQM: 'ttqm', PROCUREMENT: 'procurement', ADMIN: 'admin' };
+
+// A custom-workflow step is only actionable while the artwork's
+// overall status matches what that step-type expects — prevents
+// acting on a step that's technically still "PENDING" in the DB but
+// whose turn hasn't actually come yet (e.g. right after a rejection).
+const CUSTOM_STEP_STATUS_MAP = {
+  APPROVAL: 'MARKETING_REVIEW',
+  PHYSICAL_SAMPLE: 'PHYSICAL_SAMPLE_PENDING',
+  SAMPLE_APPROVAL: 'SAMPLE_RECEIVED_REVIEW',
+  MATCODE: 'MATCODE_PENDING',
+};
+
 const STATUS_LABELS = {
   VENDOR_UPLOAD_PENDING: 'PROCUREMENT UPLOAD PENDING',
   VENDOR_UPLOADED: 'PROCUREMENT UPLOADED',
+  MATCODE_PENDING: 'REFERENCE CODE PENDING',
 };
 
 function ArtworkDetails({ role }) {
@@ -33,20 +101,37 @@ function ArtworkDetails({ role }) {
 
   // FR006/FR028 — comments & reference-attachment thread
   const [commentList, setCommentList] = useState([]);
-  const [newComment, setNewComment] = useState('');
   const [commentAttachment, setCommentAttachment] = useState(null);
   const [commentBusy, setCommentBusy] = useState(false);
+  const commentInputRef = useRef(null);
+  const [showAllComments, setShowAllComments] = useState(false);
 
   // FR008 — packaging specification review
-
   const [packagingSpec, setPackagingSpec] = useState(null);
 
-  // Collapsible "Full Approval History" section — collapsed by default
+  // Collapsible history sections — collapsed by default
   const [showHistory, setShowHistory] = useState(false);
+  const [showSampleHistory, setShowSampleHistory] = useState(false);
 
+  // Missing-assignment recovery
   const [procurementUsers, setProcurementUsers] = useState([]);
   const [selectedProcurementId, setSelectedProcurementId] = useState('');
   const [assigningProcurement, setAssigningProcurement] = useState(false);
+
+  // Custom-workflow (BW_STICKER, RIBBON, future categories) state
+  const [workflowComments, setWorkflowComments] = useState('');
+  const [workflowBusy, setWorkflowBusy] = useState(false);
+
+  // Physical Sample state (Procurement side — sending)
+  const [sampleAttachment, setSampleAttachment] = useState(null);
+  const [sampleDateSent, setSampleDateSent] = useState('');
+  const [sampleEstArrival, setSampleEstArrival] = useState('');
+  const [sampleComments, setSampleComments] = useState('');
+
+  // Physical Sample decision state (Marketing side — reviewing)
+  const [sampleDecisionComments, setSampleDecisionComments] = useState('');
+  const [sampleRejectLevel, setSampleRejectLevel] = useState('');
+  const [showSampleRejectForm, setShowSampleRejectForm] = useState(false);
 
   const fetchDetails = async () => {
     setLoading(true);
@@ -80,13 +165,12 @@ function ArtworkDetails({ role }) {
     }
   };
 
-useEffect(() => {
+  useEffect(() => {
     fetchDetails();
     fetchComments();
     fetchPackagingSpec();
     getProcurementList().then((res) => setProcurementUsers(res.data)).catch(() => setProcurementUsers([]));
   }, [artworkId]); // eslint-disable-line react-hooks/exhaustive-deps
-
 
   const handleUpload = async () => {
     if (!file) { toast.error('Choose a file first.'); return; }
@@ -130,12 +214,32 @@ useEffect(() => {
     }
   };
 
+  const handleCommentPaste = (e) => {
+    e.preventDefault();
+    const html = e.clipboardData.getData('text/html');
+    const text = e.clipboardData.getData('text/plain');
+
+    if (html) {
+      const normalized = normalizeExcelPaste(html);
+      const clean = DOMPurify.sanitize(normalized, { ADD_ATTR: ['style'] });
+      document.execCommand('insertHTML', false, clean);
+    } else {
+      document.execCommand('insertText', false, text);
+    }
+  };
+
   const handleAddComment = async () => {
-    if (!newComment.trim() && !commentAttachment) return;
+    const el = commentInputRef.current;
+    const plainText = el ? el.innerText.trim() : '';
+    if (!plainText && !commentAttachment) return;
+
+    const rawHtml = el ? el.innerHTML : '';
+    const cleanHtml = DOMPurify.sanitize(rawHtml, { ADD_ATTR: ['style'] });
+
     setCommentBusy(true);
     try {
-      await addArtworkComment(artworkId, newComment.trim(), commentAttachment);
-      setNewComment('');
+      await addArtworkComment(artworkId, cleanHtml, commentAttachment);
+      if (el) el.innerHTML = '';
       setCommentAttachment(null);
       fetchComments();
     } catch (err) {
@@ -176,13 +280,95 @@ useEffect(() => {
     }
   };
 
+  // ---- Custom workflow handlers ----
+
+  const handleWorkflowStepDecision = async (decision) => {
+    setWorkflowBusy(true);
+    try {
+      await actOnWorkflowStep(artworkId, decision, workflowComments);
+      toast.success(`Step ${decision.toLowerCase()}.`);
+      setWorkflowComments('');
+      fetchDetails();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Action failed.');
+    } finally {
+      setWorkflowBusy(false);
+    }
+  };
+
+  const handleGenerateMatcode = async () => {
+    setWorkflowBusy(true);
+    try {
+      const res = await generateMatcode(artworkId);
+      toast.success(`Reference Code generated: ${res.data.material_code}`);
+      fetchDetails();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to generate reference code.');
+    } finally {
+      setWorkflowBusy(false);
+    }
+  };
+
+  const handleSendSample = async () => {
+    setWorkflowBusy(true);
+    try {
+      await sendPhysicalSample(artworkId, {
+        attachment: sampleAttachment,
+        dateSent: sampleDateSent,
+        estArrivalDate: sampleEstArrival,
+        comments: sampleComments,
+      });
+      toast.success('Physical sample sent.');
+      setSampleAttachment(null);
+      setSampleDateSent('');
+      setSampleEstArrival('');
+      setSampleComments('');
+      fetchDetails();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to send sample.');
+    } finally {
+      setWorkflowBusy(false);
+    }
+  };
+
+  const handleReceiveSample = async () => {
+    setWorkflowBusy(true);
+    try {
+      await receivePhysicalSample(artworkId);
+      toast.success('Sample marked as received.');
+      fetchDetails();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to mark as received.');
+    } finally {
+      setWorkflowBusy(false);
+    }
+  };
+
+  const handleSampleDecision = async (decision) => {
+    if (decision === 'REJECTED' && !sampleRejectLevel) {
+      toast.error('Please select a reject level (Sample Level or Artwork Level) first.');
+      return;
+    }
+    setWorkflowBusy(true);
+    try {
+      await decidePhysicalSample(artworkId, decision, sampleDecisionComments, decision === 'REJECTED' ? sampleRejectLevel : null);
+      toast.success(`Sample ${decision.toLowerCase()}.`);
+      setSampleDecisionComments('');
+      setSampleRejectLevel('');
+      setShowSampleRejectForm(false);
+      fetchDetails();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Action failed.');
+    } finally {
+      setWorkflowBusy(false);
+    }
+  };
+
   if (loading) return <div className="p-6 text-gray-400">Loading...</div>;
   if (!artwork) return <div className="p-6 text-gray-400">Artwork not found.</div>;
 
-  // Approve/Reject buttons should ONLY appear while the artwork is
-  // actually in an active review status — never after a rejection
-  // (even though PPC/TQM's rows technically still say "PENDING",
-  // the cycle already stopped at the stage that rejected).
+  // STANDARD-flow gating — approve/reject only appears while actively
+  // in a review status (never after a rejection).
   const ACTIVE_REVIEW_STATUSES = ['MARKETING_REVIEW', 'PPC_REVIEW', 'TQM_REVIEW', 'CUSTOMER_REVIEW'];
   const pendingStage = ACTIVE_REVIEW_STATUSES.includes(artwork.status)
     ? artwork.approvals?.find((a) => a.decision === 'PENDING')
@@ -191,7 +377,15 @@ useEffect(() => {
   const canUpload = ['procurement', 'admin'].includes(role) && !['APPROVED', 'RELEASED', 'ARCHIVED', 'OBSOLETE'].includes(artwork.status);
   const canRelease = artwork.status === 'APPROVED' && ['ppc', 'admin'].includes(role);
 
-  const rejectedStage = artwork.approvals.find((a) => a.decision === 'REJECTED');
+  const rejectedStage = artwork.approvals?.find((a) => a.decision === 'REJECTED');
+
+  // Custom-workflow gating
+  const customPendingStep = artwork.workflow_key !== 'STANDARD'
+    ? artwork.workflow_steps?.find(
+        (s) => s.status === 'PENDING' && artwork.status === CUSTOM_STEP_STATUS_MAP[s.step_type]
+      )
+    : null;
+  const canActOnCustomStep = customPendingStep && WORKFLOW_ROLE_MAP[customPendingStep.actor_role] === role;
 
   return (
     <div className="p-6 w-full h-full overflow-y-auto thin-scrollbar">
@@ -199,7 +393,7 @@ useEffect(() => {
         ← Back to list
       </button>
 
-     <div className="flex items-center justify-between mb-1">
+      <div className="flex items-center justify-between mb-1">
         <h1 className="text-xl font-semibold text-gray-800">{artwork.artwork_id} — {artwork.title}</h1>
         <div className="flex items-center gap-2">
           <button
@@ -213,13 +407,20 @@ useEffect(() => {
           </span>
         </div>
       </div>
-      <p className="text-sm text-gray-500 mb-6">
+      <p className="text-sm text-gray-500 mb-1">
         SKU: {artwork.sku_code} · Brand: {artwork.brand_name || '-'} · Customer: {artwork.customer_name || '-'}
       </p>
-    
-    {/* Missing-assignment recovery — if no procurement contact was
-          picked at creation time, this lets Marketing/Admin fix it
-          later without ever needing a manual SQL update. */}
+      {artwork.material_code && (
+        <p className="text-sm mb-6">
+          <span className="text-gray-500">Reference Code: </span>
+          <span className="font-mono font-semibold text-[#003366] bg-blue-50 border border-blue-200 rounded px-2 py-0.5">
+            {artwork.material_code}
+          </span>
+        </p>
+      )}
+      {!artwork.material_code && <div className="mb-6" />}
+
+      {/* Missing-assignment recovery */}
       {!artwork.assigned_vendor && ['marketing', 'admin'].includes(role) && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-5 mb-5">
           <h2 className="font-medium text-amber-800 mb-1">⚠️ No Procurement Contact Assigned</h2>
@@ -249,9 +450,6 @@ useEffect(() => {
         </div>
       )}
 
-     
-
-
       {/* FR008 — Packaging Specification review (full-width horizontal grid) */}
       {packagingSpec && (
         <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
@@ -269,26 +467,102 @@ useEffect(() => {
               ) : null
             ))}
           </div>
+
+          {/* The remark/attachment added at request-creation time is
+              tagged is_initial_remark=true, so it always shows here
+              (not in the general Comments feed below). */}
+          {commentList.filter((c) => c.is_initial_remark).map((c) => (
+            <div key={c.id} className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+              <div className="border border-gray-200 rounded-md bg-gray-50 overflow-hidden">
+                <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide px-3 pt-2">Remark</p>
+                <div className="px-3 pb-3 pt-1">
+                  {c.message ? (
+                    <div
+                      className="text-sm text-gray-800 overflow-x-auto [&_table]:border [&_table]:border-collapse [&_table]:my-1 [&_table]:bg-white [&_td]:border [&_td]:border-gray-300 [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-gray-300 [&_th]:px-2 [&_th]:py-1"
+                      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(c.message, { ADD_ATTR: ['style'] }) }}
+                    />
+                  ) : (
+                    <p className="text-xs text-gray-400">No remark added.</p>
+                  )}
+                </div>
+              </div>
+              <div className="border border-gray-200 rounded-md bg-gray-50 overflow-hidden">
+                <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide px-3 pt-2">Attachment</p>
+                <div className="px-3 pb-3 pt-1">
+                  {c.attachment_url ? (
+                    <a href={c.attachment_url} target="_blank" rel="noreferrer" className="text-[#003366] text-sm hover:underline inline-flex items-center gap-1">
+                      📎 View attachment
+                    </a>
+                  ) : (
+                    <p className="text-xs text-gray-400">No file attached.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
- 
-{/* Versions */}
+      {/* Versions */}
       <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
         <h2 className="font-medium text-gray-800 mb-3">Versions</h2>
         {artwork.versions.length === 0 && <p className="text-sm text-gray-400">No versions uploaded yet.</p>}
         <ul className="space-y-2">
-          {artwork.versions.map((v) => {
-            // Figure out this version's overall outcome from the full
-            // history — was IT the version that got rejected, approved,
-            // or is it still under review?
-            const versionEntries = (artwork.approval_history || []).filter(
-              (h) => h.version_number === v.version_number
+          {/* {artwork.versions.map((v) => {
+            // Figure out this version's outcome from EVERY history
+            // source: STANDARD flow's approval_history, AND custom
+            // categories' workflow_step_history + physical_sample_history.
+            const standardRejection = (artwork.approval_history || []).find(
+              (h) => h.version_number === v.version_number && h.decision === 'REJECTED'
             );
-            const wasRejected = versionEntries.some((h) => h.decision === 'REJECTED');
+            const workflowRejection = (artwork.workflow_step_history || []).find(
+              (h) => h.version_number === v.version_number && h.status === 'REJECTED'
+            );
+            const sampleRejection = (artwork.physical_sample_history || []).find(
+              (s) => s.version_number === v.version_number && s.decision === 'REJECTED'
+            ); */}
+
+            {artwork.versions.map((v) => {
+            // Figure out this version's outcome from EVERY history source.
+            // Use the LAST (most recent) matching entry — not the first —
+            // because a single version can have MULTIPLE reject cycles
+            // within it (e.g. RIBBON: sample rejected once, new sample sent,
+            // then rejected again at artwork level). The badge should always
+            // reflect the FINAL, most current outcome for that version.
+            const findLast = (arr, predicate) => {
+              for (let i = arr.length - 1; i >= 0; i--) {
+                if (predicate(arr[i])) return arr[i];
+              }
+              return undefined;
+            };
+
+            const standardRejection = findLast(
+              artwork.approval_history || [],
+              (h) => h.version_number === v.version_number && h.decision === 'REJECTED'
+            );
+            const workflowRejection = findLast(
+              artwork.workflow_step_history || [],
+              (h) => h.version_number === v.version_number && h.status === 'REJECTED'
+            );
+            const sampleRejection = findLast(
+              artwork.physical_sample_history || [],
+              (s) => s.version_number === v.version_number && s.decision === 'REJECTED'
+            );
+
+            const wasRejected = Boolean(standardRejection || workflowRejection || sampleRejection);
+            const rejectionStageLabel = standardRejection?.stage
+              || workflowRejection?.step_label
+              || (sampleRejection
+                ? `Physical Sample (${sampleRejection.reject_level === 'ARTWORK' ? 'Artwork Level' : 'Sample Level'})`
+                : null);
+
             let versionBadge = null;
             if (wasRejected) {
-              versionBadge = <span className="ml-2 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-full px-2 py-0.5">REJECTED</span>;
+              versionBadge = (
+                <span className="ml-2 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-full px-2 py-0.5">
+                  REJECTED{rejectionStageLabel ? ` at ${rejectionStageLabel}` : ''}
+                </span>
+              );
             } else if (v.is_locked) {
               versionBadge = <span className="ml-2 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">APPROVED</span>;
             } else if (v.is_active_version) {
@@ -308,6 +582,7 @@ useEffect(() => {
             );
           })}
         </ul>
+
         {canUpload && (
           <div className="mt-4 flex items-center gap-3">
             <input type="file" onChange={(e) => setFile(e.target.files[0])} className="text-sm" />
@@ -319,57 +594,242 @@ useEffect(() => {
         )}
       </div>
 
-      {/* Current Approval Workflow (active version only) — horizontal cards, full width */}
-      <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
-        <h2 className="font-medium text-gray-800 mb-3">Approval Workflow</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {artwork.approvals.map((a) => {
-            const isSkipped = rejectedStage && a.sequence > rejectedStage.sequence && a.decision === 'PENDING';
-            const displayDecision = isSkipped ? 'NOT REACHED' : a.decision;
-            const bgClass =
-              a.decision === 'APPROVED' ? 'bg-green-50 border-green-200' :
-              a.decision === 'REJECTED' ? 'bg-red-50 border-red-200' :
-              isSkipped ? 'bg-gray-50 border-gray-200' : 'bg-blue-50 border-blue-200';
-            const textClass =
-              a.decision === 'APPROVED' ? 'text-green-700' :
-              a.decision === 'REJECTED' ? 'text-red-700' :
-              isSkipped ? 'text-gray-400' : 'text-blue-700';
-            return (
-              <div key={a.stage} className={`border rounded-md p-3 ${bgClass}`}>
-                <p className="text-xs font-semibold text-gray-600 uppercase">{a.stage}</p>
-                <p className={`text-sm font-medium ${textClass}`}>{displayDecision}</p>
-                {a.acted_by && <p className="text-xs text-gray-500 mt-1">— {a.acted_by}</p>}
-                {a.comments && <p className="text-xs text-gray-500 mt-1 italic">"{a.comments}"</p>}
-              </div>
-            );
-          })}
-        </div>
+      {/* ================= STANDARD flow — unchanged ================= */}
+      {artwork.workflow_key === 'STANDARD' ? (
+        <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
+          <h2 className="font-medium text-gray-800 mb-3">Approval Workflow</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {artwork.approvals.map((a) => {
+              const isSkipped = rejectedStage && a.sequence > rejectedStage.sequence && a.decision === 'PENDING';
+              const displayDecision = isSkipped ? 'NOT REACHED' : a.decision;
+              const bgClass =
+                a.decision === 'APPROVED' ? 'bg-green-50 border-green-200' :
+                a.decision === 'REJECTED' ? 'bg-red-50 border-red-200' :
+                isSkipped ? 'bg-gray-50 border-gray-200' : 'bg-blue-50 border-blue-200';
+              const textClass =
+                a.decision === 'APPROVED' ? 'text-green-700' :
+                a.decision === 'REJECTED' ? 'text-red-700' :
+                isSkipped ? 'text-gray-400' : 'text-blue-700';
+              return (
+                <div key={a.stage} className={`border rounded-md p-3 ${bgClass}`}>
+                  <p className="text-xs font-semibold text-gray-600 uppercase">{a.stage}</p>
+                  <p className={`text-sm font-medium ${textClass}`}>{displayDecision}</p>
+                  {a.acted_by && <p className="text-xs text-gray-500 mt-1">— {a.acted_by}</p>}
+                  {a.comments && <p className="text-xs text-gray-500 mt-1 italic">"{a.comments}"</p>}
+                </div>
+              );
+            })}
+          </div>
 
-        {canActOnPending && (
-          <div className="mt-4 space-y-2">
-            <textarea
-              placeholder="Comments / reason (optional, required for reject)"
-              value={comments}
-              onChange={(e) => setComments(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-              rows={2}
-            />
-            <div className="flex gap-2">
-              <button onClick={() => handleDecision('APPROVED')} disabled={busy}
-                className="bg-green-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-green-700 disabled:opacity-50">
-                Approve
-              </button>
-              <button onClick={() => handleDecision('REJECTED')} disabled={busy}
-                className="bg-red-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-red-700 disabled:opacity-50">
-                Reject
+          {canActOnPending && (
+            <div className="mt-4 space-y-2">
+              <textarea
+                placeholder="Comments / reason (optional, required for reject)"
+                value={comments}
+                onChange={(e) => setComments(e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                rows={4}
+              />
+              <div className="flex gap-2">
+                <button onClick={() => handleDecision('APPROVED')} disabled={busy}
+                  className="bg-green-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-green-700 disabled:opacity-50">
+                  Approve
+                </button>
+                <button onClick={() => handleDecision('REJECTED')} disabled={busy}
+                  className="bg-red-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-red-700 disabled:opacity-50">
+                  Reject
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        /* ================= Custom workflow (BW_STICKER / RIBBON / future) ================= */
+        <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
+          <h2 className="font-medium text-gray-800 mb-3">Workflow ({artwork.workflow_key.replace(/_/g, ' ')})</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {(artwork.workflow_steps || []).map((s) => {
+              const bgClass =
+                s.status === 'DONE' ? 'bg-green-50 border-green-200' :
+                s.status === 'REJECTED' ? 'bg-red-50 border-red-200' : 'bg-blue-50 border-blue-200';
+              const textClass =
+                s.status === 'DONE' ? 'text-green-700' :
+                s.status === 'REJECTED' ? 'text-red-700' : 'text-blue-700';
+              return (
+                <div key={s.step_code} className={`border rounded-md p-3 ${bgClass}`}>
+                  <p className="text-xs font-semibold text-gray-600 uppercase">{s.step_label}</p>
+                  <p className={`text-sm font-medium ${textClass}`}>{s.status}</p>
+                  {s.acted_by && <p className="text-xs text-gray-500 mt-1">— {s.acted_by}</p>}
+                  {s.comments && <p className="text-xs text-gray-500 mt-1 italic">"{s.comments}"</p>}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Marketing approving/rejecting the artwork itself */}
+          {canActOnCustomStep && customPendingStep.step_type === 'APPROVAL' && (
+            <div className="mt-4 space-y-2">
+              <textarea
+                placeholder="Comments / reason (optional, required for reject)"
+                value={workflowComments}
+                onChange={(e) => setWorkflowComments(e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                rows={4}
+              />
+              <div className="flex gap-2">
+                <button onClick={() => handleWorkflowStepDecision('APPROVED')} disabled={workflowBusy}
+                  className="bg-green-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-green-700 disabled:opacity-50">
+                  Approve
+                </button>
+                <button onClick={() => handleWorkflowStepDecision('REJECTED')} disabled={workflowBusy}
+                  className="bg-red-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-red-700 disabled:opacity-50">
+                  Reject
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Procurement generating the reference code */}
+          {canActOnCustomStep && customPendingStep.step_type === 'MATCODE' && (
+            <div className="mt-4">
+              <button onClick={handleGenerateMatcode} disabled={workflowBusy}
+                className="bg-[#003366] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#002a52] disabled:opacity-50">
+                {workflowBusy ? 'Generating...' : 'Generate Reference Code for Production'}
               </button>
             </div>
-          </div>
-        )}
-      </div>
+          )}
 
-      {/* Full history across ALL versions — every reject/re-upload cycle */}
+          {/* Procurement — send a physical sample */}
+          {canActOnCustomStep && customPendingStep.step_type === 'PHYSICAL_SAMPLE' && (
+            <div className="mt-4 space-y-3">
+              <Attachment
+                selectedFile={sampleAttachment}
+                onFileChange={(e) => setSampleAttachment(e.target.files[0])}
+                onRemoveFile={() => setSampleAttachment(null)}
+                loading={workflowBusy}
+              />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Date of Sending Sample</label>
+                  <input type="date" value={sampleDateSent} onChange={(e) => setSampleDateSent(e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Est. Time of Arrival</label>
+                  <input type="date" value={sampleEstArrival} onChange={(e) => setSampleEstArrival(e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm" />
+                </div>
+              </div>
+              <textarea
+                placeholder="Comments (optional)"
+                value={sampleComments}
+                onChange={(e) => setSampleComments(e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                rows={3}
+              />
+              <button onClick={handleSendSample} disabled={workflowBusy}
+                className="bg-[#003366] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#002a52] disabled:opacity-50">
+                {workflowBusy ? 'Sending...' : 'Send Physical Sample'}
+              </button>
+            </div>
+          )}
 
+          {/* Marketing — sample details, Receive button, and Approve/Reject */}
+          {artwork.latest_physical_sample && ['SAMPLE_SENT', 'SAMPLE_RECEIVED_REVIEW'].includes(artwork.status) && (
+            <div className="mt-4 border border-gray-200 rounded-md p-4 bg-gray-50">
+              <p className="text-xs font-semibold text-gray-500 uppercase mb-3">Physical Sample Details</p>
+
+              <div className="space-y-2 mb-3">
+                <p className="text-sm">
+                  <span className="font-semibold text-gray-600">Sent By: </span>
+                  <span className="text-gray-800">{artwork.latest_physical_sample.sent_by || '-'}</span>
+                </p>
+                <p className="text-sm">
+                  <span className="font-semibold text-gray-600">Date Sent: </span>
+                  <span className="text-gray-800">{artwork.latest_physical_sample.date_sent || '-'}</span>
+                </p>
+                <p className="text-sm">
+                  <span className="font-semibold text-gray-600">Est. Arrival: </span>
+                  <span className="text-gray-800">{artwork.latest_physical_sample.est_arrival_date || '-'}</span>
+                </p>
+                <p className="text-sm">
+                  <span className="font-semibold text-gray-600">Attachment: </span>
+                  {artwork.latest_physical_sample.attachment_url ? (
+                    <a href={artwork.latest_physical_sample.attachment_url} target="_blank" rel="noreferrer" className="text-[#003366] hover:underline">
+                      📎 View attachment
+                    </a>
+                  ) : (
+                    <span className="text-gray-400">No file attached.</span>
+                  )}
+                </p>
+                <p className="text-sm">
+                  <span className="font-semibold text-gray-600">Comment: </span>
+                  <span className="text-gray-800">{artwork.latest_physical_sample.comments || '-'}</span>
+                </p>
+              </div>
+
+              {role === 'marketing' && artwork.status === 'SAMPLE_SENT' && !artwork.latest_physical_sample.is_received && (
+                <button onClick={handleReceiveSample} disabled={workflowBusy}
+                  className="bg-emerald-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-emerald-700 disabled:opacity-50">
+                  {workflowBusy ? 'Marking...' : 'Mark Sample as Received'}
+                </button>
+              )}
+
+              {role === 'marketing' && artwork.status === 'SAMPLE_RECEIVED_REVIEW' && artwork.latest_physical_sample.is_received && (
+                <div className="space-y-2">
+                  {!showSampleRejectForm ? (
+                    <div className="flex gap-2">
+                      <button onClick={() => handleSampleDecision('APPROVED')} disabled={workflowBusy}
+                        className="bg-green-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-green-700 disabled:opacity-50">
+                        Approve Sample
+                      </button>
+                      <button onClick={() => setShowSampleRejectForm(true)} disabled={workflowBusy}
+                        className="bg-red-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-red-700 disabled:opacity-50">
+                        Reject Sample
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 border border-red-200 rounded-md p-3 bg-red-50">
+                      <p className="text-xs font-semibold text-red-700">Rejecting this sample — choose a level:</p>
+                      <select
+                        value={sampleRejectLevel}
+                        onChange={(e) => setSampleRejectLevel(e.target.value)}
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                      >
+                        <option value="">-- Select level --</option>
+                        <option value="SAMPLE">Sample Level — send a new sample only</option>
+                        <option value="ARTWORK">Artwork Level — reject entire artwork, new upload required</option>
+                      </select>
+                      <textarea
+                        placeholder="Reason for rejection (recommended)"
+                        value={sampleDecisionComments}
+                        onChange={(e) => setSampleDecisionComments(e.target.value)}
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                        rows={3}
+                      />
+                      <div className="flex gap-2">
+                        <button onClick={() => handleSampleDecision('REJECTED')} disabled={workflowBusy}
+                          className="bg-red-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-red-700 disabled:opacity-50">
+                          Confirm Reject
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setShowSampleRejectForm(false); setSampleRejectLevel(''); setSampleDecisionComments(''); }}
+                          className="bg-gray-100 text-gray-700 px-3 py-1.5 rounded-md text-sm hover:bg-gray-200"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Full Approval History (STANDARD flow, across all versions) */}
       {artwork.approval_history && artwork.approval_history.length > 0 && (
         <div className="bg-white border border-gray-200 rounded-lg mb-5 overflow-hidden">
           <button
@@ -413,20 +873,128 @@ useEffect(() => {
         </div>
       )}
 
+      {/* Workflow Step History (custom workflow categories, across all versions) */}
+      {artwork.workflow_step_history && artwork.workflow_step_history.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-lg mb-5 overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setShowHistory((prev) => !prev)}
+            className="w-full flex items-center justify-between p-5 text-left hover:bg-gray-50"
+          >
+            <h2 className="font-medium text-gray-800">
+              Workflow Step History (all versions)
+              <span className="ml-2 text-xs text-gray-400 font-normal">
+                {artwork.workflow_step_history.length} {artwork.workflow_step_history.length === 1 ? 'entry' : 'entries'}
+              </span>
+            </h2>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className={`h-5 w-5 text-gray-400 transition-transform duration-200 ${showHistory ? 'rotate-180' : ''}`}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {showHistory && (
+            <div className="px-5 pb-5 space-y-2">
+              {artwork.workflow_step_history.map((s, i) => (
+                <div key={i} className="border border-gray-200 rounded-md p-3 bg-gray-50">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-gray-600">v{s.version_number} — {s.step_label}</p>
+                    <span className={
+                      s.status === 'DONE' ? 'text-xs font-medium text-green-700' :
+                      s.status === 'REJECTED' ? 'text-xs font-medium text-red-700' : 'text-xs font-medium text-gray-400'
+                    }>
+                      {s.status === 'REJECTED' ? '❌ ARTWORK REJECTED (approval stage)' : s.status}
+                      {s.acted_by ? ` — ${s.acted_by}` : ''}
+                    </span>
+                  </div>
+                  {s.comments && <p className="text-xs text-gray-500 mt-1 italic">"{s.comments}"</p>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Physical Sample History (RIBBON-style, across all versions) */}
+      {artwork.physical_sample_history && artwork.physical_sample_history.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-lg mb-5 overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setShowSampleHistory((prev) => !prev)}
+            className="w-full flex items-center justify-between p-5 text-left hover:bg-gray-50"
+          >
+            <h2 className="font-medium text-gray-800">
+              Physical Sample History
+              <span className="ml-2 text-xs text-gray-400 font-normal">
+                {artwork.physical_sample_history.length} {artwork.physical_sample_history.length === 1 ? 'entry' : 'entries'}
+              </span>
+            </h2>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className={`h-5 w-5 text-gray-400 transition-transform duration-200 ${showSampleHistory ? 'rotate-180' : ''}`}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {showSampleHistory && (
+            <div className="px-5 pb-5 space-y-3">
+              {artwork.physical_sample_history.map((s, i) => (
+                <div key={s.id} className="border border-gray-200 rounded-md p-3 bg-gray-50">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-xs font-semibold text-gray-600">v{s.version_number} — Sample #{i + 1} — sent by {s.sent_by || '-'}</p>
+                    <span className={
+                      s.decision === 'APPROVED' ? 'text-xs font-medium text-green-700' :
+                      s.decision === 'REJECTED' ? 'text-xs font-medium text-red-700' : 'text-xs font-medium text-gray-400'
+                    }>
+                      {s.decision === 'REJECTED'
+                        ? `❌ REJECTED (${s.reject_level === 'ARTWORK' ? 'Artwork Level — new upload needed' : 'Sample Level — new sample needed'})`
+                        : s.decision}
+                      {s.decided_by ? ` — ${s.decided_by}` : ''}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Sent: {s.date_sent || '-'} · Est. arrival: {s.est_arrival_date || '-'} · {s.is_received ? 'Received' : 'Not yet received'}
+                  </p>
+                  {s.comments && <p className="text-xs text-gray-500 mt-1 italic">Note from Procurement: "{s.comments}"</p>}
+                  {s.decision_comments && <p className="text-xs text-red-500 mt-1 italic">Marketing's reason: "{s.decision_comments}"</p>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* FR006, FR028 — Comments / reference attachments (all roles) */}
       <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
         <h2 className="font-medium text-gray-800 mb-3">Comments &amp; Reference Attachments</h2>
 
-        {commentList.length === 0 && (
-          <p className="text-sm text-gray-400 mb-3">No comments yet.</p>
-        )}
+        {(() => {
+          const generalComments = commentList
+            .filter((c) => !c.is_initial_remark)
+            .slice()
+            .sort((a, b) => new Date(b.created_on) - new Date(a.created_on));
 
-   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
-          {commentList.map((c) => (
-            <div key={c.id} className="text-sm bg-gray-50 rounded-md p-3 border border-gray-200">
+          if (generalComments.length === 0) {
+            return <p className="text-sm text-gray-400 mb-3">No comments yet.</p>;
+          }
+
+          const [latest, ...older] = generalComments;
+
+          const renderComment = (c, isLatest) => (
+            <div key={c.id} className={`text-sm rounded-md p-3 border ${isLatest ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'}`}>
               <div className="flex items-center justify-between mb-1 flex-wrap gap-1">
                 <span className="font-medium text-gray-800">{c.author}</span>
                 <div className="flex items-center gap-1">
+                  {isLatest && (
+                    <span className="text-[10px] font-semibold uppercase tracking-wide bg-blue-600 text-white rounded-full px-2 py-0.5">
+                      Latest
+                    </span>
+                  )}
                   {c.author_role && (
                     <span className="text-[10px] font-semibold uppercase tracking-wide bg-[#003366] text-white rounded-full px-2 py-0.5">
                       {c.author_role}
@@ -440,34 +1008,65 @@ useEffect(() => {
                 </div>
               </div>
               <span className="text-xs text-gray-400">{new Date(c.created_on).toLocaleString()}</span>
-              {c.message && <p className="text-gray-700 mt-1">{c.message}</p>}
+
+              {c.message && (
+                <div
+                  className="mt-1 text-sm text-gray-700 overflow-x-auto [&_table]:border [&_table]:border-collapse [&_table]:my-1 [&_td]:border [&_td]:border-gray-300 [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-gray-300 [&_th]:px-2 [&_th]:py-1"
+                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(c.message, { ADD_ATTR: ['style'] }) }}
+                />
+              )}
               {c.attachment_url && (
                 <a href={c.attachment_url} target="_blank" rel="noreferrer" className="text-[#003366] text-xs hover:underline mt-1 inline-block">
                   📎 View attachment
                 </a>
               )}
             </div>
-          ))}
-        </div>
+          );
 
+          return (
+            <div className="mb-4">
+              {renderComment(latest, true)}
+
+              {older.length > 0 && (
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowAllComments((prev) => !prev)}
+                    className="text-xs text-[#003366] hover:underline flex items-center gap-1"
+                  >
+                    {showAllComments ? '▲ Hide' : '▼ View'} previous comments ({older.length})
+                  </button>
+
+                  {showAllComments && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
+                      {older.map((c) => renderComment(c, false))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         <div className="space-y-2">
-          <textarea
-            placeholder="Ask a question, leave feedback, or add a reference remark..."
-            value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-            rows={2}
+          <div
+            ref={commentInputRef}
+            contentEditable
+            suppressContentEditableWarning
+            onPaste={handleCommentPaste}
+            data-placeholder="Ask a question, leave feedback, or paste an Excel table here — its rows, columns and colors will be preserved..."
+            className="w-full min-h-[76px] max-h-40 overflow-y-auto border border-gray-300 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
           />
           <div className="flex items-center gap-2">
-            <input
-              type="file"
-              onChange={(e) => setCommentAttachment(e.target.files[0])}
-              className="text-xs flex-1"
+            <Attachment
+              selectedFile={commentAttachment}
+              onFileChange={(e) => setCommentAttachment(e.target.files[0])}
+              onRemoveFile={() => setCommentAttachment(null)}
+              loading={commentBusy}
             />
             <button
               onClick={handleAddComment}
-              disabled={commentBusy || (!newComment.trim() && !commentAttachment)}
+              disabled={commentBusy}
               className="bg-[#003366] text-white px-3 py-1.5 rounded-md text-sm hover:bg-[#002a52] disabled:opacity-50"
             >
               Send

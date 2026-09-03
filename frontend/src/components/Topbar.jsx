@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Menu, ChevronDown, LogOut } from 'lucide-react';
+import ArtworkNotificationBell from './ArtworkNotificationBell';
 
 function Topbar({ toggleSidebar }) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -60,9 +61,12 @@ function Topbar({ toggleSidebar }) {
         </button>
       </div>
 
-      {/* Right Section: User Dropdown */}
-      <div className="relative" ref={dropdownRef}>
-        <button
+      {/* Right Section: Notifications + User Dropdown */}
+      <div className="flex items-center gap-3">
+        <ArtworkNotificationBell />
+
+        <div className="relative" ref={dropdownRef}>
+          <button
           onClick={() => setIsDropdownOpen(!isDropdownOpen)}
           className="flex items-center gap-3 p-1 rounded-md hover:bg-gray-50 transition-colors cursor-pointer"
         >
@@ -97,6 +101,7 @@ function Topbar({ toggleSidebar }) {
             </button>
           </div>
         )}
+        </div>
       </div>
     </header>
   );

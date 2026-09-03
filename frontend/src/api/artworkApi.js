@@ -33,10 +33,11 @@ export const archiveArtwork = (artworkId) =>
 export const getArtworkComments = (artworkId) =>
   api.get(`/api/artwork/${artworkId}/comments/`);
 
-export const addArtworkComment = (artworkId, message, attachment = null) => {
+export const addArtworkComment = (artworkId, message, attachment = null, isInitialRemark = false) => {
   const formData = new FormData();
   if (message) formData.append('message', message);
   if (attachment) formData.append('attachment', attachment);
+  if (isInitialRemark) formData.append('is_initial_remark', 'true');
   return api.post(`/api/artwork/${artworkId}/comments/add/`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });

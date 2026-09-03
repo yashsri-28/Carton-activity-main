@@ -51,6 +51,12 @@ class ArtworkRequest(models.Model):
         ("RELEASED", "Released"),
         ("ARCHIVED", "Archived"),
         ("OBSOLETE", "Obsolete"),
+        # --- Custom category workflow statuses (RIBBON, BW_STICKER) ---
+        ("PHYSICAL_SAMPLE_PENDING", "Physical Sample Pending"),
+        ("SAMPLE_SENT", "Sample Sent - Awaiting Receipt"),
+        ("SAMPLE_RECEIVED_REVIEW", "Sample Received - Review Pending"),
+        ("SAMPLE_REJECTED", "Sample Rejected"),
+        ("MATCODE_PENDING", "Reference Code Generation Pending"),
     )
 
     # --------------------------------------------------
@@ -102,6 +108,11 @@ class ArtworkRequest(models.Model):
     # --------------------------------------------------
 
     customer_approval_required = models.BooleanField(default=False)
+    
+    # Which workflow this artwork follows — decided once at creation
+    # time based on its category. "STANDARD" = the original
+    # Marketing -> PPC -> TQM chain used by most categories.
+    workflow_key = models.CharField(max_length=50, default="STANDARD", db_index=True)
 
     # --------------------------------------------------
     # Workflow
@@ -318,6 +329,11 @@ class ArtworkComment(models.Model):
         # spec, physical proof photo, etc.) — any role can attach one along
         # with their remark.
     attachment = models.FileField(upload_to="artwork_attachments/%Y/%m/", null=True, blank=True)
+    
+    # Marks the ONE remark/attachment added at request-creation time
+    # (via the Packaging Spec form) — so it always shows inside the
+    # Packaging Specification box, never in the general Comments feed.
+    is_initial_remark = models.BooleanField(default=False)
 
     created_on = models.DateTimeField(auto_now_add=True)
 
@@ -561,3 +577,20 @@ class PhysicalSample(models.Model):
 
     def __str__(self):
         return f"{self.artwork.artwork_id} - Sample sent {self.sent_on}"
+    
+    
+class MatcodeSequence(models.Model):
+    year = models.PositiveIntegerField(unique=True)
+    last_number = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        db_table = "artwork_matcode_sequence"
+
+    @classmethod
+    def next_code(cls):
+        year = timezone.now().year
+        with transaction.atomic():
+            seq, _ = cls.objects.select_for_update().get_or_create(year=year)
+            seq.last_number += 1
+            seq.save(update_fields=["last_number"])
+            return f"MAT-{year}-{seq.last_number:05d}"    

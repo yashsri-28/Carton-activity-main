@@ -105,7 +105,9 @@ function ArtworkDetails({ role }) {
   const [showAllComments, setShowAllComments] = useState(false);
 
   // Collapsible "Full Approval History" section — collapsed by default
+  // const [showHistory, setShowHistory] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showSampleHistory, setShowSampleHistory] = useState(false);
 
   const [procurementUsers, setProcurementUsers] = useState([]);
   const [selectedProcurementId, setSelectedProcurementId] = useState('');
@@ -123,7 +125,10 @@ function ArtworkDetails({ role }) {
   const [sampleComments, setSampleComments] = useState('');
 
   // Physical Sample decision state (Marketing side — reviewing)
+  // const [sampleDecisionComments, setSampleDecisionComments] = useState('');
   const [sampleDecisionComments, setSampleDecisionComments] = useState('');
+  const [sampleRejectLevel, setSampleRejectLevel] = useState('');
+  const [showSampleRejectForm, setShowSampleRejectForm] = useState(false);
 
   const fetchDetails = async () => {
     setLoading(true);
@@ -272,19 +277,38 @@ const handleReceiveSample = async () => {
   }
 };
 
-const handleSampleDecision = async (decision) => {
-  setWorkflowBusy(true);
-  try {
-    await decidePhysicalSample(artworkId, decision, sampleDecisionComments);
-    toast.success(`Sample ${decision.toLowerCase()}.`);
-    setSampleDecisionComments('');
-    fetchDetails();
-  } catch (err) {
-    toast.error(err.response?.data?.error || 'Action failed.');
-  } finally {
-    setWorkflowBusy(false);
-  }
-};
+// const handleSampleDecision = async (decision) => {
+//   setWorkflowBusy(true);
+//   try {
+//     await decidePhysicalSample(artworkId, decision, sampleDecisionComments);
+//     toast.success(`Sample ${decision.toLowerCase()}.`);
+//     setSampleDecisionComments('');
+//     fetchDetails();
+//   } catch (err) {
+//     toast.error(err.response?.data?.error || 'Action failed.');
+//   } finally {
+//     setWorkflowBusy(false);
+//   }
+// };
+  const handleSampleDecision = async (decision) => {
+    if (decision === 'REJECTED' && !sampleRejectLevel) {
+      toast.error('Please select a reject level (Sample Level or Artwork Level) first.');
+      return;
+    }
+    setWorkflowBusy(true);
+    try {
+      await decidePhysicalSample(artworkId, decision, sampleDecisionComments, decision === 'REJECTED' ? sampleRejectLevel : null);
+      toast.success(`Sample ${decision.toLowerCase()}.`);
+      setSampleDecisionComments('');
+      setSampleRejectLevel('');
+      setShowSampleRejectForm(false);
+      fetchDetails();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Action failed.');
+    } finally {
+      setWorkflowBusy(false);
+    }
+  };
 
   const handleRelease = async () => {
     setBusy(true);
@@ -381,8 +405,27 @@ const handleCommentPaste = (e) => {
     : null;
   const canActOnPending = pendingStage && STAGE_ROLE_MAP[pendingStage.stage] === role;
   // Custom-workflow (non-STANDARD) equivalent of the above
+  // const customPendingStep = artwork.workflow_key !== 'STANDARD'
+  //   ? artwork.workflow_steps?.find((s) => s.status === 'PENDING')
+  //   : null;
+  // const canActOnCustomStep = customPendingStep && WORKFLOW_ROLE_MAP[customPendingStep.actor_role] === role;
+
+
+  // Custom-workflow (non-STANDARD) equivalent of STANDARD's ACTIVE_REVIEW_STATUSES —
+// a step is only actionable while the artwork's overall status matches
+// what that step-type expects. Prevents acting on a step that's
+// technically still "PENDING" in the DB but whose turn hasn't
+// actually come yet (e.g. after a rejection).
+  const CUSTOM_STEP_STATUS_MAP = {
+    APPROVAL: 'MARKETING_REVIEW',
+    PHYSICAL_SAMPLE: 'PHYSICAL_SAMPLE_PENDING',
+    SAMPLE_APPROVAL: 'SAMPLE_RECEIVED_REVIEW',
+    MATCODE: 'MATCODE_PENDING',
+  };
   const customPendingStep = artwork.workflow_key !== 'STANDARD'
-    ? artwork.workflow_steps?.find((s) => s.status === 'PENDING')
+    ? artwork.workflow_steps?.find(
+        (s) => s.status === 'PENDING' && artwork.status === CUSTOM_STEP_STATUS_MAP[s.step_type]
+      )
     : null;
   const canActOnCustomStep = customPendingStep && WORKFLOW_ROLE_MAP[customPendingStep.actor_role] === role;
   const canUpload = ['procurement', 'admin'].includes(role) && !['APPROVED', 'RELEASED', 'ARCHIVED', 'OBSOLETE'].includes(artwork.status);
@@ -528,7 +571,7 @@ const handleCommentPaste = (e) => {
         <h2 className="font-medium text-gray-800 mb-3">Versions</h2>
         {artwork.versions.length === 0 && <p className="text-sm text-gray-400">No versions uploaded yet.</p>}
         <ul className="space-y-2">
-          {artwork.versions.map((v) => {
+          {/* {artwork.versions.map((v) => {
             // Figure out this version's overall outcome from the full
             // history — was IT the version that got rejected, approved,
             // or is it still under review?
@@ -543,7 +586,45 @@ const handleCommentPaste = (e) => {
               versionBadge = <span className="ml-2 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">APPROVED</span>;
             } else if (v.is_active_version) {
               versionBadge = <span className="ml-2 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5">IN REVIEW</span>;
-            }
+            } */}
+
+            {artwork.versions.map((v) => {
+              // Figure out this version's overall outcome from the full
+              // history — checks ALL history sources: the STANDARD flow's
+              // approval_history, AND custom-workflow categories' (RIBBON,
+              // BW_STICKER) workflow_step_history + physical_sample_history —
+              // so this works correctly no matter which flow the artwork uses.
+              const standardRejection = (artwork.approval_history || []).find(
+                (h) => h.version_number === v.version_number && h.decision === 'REJECTED'
+              );
+              const workflowRejection = (artwork.workflow_step_history || []).find(
+                (h) => h.version_number === v.version_number && h.status === 'REJECTED'
+              );
+              const sampleRejection = (artwork.physical_sample_history || []).find(
+                (s) => s.version_number === v.version_number && s.decision === 'REJECTED'
+              );
+
+              const wasRejected = Boolean(standardRejection || workflowRejection || sampleRejection);
+              const rejectionStageLabel = standardRejection?.stage
+                || workflowRejection?.step_label
+                || (sampleRejection
+                  ? `Physical Sample (${sampleRejection.reject_level === 'ARTWORK' ? 'Artwork Level' : 'Sample Level'})`
+                  : null);
+
+              let versionBadge = null;
+              if (wasRejected) {
+                versionBadge = (
+                  <span className="ml-2 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-full px-2 py-0.5">
+                    REJECTED{rejectionStageLabel ? ` at ${rejectionStageLabel}` : ''}
+                  </span>
+                );
+              } else if (v.is_locked) {
+                versionBadge = <span className="ml-2 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">APPROVED</span>;
+              } else if (v.is_active_version) {
+                versionBadge = <span className="ml-2 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5">IN REVIEW</span>;
+              }
+
+
 
             return (
               <li key={v.id} className="flex items-center justify-between text-sm border-b border-gray-100 pb-2">
@@ -822,7 +903,7 @@ const handleCommentPaste = (e) => {
                 </button>
               )}
 
-              {role === 'marketing' && artwork.status === 'SAMPLE_RECEIVED_REVIEW' && artwork.latest_physical_sample.is_received && (
+              {/* {role === 'marketing' && artwork.status === 'SAMPLE_RECEIVED_REVIEW' && artwork.latest_physical_sample.is_received && (
                 <div className="space-y-2">
                   <textarea
                     placeholder="Comments / reason (optional, required for reject)"
@@ -842,7 +923,96 @@ const handleCommentPaste = (e) => {
                     </button>
                   </div>
                 </div>
+              )} */}
+
+              {/* {role === 'marketing' && artwork.status === 'SAMPLE_RECEIVED_REVIEW' && artwork.latest_physical_sample.is_received && (
+              <div className="space-y-2">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Reject Level <span className="text-gray-400">(required only if rejecting)</span>
+                  </label>
+                  <select
+                    value={sampleRejectLevel}
+                    onChange={(e) => setSampleRejectLevel(e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                  >
+                    <option value="">-- Select level --</option>
+                    <option value="SAMPLE">Sample Level — send a new sample only</option>
+                    <option value="ARTWORK">Artwork Level — reject entire artwork, new upload required</option>
+                  </select>
+                </div>
+                <textarea
+                  placeholder="Comments / reason (optional, required for reject)"
+                  value={sampleDecisionComments}
+                  onChange={(e) => setSampleDecisionComments(e.target.value)}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                  rows={3}
+                />
+                <div className="flex gap-2">
+                  <button onClick={() => handleSampleDecision('APPROVED')} disabled={workflowBusy}
+                    className="bg-green-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-green-700 disabled:opacity-50">
+                    Approve Sample
+                  </button>
+                  <button onClick={() => handleSampleDecision('REJECTED')} disabled={workflowBusy}
+                    className="bg-red-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-red-700 disabled:opacity-50">
+                    Reject Sample
+                  </button>
+                </div>
+              </div>
+            )} */}
+
+            {role === 'marketing' && artwork.status === 'SAMPLE_RECEIVED_REVIEW' && artwork.latest_physical_sample.is_received && (
+            <div className="space-y-2">
+              {!showSampleRejectForm ? (
+                // Step 1 — plain Approve / Reject choice, no dropdown visible yet
+                <div className="flex gap-2">
+                  <button onClick={() => handleSampleDecision('APPROVED')} disabled={workflowBusy}
+                    className="bg-green-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-green-700 disabled:opacity-50">
+                    Approve Sample
+                  </button>
+                  <button onClick={() => setShowSampleRejectForm(true)} disabled={workflowBusy}
+                    className="bg-red-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-red-700 disabled:opacity-50">
+                    Reject Sample
+                  </button>
+                </div>
+              ) : (
+                // Step 2 — only shown after clicking Reject: pick a level + reason,
+                // then confirm. Cancel goes back to the plain Approve/Reject choice.
+                <div className="space-y-2 border border-red-200 rounded-md p-3 bg-red-50">
+                  <p className="text-xs font-semibold text-red-700">Rejecting this sample — choose a level:</p>
+                  <select
+                    value={sampleRejectLevel}
+                    onChange={(e) => setSampleRejectLevel(e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                  >
+                    <option value="">-- Select level --</option>
+                    <option value="SAMPLE">Sample Level — send a new sample only</option>
+                    <option value="ARTWORK">Artwork Level — reject entire artwork, new upload required</option>
+                  </select>
+                  <textarea
+                    placeholder="Reason for rejection (recommended)"
+                    value={sampleDecisionComments}
+                    onChange={(e) => setSampleDecisionComments(e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                    rows={3}
+                  />
+                  <div className="flex gap-2">
+                    <button onClick={() => handleSampleDecision('REJECTED')} disabled={workflowBusy}
+                      className="bg-red-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-red-700 disabled:opacity-50">
+                      Confirm Reject
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setShowSampleRejectForm(false); setSampleRejectLevel(''); setSampleDecisionComments(''); }}
+                      className="bg-gray-100 text-gray-700 px-3 py-1.5 rounded-md text-sm hover:bg-gray-200"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
               )}
+            </div>
+          )}
             </div>
           )}
         </div>
@@ -892,6 +1062,124 @@ const handleCommentPaste = (e) => {
           )}
         </div>
       )}
+
+
+      {artwork.workflow_step_history && artwork.workflow_step_history.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-lg mb-5 overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setShowHistory((prev) => !prev)}
+            className="w-full flex items-center justify-between p-5 text-left hover:bg-gray-50"
+          >
+            <h2 className="font-medium text-gray-800">
+              Workflow Step History (all versions)
+              <span className="ml-2 text-xs text-gray-400 font-normal">
+                {artwork.workflow_step_history.length} {artwork.workflow_step_history.length === 1 ? 'entry' : 'entries'}
+              </span>
+            </h2>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className={`h-5 w-5 text-gray-400 transition-transform duration-200 ${showHistory ? 'rotate-180' : ''}`}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {showHistory && (
+            <div className="px-5 pb-5 space-y-2">
+              {artwork.workflow_step_history.map((s, i) => (
+                <div key={i} className="border border-gray-200 rounded-md p-3 bg-gray-50">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-gray-600">v{s.version_number} — {s.step_label}</p>
+                    <span className={
+                      s.status === 'DONE' ? 'text-xs font-medium text-green-700' :
+                      s.status === 'REJECTED' ? 'text-xs font-medium text-red-700' : 'text-xs font-medium text-gray-400'
+                    }>
+                      {s.status === 'REJECTED' ? '❌ ARTWORK REJECTED (approval stage)' : s.status}
+                      {s.acted_by ? ` — ${s.acted_by}` : ''}
+                    </span>
+                  </div>
+                  {s.comments && <p className="text-xs text-gray-500 mt-1 italic">"{s.comments}"</p>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {artwork.physical_sample_history && artwork.physical_sample_history.length > 0 && (
+      <div className="bg-white border border-gray-200 rounded-lg mb-5 overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setShowSampleHistory((prev) => !prev)}
+          className="w-full flex items-center justify-between p-5 text-left hover:bg-gray-50"
+        >
+          <h2 className="font-medium text-gray-800">
+            Physical Sample History
+            <span className="ml-2 text-xs text-gray-400 font-normal">
+              {artwork.physical_sample_history.length} {artwork.physical_sample_history.length === 1 ? 'entry' : 'entries'}
+            </span>
+          </h2>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className={`h-5 w-5 text-gray-400 transition-transform duration-200 ${showSampleHistory ? 'rotate-180' : ''}`}
+            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+{/* 
+        {showSampleHistory && (
+          <div className="px-5 pb-5 space-y-3">
+            {artwork.physical_sample_history.map((s, i) => (
+              <div key={s.id} className="border border-gray-200 rounded-md p-3 bg-gray-50">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs font-semibold text-gray-600">Sample #{i + 1} — sent by {s.sent_by || '-'}</p>
+                  <span className={
+                    s.decision === 'APPROVED' ? 'text-xs font-medium text-green-700' :
+                    s.decision === 'REJECTED' ? 'text-xs font-medium text-red-700' : 'text-xs font-medium text-gray-400'
+                  }>
+                    {s.decision}{s.decided_by ? ` — ${s.decided_by}` : ''}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500">
+                  Sent: {s.date_sent || '-'} · Est. arrival: {s.est_arrival_date || '-'} · {s.is_received ? 'Received' : 'Not yet received'}
+                </p>
+                {s.comments && <p className="text-xs text-gray-500 mt-1 italic">Note from Procurement: "{s.comments}"</p>}
+                {s.decision_comments && <p className="text-xs text-red-500 mt-1 italic">Marketing's reason: "{s.decision_comments}"</p>}
+              </div>
+            ))}
+          </div>
+        )} */}
+
+        {showSampleHistory && (
+        <div className="px-5 pb-5 space-y-3">
+          {artwork.physical_sample_history.map((s, i) => (
+            <div key={s.id} className="border border-gray-200 rounded-md p-3 bg-gray-50">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-xs font-semibold text-gray-600">v{s.version_number} — Sample #{i + 1} — sent by {s.sent_by || '-'}</p>
+                <span className={
+                  s.decision === 'APPROVED' ? 'text-xs font-medium text-green-700' :
+                  s.decision === 'REJECTED' ? 'text-xs font-medium text-red-700' : 'text-xs font-medium text-gray-400'
+                }>
+                  {s.decision === 'REJECTED'
+                    ? `❌ REJECTED (${s.reject_level === 'ARTWORK' ? 'Artwork Level — new upload needed' : 'Sample Level — new sample needed'})`
+                    : s.decision}
+                  {s.decided_by ? ` — ${s.decided_by}` : ''}
+                </span>
+              </div>
+              <p className="text-xs text-gray-500">
+                Sent: {s.date_sent || '-'} · Est. arrival: {s.est_arrival_date || '-'} · {s.is_received ? 'Received' : 'Not yet received'}
+              </p>
+              {s.comments && <p className="text-xs text-gray-500 mt-1 italic">Note from Procurement: "{s.comments}"</p>}
+              {s.decision_comments && <p className="text-xs text-red-500 mt-1 italic">Marketing's reason: "{s.decision_comments}"</p>}
+            </div>
+          ))}
+        </div>
+      )}
+      </div>
+    )}
 
       {/* FR006, FR028 — Comments / reference attachments (all roles) */}
 

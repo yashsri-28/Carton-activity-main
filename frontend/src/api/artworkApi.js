@@ -94,5 +94,8 @@ export const sendPhysicalSample = (artworkId, { attachment, dateSent, estArrival
 export const receivePhysicalSample = (artworkId) =>
   api.post(`/api/artwork/${artworkId}/physical-sample/receive/`);
 
-export const decidePhysicalSample = (artworkId, decision, comments = '') =>
-  api.post(`/api/artwork/${artworkId}/physical-sample/decide/`, { decision, comments });
+// export const decidePhysicalSample = (artworkId, decision, comments = '') =>
+//   api.post(`/api/artwork/${artworkId}/physical-sample/decide/`, { decision, comments });
+
+export const decidePhysicalSample = (artworkId, decision, comments = '', rejectLevel = null) =>
+  api.post(`/api/artwork/${artworkId}/physical-sample/decide/`, { decision, comments, reject_level: rejectLevel });

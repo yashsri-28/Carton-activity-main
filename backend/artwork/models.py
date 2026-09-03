@@ -483,6 +483,18 @@ class WorkflowStep(models.Model):
         related_name="workflow_steps",
     )
 
+    # Which version this step belongs to — old versions' rejection
+    # history is NEVER deleted (same rule as the STANDARD flow's
+    # ArtworkApproval), so a full reject/re-upload trail always stays
+    # traceable, per version.
+    version = models.ForeignKey(
+        "ArtworkVersion",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="workflow_steps_for_version",
+    )
+
     workflow_key = models.CharField(max_length=50)
     step_code = models.CharField(max_length=50)
     step_type = models.CharField(max_length=30)   # APPROVAL / PHYSICAL_SAMPLE / SAMPLE_APPROVAL / MATCODE
@@ -526,10 +538,25 @@ class PhysicalSample(models.Model):
         ("REJECTED", "Rejected"),
     )
 
+    REJECT_LEVEL_CHOICES = (
+        ("SAMPLE", "Sample Level"),
+        ("ARTWORK", "Artwork Level"),
+    )
+
     artwork = models.ForeignKey(
         ArtworkRequest,
         on_delete=models.CASCADE,
         related_name="physical_samples",
+    )
+
+    # Which artwork version this sample was sent for — same
+    # history-preservation rule as everywhere else.
+    version = models.ForeignKey(
+        "ArtworkVersion",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="physical_samples_for_version",
     )
 
     # --- Sent by Procurement ---
@@ -557,7 +584,12 @@ class PhysicalSample(models.Model):
     received_on = models.DateTimeField(null=True, blank=True)
 
     # --- Marketing's decision on the received sample ---
+       # --- Marketing's decision on the received sample ---
     decision = models.CharField(max_length=10, choices=DECISION_CHOICES, default="PENDING")
+    # Permanently records WHICH TYPE of rejection this was — so
+    # history always shows "was this a sample-only reject, or a
+    # full-artwork reject" even long after the fact.
+    reject_level = models.CharField(max_length=10, choices=REJECT_LEVEL_CHOICES, null=True, blank=True)
     decision_comments = models.TextField(blank=True, default="")
     decided_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

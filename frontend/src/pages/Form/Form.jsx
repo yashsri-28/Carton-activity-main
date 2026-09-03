@@ -110,9 +110,8 @@ const TextareaField = ({ label, name, value, onChange, placeholder, maxWords = 1
         />
       </div>
       <div className="flex justify-end">
-        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-          isNearLimit ? 'bg-red-50 text-red-600' : 'bg-gray-50 text-gray-400'
-        }`}>
+        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${isNearLimit ? 'bg-red-50 text-red-600' : 'bg-gray-50 text-gray-400'
+          }`}>
           {wordCount}/{maxWords} words
         </span>
       </div>
@@ -122,8 +121,8 @@ const TextareaField = ({ label, name, value, onChange, placeholder, maxWords = 1
 
 // Wrapper
 const FormItem = ({ children }) => (
-// Wrapper
-// const FormItem = ({ children }) => (
+  // Wrapper
+  // const FormItem = ({ children }) => (
   <div className="w-full md:w-1/2 lg:w-1/3 px-4 mb-6">
     {children}
   </div>
@@ -135,6 +134,8 @@ function Form({
   companies,
   onCompanyChange,
   onRemarkChange,
+  onSubmitBoth,
+  onGussetSizeToggle,
   selectedFile,
   onFileChange,
   onRemoveFile,
@@ -205,10 +206,23 @@ function Form({
         )} */}
 
         {/* Bedsheet Form */}
+        {/* {formData.productCategory === "Bedsheet" && (
+          <BedsheetForm
+            formData={formData}
+            onInputChange={onInputChange}
+            selectedFile={selectedFile}
+            onFileChange={onFileChange}
+            onRemoveFile={onRemoveFile}
+            loading={loading}
+            hideAttachment={hideAttachment}
+          />
+        )} */}
+
         {formData.productCategory === "Bedsheet" && (
           <BedsheetForm
             formData={formData}
             onInputChange={onInputChange}
+            onGussetSizeToggle={onGussetSizeToggle}
             selectedFile={selectedFile}
             onFileChange={onFileChange}
             onRemoveFile={onRemoveFile}
@@ -533,9 +547,9 @@ function Form({
               placeholder="Yes/No + Arrange samples"
             />
           </div>
-          
+
           {/* Remark - Common field for all product categories */}
-                   {/* Remark - Common field for all product categories */}
+          {/* Remark - Common field for all product categories */}
           <div className="w-full md:w-1/2 lg:w-1/3 px-4 mb-6 self-start">
             <TextareaField
               label="Remark"
@@ -608,7 +622,7 @@ function Form({
                 </div>
               </div>
             </div>
-            
+
           )}
         </div>)}
 

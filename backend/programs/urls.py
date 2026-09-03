@@ -3,11 +3,16 @@ from .views import (submit_carton_program, get_activity_program_status_list,
                     copy_carton_program, recall, edit_carton_program, get_carton_program_details,
                     my_assigned_activities, accept_program, reject_program,
                     bulk_update_tqm_subprogram, upload_carton_program_attachment,
+                    upload_sample_attachment,
                     purchase_assigned_activities, purchase_submit_completion, purchase_accept_request,
                     accept_program_ppc,
                     warehouse_dashboard, update_warehouse_row,
                     submit_gusset_program, list_gusset_program, get_gusset_program_details,
-                    list_gusset_program, edit_gusset_program, edit_gusset_program, accept_gusset_program, reject_gusset_program,recalculate_preview,get_carton_calculations_ai
+                    list_gusset_program, edit_gusset_program, edit_gusset_program, accept_gusset_program, reject_gusset_program,recalculate_preview,get_carton_calculations_ai,
+                    submit_gusset_final,
+                    upload_gusset_program_attachment, upload_gusset_sample_attachment,
+                    update_gusset_specs,
+                    superadmin_list_all_programs, superadmin_delete_program, superadmin_delete_logs
                     )
 
 urlpatterns = [
@@ -107,6 +112,13 @@ urlpatterns = [
     
     
     path(
+        "carton-program/sample-attachment/upload/",
+        upload_sample_attachment,
+        name="upload_sample_attachment"
+    ),
+    
+    
+    path(
         "purchase/assigned-activities/",
         purchase_assigned_activities
     ),
@@ -134,17 +146,70 @@ urlpatterns = [
     ),
 
 
-    path("submit/", submit_gusset_program),
+    # path("submit/", submit_gusset_program),
 
-    path("list/", list_gusset_program),
+    # path("list/", list_gusset_program),
 
-    path("details/", get_gusset_program_details),
+    # path("details/", get_gusset_program_details),
     
-    # --------------------------------------------------
+    # # --------------------------------------------------
+    # # Submit Gusset Program
+    # # --------------------------------------------------
+    # path(
+    #     "submit/",
+    #     submit_gusset_program,
+    #     name="submit_gusset_program"
+    # ),
+
+    # # --------------------------------------------------
+    # # Get Gusset Program Details
+    # # --------------------------------------------------
+    # path(
+    #     "details/",
+    #     get_gusset_program_details,
+    #     name="get_gusset_program_details"
+    # ),
+
+    # # --------------------------------------------------
+    # # List Gusset Programs
+    # # --------------------------------------------------
+    # path(
+    #     "list/",
+    #     list_gusset_program,
+    #     name="list_gusset_programs"
+    # ),
+
+    # # --------------------------------------------------
+    # # Edit Gusset Program
+    # # --------------------------------------------------
+    # path(
+    #     "edit/",
+    #     edit_gusset_program,
+    #     name="edit_gusset_program"
+    # ),
+
+    # # --------------------------------------------------
+    # # Accept Gusset Program
+    # # --------------------------------------------------
+    # path(
+    #     "accept/",
+    #     accept_gusset_program,
+    #     name="accept_gusset_program"
+    # ),
+
+    # # --------------------------------------------------
+    # # Reject Gusset Program
+    # # --------------------------------------------------
+    # path(
+    #     "reject/",
+    #     reject_gusset_program,
+    #     name="reject_gusset_program"
+    # ),
+        # --------------------------------------------------
     # Submit Gusset Program
     # --------------------------------------------------
     path(
-        "submit/",
+        "gusset-program/submit/",
         submit_gusset_program,
         name="submit_gusset_program"
     ),
@@ -153,7 +218,7 @@ urlpatterns = [
     # Get Gusset Program Details
     # --------------------------------------------------
     path(
-        "details/",
+        "gusset-program/details/",
         get_gusset_program_details,
         name="get_gusset_program_details"
     ),
@@ -162,7 +227,7 @@ urlpatterns = [
     # List Gusset Programs
     # --------------------------------------------------
     path(
-        "list/",
+        "gusset-program/list/",
         list_gusset_program,
         name="list_gusset_programs"
     ),
@@ -171,7 +236,7 @@ urlpatterns = [
     # Edit Gusset Program
     # --------------------------------------------------
     path(
-        "edit/",
+        "gusset-program/edit/",
         edit_gusset_program,
         name="edit_gusset_program"
     ),
@@ -180,7 +245,7 @@ urlpatterns = [
     # Accept Gusset Program
     # --------------------------------------------------
     path(
-        "accept/",
+        "gusset-program/accept/",
         accept_gusset_program,
         name="accept_gusset_program"
     ),
@@ -189,12 +254,50 @@ urlpatterns = [
     # Reject Gusset Program
     # --------------------------------------------------
     path(
-        "reject/",
+        "gusset-program/reject/",
         reject_gusset_program,
         name="reject_gusset_program"
     ),
+
+    path(
+        "gusset-program/submit-final/",
+        submit_gusset_final,
+        name="submit_gusset_final"
+    ),
+
+    path(
+        "gusset-program/attachment/upload/",
+        upload_gusset_program_attachment,
+        name="upload_gusset_program_attachment"
+    ),
+
+    path(
+        "gusset-program/sample-attachment/upload/",
+        upload_gusset_sample_attachment,
+        name="upload_gusset_sample_attachment"
+    ),
+
+    path(
+        "gusset-program/specs/update/",
+        update_gusset_specs,
+        name="update_gusset_specs"
+    ),
+
+    path(
+        "superadmin/programs/list/",
+        superadmin_list_all_programs,
+        name="superadmin_list_all_programs"
+    ),
+
+    path(
+        "superadmin/programs/delete/",
+        superadmin_delete_program,
+        name="superadmin_delete_program"
+    ),
+
+    path(
+        "superadmin/delete-logs/",
+        superadmin_delete_logs,
+        name="superadmin_delete_logs"
+    ),
 ]
-
-
-    
-

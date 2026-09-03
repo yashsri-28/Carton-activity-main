@@ -108,9 +108,13 @@ class BedsheetProgramDetails(models.Model):
 
     fabric_tc = models.CharField(max_length=100, null=True, blank=True)
 
+    fold_length = models.CharField(max_length=50, null=True, blank=True)
+    fold_width = models.CharField(max_length=50, null=True, blank=True)
+
     folding_details = models.TextField(null=True, blank=True)
 
     required_pcs_per_polybag = models.IntegerField(null=True, blank=True)
+    elastic_required = models.BooleanField(default=False)   # 👈 NEW
 
     polybag_size = models.CharField(max_length=100, null=True, blank=True)
 
@@ -590,6 +594,7 @@ class SampleProgram(models.Model):
     sample = models.CharField(max_length=500)
 
     quality = models.CharField(max_length=500)
+    sample_code = models.CharField(max_length=255, null=True, blank=True)
 
     lbs_per_dz = models.DecimalField(max_digits=10, decimal_places=2)
 
@@ -609,7 +614,20 @@ class SampleProgram(models.Model):
     def __str__(self):
         return self.program_name
 
-  
+class SampleProgramAttachment(models.Model):
+
+    sample = models.ForeignKey(
+        SampleProgram,
+        on_delete=models.CASCADE,
+        related_name="attachments"
+    )
+
+    file = models.FileField(upload_to="sample_program_attachments/")
+    description = models.TextField(blank=True)
+    uploaded_on = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "sample_program_attachment" 
     
 class ActivityProgramStatus(models.Model):
 
@@ -633,7 +651,9 @@ class ActivityProgramStatus(models.Model):
     program = models.ForeignKey(
         CartonProgram,
         on_delete=models.CASCADE,
-        related_name="activity_statuses"
+        related_name="activity_statuses",
+        null=True,
+        blank=True
     )
     
     sent_to = models.ForeignKey(
@@ -642,6 +662,13 @@ class ActivityProgramStatus(models.Model):
         null=True,
         blank=True,
         related_name="assigned_programs"
+    )
+    gusset_program = models.ForeignKey(
+        "GussetProgram",
+        on_delete=models.CASCADE,
+        related_name="activity_statuses",
+        null=True,
+        blank=True
     )
     
     
@@ -667,10 +694,31 @@ class ActivityProgramStatus(models.Model):
 
     class Meta:
         db_table = "activity_program_status"
-        unique_together = ("activity", "program")
 
     def __str__(self):
-        return f"{self.activity} - {self.program.program_name} - {self.status}"
+        prog = self.program or self.gusset_program
+        prog_name = prog.program_name if prog else "Unknown"
+        return f"{self.activity} - {prog_name} - {self.status}"
+
+    @property
+    def program_name(self):
+        if self.program:
+            return self.program.program_name
+        if self.gusset_program:
+            return self.gusset_program.program_name
+        return None
+
+    @property
+    def customer_name(self):
+        if self.program:
+            return self.program.customer_name
+        if self.gusset_program:
+            return self.gusset_program.customer_name
+        return None
+
+    @property
+    def program_type_group(self):
+        return "gusset" if self.gusset_program_id else "carton"
 
 
 
@@ -705,6 +753,19 @@ class GussetProgram(models.Model):
     expected_date_confirmation = models.DateField(null=True, blank=True)
 
     # ---------------- PRODUCT ----------------
+
+    size = models.CharField(max_length=100, null=True, blank=True) 
+    # New field added to store custom size when user selects "Other"
+    other_size = models.CharField(max_length=100, null=True, blank=True)
+
+    fold_length = models.CharField(max_length=50, null=True, blank=True)
+    fold_width = models.CharField(max_length=50, null=True, blank=True)
+    gusset_bank = models.CharField(max_length=255, null=True, blank=True) 
+    
+    fold_length = models.CharField(max_length=50, null=True, blank=True)   
+    fold_width = models.CharField(max_length=50, null=True, blank=True)  
+
+    gusset_bank = models.CharField(max_length=255, null=True, blank=True)
 
     tc = models.CharField(max_length=100, null=True, blank=True)
 
@@ -797,27 +858,30 @@ class GussetProgramSpecification(models.Model):
         related_name="program_specifications"
     )
 
-    program = models.CharField(max_length=255)
-
-    style = models.CharField(max_length=255)
+    # Kept for backward compatibility with old rows / other code paths.
+    # No longer required for the new Gusset spec-row flow.
+    program = models.CharField(max_length=255, null=True, blank=True)
+    style = models.CharField(max_length=255, null=True, blank=True)
 
     width_in = models.FloatField(null=True, blank=True)
-
     width_cm = models.FloatField(null=True, blank=True)
-
     length_in = models.FloatField(null=True, blank=True)
-
     length_cm = models.FloatField(null=True, blank=True)
 
-    wt_per_unit = models.FloatField(null=True, blank=True)
-
-    gsm = models.FloatField(null=True, blank=True)
-
     unit_per_carton = models.IntegerField(null=True, blank=True)
-
     inner_pack_unit_qty = models.CharField(max_length=100, null=True, blank=True)
 
-    fold = models.CharField(max_length=100, null=True, blank=True)
+    # NEW fields for the size-checkbox driven spec rows
+    size = models.CharField(max_length=100, null=True, blank=True)
+    fold_length = models.CharField(max_length=50, null=True, blank=True)
+    fold_width = models.CharField(max_length=50, null=True, blank=True)
+    gusset_name = models.CharField(max_length=255, null=True, blank=True)
+    wt = models.FloatField(null=True, blank=True)
+    gsm = models.FloatField(null=True, blank=True)
+
+    # Editable later by TQM/PPC (after accept) — same concept as
+    # CartonProgramSubProgram's TQM-filled fields.
+    is_finalized_by_tqm = models.BooleanField(default=False)
 
     class Meta:
         db_table = "gusset_program_specifications"
@@ -855,3 +919,68 @@ class GussetSampleProgram(models.Model):
 
     class Meta:
         db_table = "gusset_sample_program"
+
+
+
+
+class GussetProgramAttachment(models.Model):
+    program = models.ForeignKey(
+        GussetProgram,
+        on_delete=models.CASCADE,
+        related_name="attachments"
+    )
+    file = models.FileField(upload_to="gusset_program_attachments/")
+    description = models.TextField(blank=True)
+    uploaded_on = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        db_table = "gusset_program_attachment"
+
+
+class GussetSampleAttachment(models.Model):
+    sample = models.ForeignKey(
+        GussetSampleProgram,
+        on_delete=models.CASCADE,
+        related_name="attachments"
+    )
+    file = models.FileField(upload_to="gusset_sample_attachments/")
+    description = models.TextField(blank=True)
+    uploaded_on = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        db_table = "gusset_sample_attachment"
+
+
+class SuperAdminDeleteLog(models.Model):
+    """
+    Dedicated audit log for SuperAdmin delete actions — separate from the
+    general activity_logs app, specifically for tracking permanent
+    deletions of Carton/Gusset programs.
+    """
+
+    PROGRAM_TYPE_CHOICES = (
+        ("CARTON", "Carton Program"),
+        ("GUSSET", "Gusset Program"),
+    )
+
+    program_type = models.CharField(max_length=20, choices=PROGRAM_TYPE_CHOICES)
+    program_id = models.IntegerField(help_text="ID of the deleted CartonProgram or GussetProgram")
+    program_name = models.CharField(max_length=255, null=True, blank=True)
+    customer_name = models.CharField(max_length=255, null=True, blank=True)
+    activity_program_status_id = models.IntegerField(null=True, blank=True)
+
+    deleted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="superadmin_deletions"
+    )
+    deleted_on = models.DateTimeField(auto_now_add=True)
+
+    snapshot = models.JSONField(null=True, blank=True)
+
+    class Meta:
+        db_table = "superadmin_delete_log"
+        ordering = ["-deleted_on"]
+
+    def __str__(self):
+        return f"{self.program_type} #{self.program_id} deleted by {self.deleted_by} on {self.deleted_on}"

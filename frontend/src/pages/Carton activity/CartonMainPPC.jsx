@@ -154,7 +154,11 @@ function CartonMainPPC() {
   };
 
   const handleView = (row) => {
-    navigate(`/carton/view/${row.activity_program_status_id}`);
+    if (row.program_type_group === 'gusset') {
+      navigate(`/gusset/view/${row.activity_program_status_id}`);
+    } else {
+      navigate(`/carton/view/${row.activity_program_status_id}`);
+    }
   };
 
   const handleAccept = async (row) => {
@@ -228,6 +232,19 @@ function CartonMainPPC() {
       render: (row) => (
         <span className={`font-medium ${getStatusTextStyle(row.status)}`}>
           {row.status || 'Unknown'}
+        </span>
+      ),
+    },
+    {
+      key: 'program_type_group',
+      header: 'Type',
+      render: (row) => (
+        <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
+          row.program_type_group === 'gusset'
+            ? 'bg-purple-100 text-purple-700'
+            : 'bg-blue-100 text-blue-700'
+        }`}>
+          {row.program_type_group === 'gusset' ? 'Gusset' : 'Carton'}
         </span>
       ),
     },

@@ -350,6 +350,7 @@
 //             <DetailItem label="Required Sets/Carton" value={bedsheet.required_sets_per_carton} />
 //             <DetailItem label="PolyFold Condition" value={bedsheet.polyfold_condition} />
 //             <DetailItem label="Filled Product GSM" value={bedsheet.filled_product_gsm} />
+{/* <DetailItem label="Elastic Required" value={bedsheet.elastic_required} boolean /> */}
 //           </div>
 //         </div>
 //       );
@@ -1050,8 +1051,7 @@ function CartonView() {
   }, [id]);
 
   const handleAttachmentClick = async (attachment, index) => {
-    // const fileUrl = attachment.file_url;
-    const fileUrl = attachment.file_url?.replace(/^http:\/\//i, 'https://');
+    const fileUrl = attachment.file_url;
     const attachmentId = attachment.id || index;
     if (!fileUrl) return;
     setCheckingLink(attachmentId);
@@ -1151,7 +1151,7 @@ function CartonView() {
       const response = await api.post('/api/subprogram/recalculate-preview/', payload);
       const results = response.data.results || [];
 
-            setSubprograms(prev => prev.map(sp => {
+      setSubprograms(prev => prev.map(sp => {
         const match = results.find(r => r.subprogram_id === sp.subprogram_id);
         if (!match) return sp;
 
@@ -1387,7 +1387,15 @@ function CartonView() {
             <DetailItem label="Special Packing Requirement" value={bedsheet.special_packing_requirement} />
             <DetailItem label="Packing Type" value={bedsheet.packing_type} />
             <DetailItem label="Product Dimension" value={bedsheet.product_dimension} />
-            <DetailItem label="Fold Size" value={bedsheet.fold_size} />
+            {/* <DetailItem label="Fold Size" value={bedsheet.fold_size} /> */}
+            <DetailItem
+              label="Fold Length x Fold Width"
+              value={
+                bedsheet.fold_length && bedsheet.fold_width
+                  ? `${bedsheet.fold_length} x ${bedsheet.fold_width}`
+                  : (bedsheet.fold_length || bedsheet.fold_width || null)
+              }
+            />
             <DetailItem label="Blister Packing Required" value={bedsheet.blister_packing_required} boolean />
             <DetailItem label="Blister Packing Details" value={bedsheet.blister_packing_details} />
             <DetailItem label="Bag Type" value={bedsheet.bag_type} />
@@ -1395,6 +1403,7 @@ function CartonView() {
             <DetailItem label="Required Sets/Carton" value={bedsheet.required_sets_per_carton} />
             <DetailItem label="PolyFold Condition" value={bedsheet.polyfold_condition} />
             <DetailItem label="Filled Product GSM" value={bedsheet.filled_product_gsm} />
+            <DetailItem label="Elastic Required" value={bedsheet.elastic_required} boolean />
           </div>
         </div>
       );
@@ -1402,7 +1411,7 @@ function CartonView() {
 
     // if (programType === 'TERRY_TOWEL' && details.terry_details) {
     //   const terry = details.terry_details;
-        if ((programType === 'TERRY_TOWEL' || programType === 'TOWEL') && details.terry_details) {
+    if ((programType === 'TERRY_TOWEL' || programType === 'TOWEL') && details.terry_details) {
       const terry = details.terry_details;
       return (
         <div className="bg-green-50 p-5 rounded-lg border border-green-100 mt-4">
@@ -1959,6 +1968,8 @@ function CartonView() {
                     { label: "Width (Cm)", key: "width_cm" },
                     { label: "Length (In)", key: "length_in" },
                     { label: "Length (Cm)", key: "length_cm" },
+                    { label: "Sample Code", key: "sample_code" },
+                    { label: "Attachment", key: "attachments", type: "attachment_list" },
                   ]}
                   data={samples}
                   type="flat"

@@ -16,6 +16,7 @@ from drf_yasg import openapi
 
 from programs.services.carton_calculator import CartonCalculator
 from activity_logs.utils import create_log
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,11 @@ from .models import (
     BathRobeProgramDetails,
     GussetProgram,
     GussetProgramSpecification,
-    GussetSampleProgram
+    GussetSampleProgram,
+    SampleProgramAttachment,
+    GussetProgramAttachment,
+    GussetSampleAttachment,
+    SuperAdminDeleteLog,
     
 )
 
@@ -44,61 +49,57 @@ from .models import (
 from programs.services.notification_service import NotificationService
 
 
+from django.utils import timezone as django_timezone
+import pytz
 
+def to_ist_str(dt):
+    """Convert a UTC datetime to IST string, or return None."""
+    if not dt:
+        return None
+    ist = pytz.timezone("Asia/Kolkata")
+    return django_timezone.localtime(dt, ist).strftime("%d-%m-%Y %H:%M:%S")
 
 
 
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 
+
+
+
 def clean_kwargs(model, data: dict) -> dict:
     """
     Filters a dict down to only the keys that are actual fields
     on the given model, so stray/unexpected keys from the request
     don't blow up .objects.create() with a TypeError.
-
-    Also auto-converts any DecimalField values using to_decimal(),
-    so a plain int 0 / '' / None never reaches the SQL Server driver
-    and causes 'Invalid precision value (0)'.
     """
     if not isinstance(data, dict):
         return {}
 
-    field_map = {
-        f.name: f
-        for f in model._meta.get_fields()
-        if hasattr(f, "get_internal_type")
+    valid_fields = {f.name for f in model._meta.get_fields()}
+
+    return {
+        key: value
+        for key, value in data.items()
+        if key in valid_fields
     }
-
-    cleaned = {}
-    for key, value in data.items():
-        if key not in field_map:
-            continue
-
-        field = field_map[key]
-
-        if field.get_internal_type() == "DecimalField":
-            cleaned[key] = to_decimal(value)
-        else:
-            cleaned[key] = value
-
-    return cleaned
 def clean_int(value):
     """Convert '' or None to None, otherwise return the value as-is."""
     if value in (None, "", "null"):
         return None
     return value
 
-from decimal import Decimal, InvalidOperation
 
-def to_decimal(value, default="0.00"):
-    """Safely convert incoming value to Decimal, avoiding SQL Server precision errors."""
-    try:
-        if value in (None, ""):
-            return Decimal(default)
-        return Decimal(str(value))
-    except (InvalidOperation, TypeError, ValueError):
-        return Decimal(default)
+def to_bool(value):
+    """
+    Converts frontend 'Yes'/'No' string into a proper Python boolean.
+    Returns False if value is None or anything other than 'Yes'.
+    """
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    return str(value).strip().lower() == "yes"
 # ------------------------------------------------------------------
 # API: Submit Carton Program
 # Description:
@@ -132,7 +133,10 @@ bedsheet_details_schema = openapi.Schema(
         "packing_type": openapi.Schema(type=openapi.TYPE_STRING),
         "product_dimension": openapi.Schema(type=openapi.TYPE_STRING),
         "fold_size": openapi.Schema(type=openapi.TYPE_STRING),
+        "fold_length": openapi.Schema(type=openapi.TYPE_STRING),
+        "fold_width": openapi.Schema(type=openapi.TYPE_STRING),
         "blister_packing_required": openapi.Schema(type=openapi.TYPE_BOOLEAN),
+        "elastic_required": openapi.Schema(type=openapi.TYPE_BOOLEAN),
         "blister_packing_details": openapi.Schema(type=openapi.TYPE_STRING),
         "bag_type": openapi.Schema(type=openapi.TYPE_STRING),
         "special_box_required": openapi.Schema(type=openapi.TYPE_STRING),
@@ -405,13 +409,15 @@ def submit_carton_program(request):
     data = request.data
 
     activity_name = data.get("activity_name")
-    program_name = data.get("program_name") or ""
+    program_name = data.get("program_name")
     program_type = data.get("program_type", "TOWEL")
     sent_to_user_id = data.get("sent_to_user_id")
     btn = data.get("btn", "")
 
     if not activity_name:
         return Response({"error": "activity_name is required"}, status=400)
+    if not program_name:
+        return Response({"error": "program_name is required"}, status=400)
 
     valid_types = {"TOWEL", "BEDSHEET", "TERRY_TOWEL", "BATH_ROBE"}
     if program_type not in valid_types:
@@ -454,27 +460,21 @@ def submit_carton_program(request):
 
     # 2️⃣ PRODUCT-SPECIFIC DETAILS
     if program_type == "BEDSHEET":
-        bedsheet_kwargs = clean_kwargs(BedsheetProgramDetails, data.get("bedsheet_details", {}))
-        bedsheet_kwargs["filled_product_gsm"] = to_decimal(bedsheet_kwargs.get("filled_product_gsm"))
         BedsheetProgramDetails.objects.create(
             carton_program=carton_program,
-            **bedsheet_kwargs
+            **clean_kwargs(BedsheetProgramDetails, data.get("bedsheet_details", {}))
         )
     elif program_type in ("TERRY_TOWEL", "TOWEL"):
         # Terry Towel fields are merged into the default Towel form,
         # so TOWEL programs also get a TerryTowelProgramDetails row.
-        terry_kwargs = clean_kwargs(TerryTowelProgramDetails, data.get("terry_details", {}))
-        terry_kwargs["towel_weight_per_piece"] = to_decimal(terry_kwargs.get("towel_weight_per_piece"))
         TerryTowelProgramDetails.objects.create(
             carton_program=carton_program,
-            **terry_kwargs
+            **clean_kwargs(TerryTowelProgramDetails, data.get("terry_details", {}))
         )
     elif program_type == "BATH_ROBE":
-        bathrobe_kwargs = clean_kwargs(BathRobeProgramDetails, data.get("bathrobe_details", {}))
-        bathrobe_kwargs["bath_robe_weight"] = to_decimal(bathrobe_kwargs.get("bath_robe_weight"))
         BathRobeProgramDetails.objects.create(
             carton_program=carton_program,
-            **bathrobe_kwargs
+            **clean_kwargs(BathRobeProgramDetails, data.get("bathrobe_details", {}))
         )
 
     # 3️⃣ ACTIVITY STATUS
@@ -490,70 +490,53 @@ def submit_carton_program(request):
     # 4️⃣ SUBPROGRAMS
     calc = CartonCalculator()
     for sp in subprograms:
-        result = calc.compute(sp)
+        try:
+            result = calc.compute(sp)
+        except ValueError as e:
+            return Response(
+                {"error": f"{e} (program: {sp.get('program_name') or sp.get('style') or 'unnamed'})"},
+                status=400
+            )
+
         CartonProgramSubProgram.objects.create(
             carton_program=carton_program,
             program_name=sp.get("program_name"),
             style=sp.get("style"),
-
-            width_in=to_decimal(sp.get("width_in")),
-            length_in=to_decimal(sp.get("length_in")),
-            width_cm=to_decimal(sp.get("width_cm")),
-            length_cm=to_decimal(sp.get("length_cm")),
-
-            gsm=to_decimal(sp.get("gsm")),
-            wt_per_unit=to_decimal(result.get("weight")),
-
-            unit_per_carton=sp.get("unit_per_carton") or 0,
+            width_in=sp.get("width_in"),
+            length_in=sp.get("length_in"),
+            gsm=sp.get("gsm"),
+            wt_per_unit=result["weight"],
+            unit_per_carton=sp.get("unit_per_carton"),
             inner_pack_unit_qty=sp.get("inner_pack_unit_qty"),
             fold=sp.get("fold"),
-            pcs_per_set=sp.get("pcs_per_set") or None,
+            pcs_per_set=sp.get("pcs_per_set"),
             remark=sp.get("remark"),
-
-            folded_length=to_decimal(result.get("folded_length")),
-            folded_width=to_decimal(result.get("folded_width")),
-
-            carton_length=to_decimal(result.get("carton", {}).get("length")),
-            carton_width=to_decimal(result.get("carton", {}).get("width")),
-            carton_height=to_decimal(result.get("carton", {}).get("height")),
-
-            # TQM stage ke fields — abhi khali hain, isliye explicitly 0.00 do,
-            # None mat chodo warna SQL Server crash karega
-            pdq_length=to_decimal(sp.get("pdq_length")),
-            pdq_width=to_decimal(sp.get("pdq_width")),
-            pdq_height=to_decimal(sp.get("pdq_height")),
-            net_wt_pdq=to_decimal(sp.get("net_wt_pdq")),
-            pallet_wt_pdq=to_decimal(sp.get("pallet_wt_pdq")),
-
-            pallet_length=to_decimal(sp.get("pallet_length")),
-            pallet_width=to_decimal(sp.get("pallet_width")),
-            pallet_height=to_decimal(sp.get("pallet_height")),
-
-            packed_pb_length=to_decimal(sp.get("packed_pb_length")),
-            packed_pb_width=to_decimal(sp.get("packed_pb_width")),
-            packed_pb_height=to_decimal(sp.get("packed_pb_height")),
-
-            gross_wt_per_carton=to_decimal(sp.get("gross_wt_per_carton")),
-            saved_cbm_per_carton=to_decimal(sp.get("saved_cbm_per_carton")),
-            saved_net_wt_carton=to_decimal(sp.get("saved_net_wt_carton")),
+            folded_length=result["folded_length"],
+            folded_width=result["folded_width"],
+            carton_length=result["carton"]["length"],
+            carton_width=result["carton"]["width"],
+            carton_height=result["carton"]["height"],
         )
 
     # 5️⃣ SAMPLE PROGRAMS
+    sample_ids = []
     for sm in samples:
-        SampleProgram.objects.create(
+        sample_obj = SampleProgram.objects.create(
             carton_program=carton_program,
             program_name=sm.get("program_name"),
+            sample_code=sm.get("sample_code"),
             size=sm.get("size"),
             sample=sm.get("sample"),
             quality=sm.get("quality"),
-            lbs_per_dz=to_decimal(sm.get("lbs_per_dz")),
-            gsm=to_decimal(sm.get("gsm")),
+            lbs_per_dz=sm.get("lbs_per_dz"),
+            gsm=sm.get("gsm"),
             shade=sm.get("shade"),
-            width_in=to_decimal(sm.get("width_in")),
-            length_in=to_decimal(sm.get("length_in")),
-            width_cm=to_decimal(sm.get("width_cm")),
-            length_cm=to_decimal(sm.get("length_cm")),
+            width_in=sm.get("width_in"),
+            length_in=sm.get("length_in"),
+            width_cm=sm.get("width_cm"),
+            length_cm=sm.get("length_cm"),
         )
+        sample_ids.append(sample_obj.id)
 
     # 6️⃣ LOGGING
     create_log(
@@ -587,7 +570,8 @@ def submit_carton_program(request):
         {
             "message": "Carton Program Saved Successfully",
             "program_id": carton_program.id,
-            "program_type": program_type
+            "program_type": program_type,
+            "sample_ids": sample_ids
         },
         status=201
     )
@@ -849,31 +833,31 @@ activity_status_response_schema = openapi.Schema(
 @permission_classes([IsAuthenticated])
 def get_activity_program_status_list(request):
     """
-    Fetch all activity-program status records
+    Fetch all activity-program status records (covers both CartonProgram
+    and GussetProgram rows, since ActivityProgramStatus can point to either)
     """
 
     records = ActivityProgramStatus.objects.select_related(
-        "program"
+        "program", "gusset_program"
     ).filter(created_by=request.user)
 
     response_data = []
 
     for obj in records:
+        # Skip corrupted rows that point to neither type
+        if not obj.program_id and not obj.gusset_program_id:
+            continue
+
         response_data.append({
             "id": obj.id,
             "activity": obj.activity,
 
-            "program_id": obj.program.id,
-            "program_name": obj.program.program_name,
-            "customer_name": obj.program.customer_name,
+            "program_id": obj.gusset_program_id or obj.program_id,
+            "program_name": obj.program_name,
+            "customer_name": obj.customer_name,
+            "program_type_group": obj.program_type_group,
 
             "status": obj.status,
-
-            # "created_date": obj.created_on.strftime("%d-%m-%Y")
-            # if obj.created_on else None,
-
-            # "last_action_date": obj.updated_on.strftime("%d-%m-%Y")
-            # if obj.updated_on else None,
 
             "created_date": obj.created_on.strftime("%d-%m-%Y %H:%M:%S")
             if obj.created_on else None,
@@ -881,7 +865,6 @@ def get_activity_program_status_list(request):
             "last_action_date": obj.updated_on.strftime("%d-%m-%Y %H:%M:%S")
             if obj.updated_on else None,
 
-            
             "rejection_reason": obj.rejection_reason
 
         })
@@ -1349,6 +1332,8 @@ def edit_carton_program(request):
         details.packing_type = bd.get("packing_type")
         details.product_dimension = bd.get("product_dimension")
         details.fold_size = bd.get("fold_size")
+        details.fold_length = bd.get("fold_length")
+        details.fold_width = bd.get("fold_width")
         details.blister_packing_required = bd.get("blister_packing_required")
         details.blister_packing_details = bd.get("blister_packing_details")
         details.bag_type = bd.get("bag_type")
@@ -1356,6 +1341,7 @@ def edit_carton_program(request):
         details.required_sets_per_carton = bd.get("required_sets_per_carton")
         details.polyfold_condition = bd.get("polyfold_condition")
         details.filled_product_gsm = bd.get("filled_product_gsm")
+        details.elastic_required = bd.get("elastic_required", False) 
 
         details.save()
 
@@ -1599,6 +1585,8 @@ def get_carton_program_details(request):
                 "packing_type": bd.packing_type,
                 "product_dimension": bd.product_dimension,
                 "fold_size": bd.fold_size,
+                "fold_length": bd.fold_length,
+                "fold_width": bd.fold_width,
                 "blister_packing_required": bd.blister_packing_required,
                 "blister_packing_details": bd.blister_packing_details,
                 "bag_type": bd.bag_type,
@@ -1606,6 +1594,7 @@ def get_carton_program_details(request):
                 "required_sets_per_carton": bd.required_sets_per_carton,
                 "polyfold_condition": bd.polyfold_condition,
                 "filled_product_gsm": bd.filled_product_gsm,
+                "elastic_required": bd.elastic_required, 
             }
         except:
             bedsheet_details = {}
@@ -1724,8 +1713,20 @@ def get_carton_program_details(request):
     )
 
     for sm in samples:
+        sample_attachments = [
+            {
+                "id": att.id,
+                "file_url": request.build_absolute_uri(att.file.url),
+                "description": att.description,
+                "uploaded_on": att.uploaded_on.strftime("%d-%m-%Y")
+            }
+            for att in sm.attachments.all()
+        ]
+
         sample_list.append({
+            "sample_id": sm.id,
             "program_name": sm.program_name,
+            "sample_code": sm.sample_code,
             "size": sm.size,
             "sample": sm.sample,
             "quality": sm.quality,
@@ -1736,6 +1737,7 @@ def get_carton_program_details(request):
             "length_in": sm.length_in,
             "width_cm": sm.width_cm,
             "length_cm": sm.length_cm,
+            "attachments": sample_attachments,
         })
 
     # --------------------------------------------------
@@ -2164,7 +2166,7 @@ my_assigned_activities_response_schema = openapi.Schema(
 def my_assigned_activities(request):
 
     records = ActivityProgramStatus.objects.select_related(
-        "program"
+        "program", "gusset_program"
     ).filter(
         sent_to=request.user
     ).exclude(
@@ -2174,12 +2176,16 @@ def my_assigned_activities(request):
     data = []
 
     for r in records:
+        if not r.program_id and not r.gusset_program_id:
+            continue
+
         data.append({
             "activity_program_status_id": r.id,
             "activity": r.activity,
-            "program_name": r.program.program_name,
-            "customer_name": r.program.customer_name,
-            "program_type": r.program.program_type,
+            "program_name": r.program_name,
+            "customer_name": r.customer_name,
+            "program_type": r.program.program_type if r.program_id else "GUSSET",
+            "program_type_group": r.program_type_group,
             "status": r.status,
             "created_on": r.created_on.strftime("%d-%m-%Y %H:%M:%S")
             if r.created_on else None,
@@ -2237,7 +2243,7 @@ def accept_program(request):
         module_name="Activity Status",
         record_id=aps.id,
         action="Accepted",
-        message=f"Program {aps.program.program_name} accepted",
+        message=f"Program {aps.program_name} accepted",
         user=request.user
     )
 
@@ -2308,7 +2314,7 @@ def accept_program_ppc(request):
         module_name="Activity Status",
         record_id=aps.id,
         action="Accepted_PPC",
-        message=f"Program {aps.program.program_name} accepted by ppc",
+        message=f"Program {aps.program_name} accepted by ppc",
         user=request.user
     )
 
@@ -3501,6 +3507,10 @@ submit_gusset_schema = openapi.Schema(
         "customer_name": openapi.Schema(type=openapi.TYPE_STRING),
 
         "program_name": openapi.Schema(type=openapi.TYPE_STRING),
+        "other_size": openapi.Schema(type=openapi.TYPE_STRING),
+        "fold_length": openapi.Schema(type=openapi.TYPE_STRING),
+        "fold_width": openapi.Schema(type=openapi.TYPE_STRING),
+        "gusset_bank": openapi.Schema(type=openapi.TYPE_STRING),
 
         "tc": openapi.Schema(type=openapi.TYPE_STRING),
         "weave": openapi.Schema(type=openapi.TYPE_STRING),
@@ -3517,7 +3527,7 @@ submit_gusset_schema = openapi.Schema(
 
         "fold_size_inches": openapi.Schema(type=openapi.TYPE_STRING),
 
-        "cardboard_required": openapi.Schema(type=openapi.TYPE_BOOLEAN),
+        "polybag_required": openapi.Schema(type=openapi.TYPE_BOOLEAN),
 
         "fold_type": openapi.Schema(type=openapi.TYPE_STRING),
 
@@ -3569,6 +3579,104 @@ submit_gusset_schema = openapi.Schema(
 # ------------------------------------------------------------------
 
 
+# @swagger_auto_schema(
+#     method="post",
+#     operation_summary="Submit Gusset Program",
+#     request_body=submit_gusset_schema,
+#     responses={
+#         201: "Program Created",
+#         400: "Bad Request"
+#     }
+# )
+
+# @api_view(["POST"])
+# @permission_classes([IsAuthenticated])
+# def submit_gusset_program(request):
+
+#     data = request.data
+
+#     specs = data.get("program_specifications", [])
+#     samples = data.get("samples", [])
+
+#     gusset = GussetProgram.objects.create(
+
+#         customer_name=data.get("customer_name"),
+#         program_name=data.get("program_name"),
+
+#         tc=data.get("tc"),
+#         weave=data.get("weave"),
+#         product_group=data.get("product_group"),
+#         size=data.get("size"),
+#         down=data.get("down"),
+
+#         value_addition_flat_sheet=data.get("value_addition_flat_sheet"),
+#         value_addition_duvet_cover=data.get("value_addition_duvet_cover"),
+#         value_addition_fitted_sheet=data.get("value_addition_fitted_sheet"),
+#         value_addition_pillowcase=data.get("value_addition_pillowcase"),
+
+#         fold_size_inches=data.get("fold_size_inches"),
+
+#         cardboard_required=data.get("cardboard_required"),
+#         fold_type=data.get("fold_type"),
+#         ply=data.get("ply"),
+#         fold_on_side=data.get("fold_on_side"),
+
+#         reference_program=data.get("reference_program"),
+#         comments=data.get("comments"),
+
+#         polybag_required=data.get("polybag_required"),
+#         material_type=data.get("material_type"),
+#         opening_type=data.get("opening_type"),
+#         opening_on_side=data.get("opening_on_side"),
+#         inlay_or_belly_band=data.get("inlay_or_belly_band"),
+#         polybag_type=data.get("polybag_type"),
+
+#         created_by=request.user
+#     )
+
+#     # Program Specs
+
+#     for sp in specs:
+
+#         GussetProgramSpecification.objects.create(
+#             gusset_program=gusset,
+#             program=sp.get("program"),
+#             style=sp.get("style"),
+#             width_in=sp.get("width_in"),
+#             width_cm=sp.get("width_cm"),
+#             length_in=sp.get("length_in"),
+#             length_cm=sp.get("length_cm"),
+#             wt_per_unit=sp.get("wt_per_unit"),
+#             gsm=sp.get("gsm"),
+#             unit_per_carton=sp.get("unit_per_carton"),
+#             inner_pack_unit_qty=sp.get("inner_pack_unit_qty"),
+#             fold=sp.get("fold"),
+#         )
+
+#     # Sample Programs
+
+#     for sm in samples:
+
+#         GussetSampleProgram.objects.create(
+#             gusset_program=gusset,
+#             program_name=sm.get("program_name"),
+#             size=sm.get("size"),
+#             sample=sm.get("sample"),
+#             quality=sm.get("quality"),
+#             lbs_per_dz=sm.get("lbs_per_dz"),
+#             gsm=sm.get("gsm"),
+#             shade=sm.get("shade"),
+#             width_in=sm.get("width_in"),
+#             length_in=sm.get("length_in"),
+#             width_cm=sm.get("width_cm"),
+#             length_cm=sm.get("length_cm"),
+#         )
+
+#     return Response({
+#         "message": "Gusset Program Created",
+#         "program_id": gusset.id
+#     })
+    
 @swagger_auto_schema(
     method="post",
     operation_summary="Submit Gusset Program",
@@ -3578,25 +3686,44 @@ submit_gusset_schema = openapi.Schema(
         400: "Bad Request"
     }
 )
-
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@transaction.atomic
 def submit_gusset_program(request):
 
     data = request.data
 
+    # Step 15a: Validate required fields
+    customer_name = data.get("customer_name")
+    program_name = data.get("program_name")
+    activity_name = data.get("activity_name")
+    sent_to_user_id = data.get("sent_to_user_id")
+    btn = data.get("btn", "")
+
+    if not customer_name:
+        return Response({"error": "customer_name is required"}, status=400)
+    if not program_name:
+        return Response({"error": "program_name is required"}, status=400)
+    if not activity_name:
+        return Response({"error": "activity_name is required"}, status=400)
+
     specs = data.get("program_specifications", [])
     samples = data.get("samples", [])
 
-    gusset = GussetProgram.objects.create(
+    # Step 15b: Handle "Other" size logic
+    gusset_size = data.get("size")
+    other_size = data.get("other_size") if gusset_size == "Other" else None
 
-        customer_name=data.get("customer_name"),
-        program_name=data.get("program_name"),
+    # Step 15c: Create main GussetProgram record
+    gusset = GussetProgram.objects.create(
+        customer_name=customer_name,
+        program_name=program_name,
 
         tc=data.get("tc"),
         weave=data.get("weave"),
         product_group=data.get("product_group"),
-        size=data.get("size"),
+        size=gusset_size,
+        other_size=other_size,
         down=data.get("down"),
 
         value_addition_flat_sheet=data.get("value_addition_flat_sheet"),
@@ -3605,8 +3732,12 @@ def submit_gusset_program(request):
         value_addition_pillowcase=data.get("value_addition_pillowcase"),
 
         fold_size_inches=data.get("fold_size_inches"),
+        fold_length=data.get("fold_length"),
+        fold_width=data.get("fold_width"),
 
-        cardboard_required=data.get("cardboard_required"),
+        gusset_bank=data.get("gusset_bank"),
+
+        cardboard_required=to_bool(data.get("cardboard_required")),
         fold_type=data.get("fold_type"),
         ply=data.get("ply"),
         fold_on_side=data.get("fold_on_side"),
@@ -3614,7 +3745,7 @@ def submit_gusset_program(request):
         reference_program=data.get("reference_program"),
         comments=data.get("comments"),
 
-        polybag_required=data.get("polybag_required"),
+        polybag_required=to_bool(data.get("polybag_required")),
         material_type=data.get("material_type"),
         opening_type=data.get("opening_type"),
         opening_on_side=data.get("opening_on_side"),
@@ -3624,30 +3755,23 @@ def submit_gusset_program(request):
         created_by=request.user
     )
 
-    # Program Specs
-
+    # Step 15d: Save program specifications (loop)
+    # New format: each spec row is {size, fold_length, fold_width, gusset_name, wt, gsm}
     for sp in specs:
-
         GussetProgramSpecification.objects.create(
             gusset_program=gusset,
-            program=sp.get("program"),
-            style=sp.get("style"),
-            width_in=sp.get("width_in"),
-            width_cm=sp.get("width_cm"),
-            length_in=sp.get("length_in"),
-            length_cm=sp.get("length_cm"),
-            wt_per_unit=sp.get("wt_per_unit"),
+            size=sp.get("size"),
+            fold_length=sp.get("fold_length"),
+            fold_width=sp.get("fold_width"),
+            gusset_name=sp.get("gusset_name"),
+            wt=sp.get("wt"),
             gsm=sp.get("gsm"),
-            unit_per_carton=sp.get("unit_per_carton"),
-            inner_pack_unit_qty=sp.get("inner_pack_unit_qty"),
-            fold=sp.get("fold"),
         )
 
-    # Sample Programs
-
+    # Step 15e: Save sample programs (loop)
+    sample_ids = []
     for sm in samples:
-
-        GussetSampleProgram.objects.create(
+        sample_obj = GussetSampleProgram.objects.create(
             gusset_program=gusset,
             program_name=sm.get("program_name"),
             size=sm.get("size"),
@@ -3661,13 +3785,53 @@ def submit_gusset_program(request):
             width_cm=sm.get("width_cm"),
             length_cm=sm.get("length_cm"),
         )
+        sample_ids.append(sample_obj.id)
 
-    return Response({
-        "message": "Gusset Program Created",
-        "program_id": gusset.id
-    })
-    
+    # Step 15f: Create ActivityProgramStatus row — this is what plugs the
+    # gusset program into the same pipeline (assign/accept/reject/recall)
+    # that CartonProgram already uses.
+    status_value = "Draft" if btn.lower() == "save as draft" else "Pending"
 
+    aps = ActivityProgramStatus.objects.create(
+        activity=activity_name,
+        gusset_program=gusset,
+        program=None,
+        status=status_value,
+        sent_to_id=sent_to_user_id,
+        created_by=request.user
+    )
+
+    # Step 15g: Create audit log entry
+    create_log(
+        module_name="GussetProgram",
+        record_id=gusset.id,
+        action="Created",
+        message=f"Gusset program '{program_name}' created",
+        user=request.user
+    )
+
+    # Step 15h: Notify assigned user (best-effort, same pattern as carton submit)
+    User = get_user_model()
+    notification = NotificationService()
+
+    if status_value != "Draft" and sent_to_user_id:
+        try:
+            User.objects.get(id=sent_to_user_id)
+            notification.send_tqm_notification(gusset)
+        except User.DoesNotExist:
+            logger.warning("sent_to_user_id %s not found for gusset program %s", sent_to_user_id, gusset.id)
+        except Exception:
+            logger.exception("Failed to send notification for gusset program %s", gusset.id)
+
+    return Response(
+        {
+            "message": "Gusset Program Created",
+            "program_id": gusset.id,
+            "activity_program_status_id": aps.id,
+            "sample_ids": sample_ids
+        },
+        status=201
+    )
 
 
 # ------------------------------------------------------------------
@@ -3766,57 +3930,155 @@ gusset_details_request_schema = openapi.Schema(
 # ------------------------------------------------------------------
 
 
+# @swagger_auto_schema(
+#     method="post",
+#     operation_summary="Get Gusset Program Details",
+#     request_body=gusset_details_request_schema,
+# )
+
+
+# @api_view(["POST"])
+# @permission_classes([IsAuthenticated])
+# def get_gusset_program_details(request):
+
+#     program_id = request.data.get("program_id")
+
+#     gusset = GussetProgram.objects.get(id=program_id)
+
+#     specs = []
+#     samples = []
+
+#     for s in gusset.program_specifications.all():
+
+#         specs.append({
+#             "program": s.program,
+#             "style": s.style,
+#             "width_in": s.width_in,
+#             "width_cm": s.width_cm,
+#             "length_in": s.length_in,
+#             "length_cm": s.length_cm,
+#             "wt_per_unit": s.wt_per_unit,
+#             "gsm": s.gsm,
+#             "unit_per_carton": s.unit_per_carton,
+#             "inner_pack_unit_qty": s.inner_pack_unit_qty,
+#             "fold": s.fold,
+            
+
+#         })
+
+#     for sm in gusset.samples.all():
+
+#         samples.append({
+#             "program_name": sm.program_name,
+#             "size": sm.size,
+#             "sample": sm.sample,
+#             "quality": sm.quality,
+#             "gsm": sm.gsm,
+#             "shade": sm.shade
+#         })
+
+#     return Response({
+
+#         "program_id": gusset.id,
+
+#         "customer_name": gusset.customer_name,
+#         "program_name": gusset.program_name,
+
+#         "tc": gusset.tc,
+#         "weave": gusset.weave,
+#         "product_group": gusset.product_group,
+#         "size": gusset.size,
+#         "expected_date_program": gusset.expected_date_confirmation,
+
+#         "program_specifications": specs,
+
+#         "samples": samples
+#     })
+    
 @swagger_auto_schema(
     method="post",
     operation_summary="Get Gusset Program Details",
     request_body=gusset_details_request_schema,
 )
-
-
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def get_gusset_program_details(request):
 
-    program_id = request.data.get("program_id")
+    # Step 24: Accept activity_program_status_id (same key used everywhere
+    # else in the pipeline) instead of a raw gusset program_id.
+    aps_id = request.data.get("activity_program_status_id")
 
-    gusset = GussetProgram.objects.get(id=program_id)
+    if not aps_id:
+        return Response({"error": "activity_program_status_id is required"}, status=400)
+
+    try:
+        aps = ActivityProgramStatus.objects.select_related("gusset_program").get(id=aps_id)
+    except ActivityProgramStatus.DoesNotExist:
+        return Response({"error": "Invalid activity_program_status_id"}, status=404)
+
+    if not aps.gusset_program_id:
+        return Response({"error": "This activity is not a gusset program"}, status=400)
+
+    gusset = aps.gusset_program
 
     specs = []
-    samples = []
-
     for s in gusset.program_specifications.all():
-
         specs.append({
-            "program": s.program,
-            "style": s.style,
-            "width_in": s.width_in,
-            "width_cm": s.width_cm,
-            "length_in": s.length_in,
-            "length_cm": s.length_cm,
-            "wt_per_unit": s.wt_per_unit,
+            "spec_id": s.id,
+            "size": s.size,
+            "fold_length": s.fold_length,
+            "fold_width": s.fold_width,
+            "gusset_name": s.gusset_name,
+            "wt": s.wt,
             "gsm": s.gsm,
-            "unit_per_carton": s.unit_per_carton,
-            "inner_pack_unit_qty": s.inner_pack_unit_qty,
-            "fold": s.fold,
-            
-
+            "is_finalized_by_tqm": s.is_finalized_by_tqm,
         })
 
+    samples = []
     for sm in gusset.samples.all():
-
+        sample_attachments = [
+            {
+                "id": att.id,
+                "file_url": request.build_absolute_uri(att.file.url),
+                "description": att.description,
+                "uploaded_on": att.uploaded_on.strftime("%d-%m-%Y")
+            }
+            for att in sm.attachments.all()
+        ]
         samples.append({
+            "sample_id": sm.id,
             "program_name": sm.program_name,
             "size": sm.size,
             "sample": sm.sample,
             "quality": sm.quality,
             "gsm": sm.gsm,
-            "shade": sm.shade
+            "shade": sm.shade,
+            "lbs_per_dz": sm.lbs_per_dz,
+            "width_in": sm.width_in,
+            "width_cm": sm.width_cm,
+            "length_in": sm.length_in,
+            "length_cm": sm.length_cm,
+            "attachments": sample_attachments,
+        })
+
+    # Program-level attachments
+    attachments = []
+    for att in gusset.attachments.all():
+        attachments.append({
+            "id": att.id,
+            "file_url": request.build_absolute_uri(att.file.url),
+            "description": att.description,
+            "uploaded_on": att.uploaded_on.strftime("%d-%m-%Y")
         })
 
     return Response({
+        "activity_program_status_id": aps.id,
+        "activity": aps.activity,
+        "status": aps.status,               # pipeline status now lives on ActivityProgramStatus
+        "rejection_reason": aps.rejection_reason,
+        "sent_to_user_id": aps.sent_to_id,
 
         "program_id": gusset.id,
-
         "customer_name": gusset.customer_name,
         "program_name": gusset.program_name,
 
@@ -3824,15 +4086,33 @@ def get_gusset_program_details(request):
         "weave": gusset.weave,
         "product_group": gusset.product_group,
         "size": gusset.size,
+        "other_size": gusset.other_size,
+
+        "fold_length": gusset.fold_length,
+        "fold_width": gusset.fold_width,
+        "gusset_bank": gusset.gusset_bank,
+
+        "cardboard_required": gusset.cardboard_required,
+        "fold_type": gusset.fold_type,
+        "ply": gusset.ply,
+        "fold_on_side": gusset.fold_on_side,
+
+        "polybag_required": gusset.polybag_required,
+        "material_type": gusset.material_type,
+        "opening_type": gusset.opening_type,
+        "opening_on_side": gusset.opening_on_side,
+        "inlay_or_belly_band": gusset.inlay_or_belly_band,
+        "polybag_type": gusset.polybag_type,
+
+        "reference_program": gusset.reference_program,
+        "comments": gusset.comments,
+
         "expected_date_program": gusset.expected_date_confirmation,
 
         "program_specifications": specs,
-
-        "samples": samples
+        "samples": samples,
+        "attachments": attachments
     })
-    
-
-
 
 # ------------------------------------------------------------------
 # Swagger Schema: Edit Gusset Program
@@ -4081,3 +4361,413 @@ def reject_gusset_program(request):
         {"message": "Gusset Program Rejected Successfully"},
         status=200
     )
+
+
+@swagger_auto_schema(
+    method="post",
+    operation_summary="Upload Sample Attachment",
+    operation_description="Uploads an email/PDF/image attachment and links it to a sample row",
+    manual_parameters=[
+        openapi.Parameter(
+            "sample_id", openapi.IN_FORM,
+            type=openapi.TYPE_INTEGER, required=True,
+            description="SampleProgram ID"
+        ),
+        openapi.Parameter(
+            "file", openapi.IN_FORM,
+            type=openapi.TYPE_FILE, required=True,
+            description="Attachment file (.pdf, .eml, .msg, .png, .jpg, .jpeg, .webp)"
+        ),
+        openapi.Parameter(
+            "description", openapi.IN_FORM,
+            type=openapi.TYPE_STRING, required=False
+        ),
+    ],
+    responses={
+        200: openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={"message": openapi.Schema(type=openapi.TYPE_STRING)}
+        )
+    }
+)
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@parser_classes([MultiPartParser, FormParser])
+def upload_sample_attachment(request):
+
+    sample_id = request.data.get("sample_id")
+    file = request.FILES.get("file")
+    description = request.data.get("description", "")
+
+    if not sample_id or not file:
+        return Response(
+            {"error": "sample_id and file are required"},
+            status=400
+        )
+
+    # 👇 YE NAYA VALIDATION BLOCK ADD KARO
+    allowed_extensions = {".pdf", ".eml", ".msg", ".png", ".jpg", ".jpeg", ".gif", ".webp"}
+    ext = os.path.splitext(file.name)[1].lower()
+
+    if ext not in allowed_extensions:
+        return Response(
+            {"error": f"Unsupported file type '{ext}'. Allowed: PDF, email (.eml/.msg), image"},
+            status=400
+        )
+
+    try:
+        sample = SampleProgram.objects.get(id=sample_id)
+    except SampleProgram.DoesNotExist:
+        return Response({"error": "Invalid sample_id"}, status=404)
+
+    SampleProgramAttachment.objects.create(
+        sample=sample,
+        file=file,
+        description=description
+    )
+
+    return Response({"message": "Sample attachment uploaded successfully"})
+
+
+
+gusset_submit_final_schema = openapi.Schema(
+    type=openapi.TYPE_OBJECT,
+    required=["activity_program_status_id"],
+    properties={
+        "activity_program_status_id": openapi.Schema(type=openapi.TYPE_INTEGER),
+    }
+)
+
+
+@swagger_auto_schema(
+    method="post",
+    operation_summary="Submit Gusset Program as Final (TQM)",
+    request_body=gusset_submit_final_schema,
+)
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def submit_gusset_final(request):
+
+    aps_id = request.data.get("activity_program_status_id")
+
+    if not aps_id:
+        return Response({"error": "activity_program_status_id is required"}, status=400)
+
+    try:
+        aps = ActivityProgramStatus.objects.get(
+            id=aps_id,
+            sent_to=request.user
+        )
+    except ActivityProgramStatus.DoesNotExist:
+        return Response({"error": "Invalid record"}, status=404)
+
+    if not aps.gusset_program_id:
+        return Response({"error": "This activity is not a gusset program"}, status=400)
+
+    aps.status = "Final Working Submitted"
+    aps.rejection_reason = None
+    aps.save()
+
+    create_log(
+        module_name="GussetProgram",
+        record_id=aps.gusset_program_id,
+        action="Final Submitted",
+        message=f"Gusset program '{aps.program_name}' marked as Final Working Submitted",
+        user=request.user
+    )
+
+    return Response({"message": "Gusset Program Final Working Submitted"})
+
+@swagger_auto_schema(
+    method="post",
+    operation_summary="Upload Gusset Program Attachment",
+    manual_parameters=[
+        openapi.Parameter("program_id", openapi.IN_FORM, type=openapi.TYPE_INTEGER, required=True),
+        openapi.Parameter("file", openapi.IN_FORM, type=openapi.TYPE_FILE, required=True),
+        openapi.Parameter("description", openapi.IN_FORM, type=openapi.TYPE_STRING, required=False),
+    ],
+    responses={200: openapi.Schema(type=openapi.TYPE_OBJECT, properties={"message": openapi.Schema(type=openapi.TYPE_STRING)})}
+)
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@parser_classes([MultiPartParser, FormParser])
+def upload_gusset_program_attachment(request):
+
+    program_id = request.data.get("program_id")
+    file = request.FILES.get("file")
+    description = request.data.get("description", "")
+
+    if not program_id or not file:
+        return Response({"error": "program_id and file are required"}, status=400)
+
+    try:
+        program = GussetProgram.objects.get(id=program_id)
+    except GussetProgram.DoesNotExist:
+        return Response({"error": "Invalid program_id"}, status=404)
+
+    GussetProgramAttachment.objects.create(
+        program=program,
+        file=file,
+        description=description
+    )
+
+    return Response({"message": "Attachment uploaded successfully"})
+
+
+@swagger_auto_schema(
+    method="post",
+    operation_summary="Upload Gusset Sample Attachment",
+    manual_parameters=[
+        openapi.Parameter("sample_id", openapi.IN_FORM, type=openapi.TYPE_INTEGER, required=True),
+        openapi.Parameter("file", openapi.IN_FORM, type=openapi.TYPE_FILE, required=True),
+        openapi.Parameter("description", openapi.IN_FORM, type=openapi.TYPE_STRING, required=False),
+    ],
+    responses={200: openapi.Schema(type=openapi.TYPE_OBJECT, properties={"message": openapi.Schema(type=openapi.TYPE_STRING)})}
+)
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@parser_classes([MultiPartParser, FormParser])
+def upload_gusset_sample_attachment(request):
+
+    sample_id = request.data.get("sample_id")
+    file = request.FILES.get("file")
+    description = request.data.get("description", "")
+
+    if not sample_id or not file:
+        return Response({"error": "sample_id and file are required"}, status=400)
+
+    allowed_extensions = {".pdf", ".eml", ".msg", ".png", ".jpg", ".jpeg", ".gif", ".webp"}
+    ext = os.path.splitext(file.name)[1].lower()
+
+    if ext not in allowed_extensions:
+        return Response(
+            {"error": f"Unsupported file type '{ext}'. Allowed: PDF, email (.eml/.msg), image"},
+            status=400
+        )
+
+    try:
+        sample = GussetSampleProgram.objects.get(id=sample_id)
+    except GussetSampleProgram.DoesNotExist:
+        return Response({"error": "Invalid sample_id"}, status=404)
+
+    GussetSampleAttachment.objects.create(
+        sample=sample,
+        file=file,
+        description=description
+    )
+
+    return Response({"message": "Sample attachment uploaded successfully"})
+
+
+gusset_specs_update_schema = openapi.Schema(
+    type=openapi.TYPE_OBJECT,
+    required=["specs"],
+    properties={
+        "specs": openapi.Schema(
+            type=openapi.TYPE_ARRAY,
+            items=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                required=["spec_id"],
+                properties={
+                    "spec_id": openapi.Schema(type=openapi.TYPE_INTEGER),
+                    "size": openapi.Schema(type=openapi.TYPE_STRING),
+                    "fold_length": openapi.Schema(type=openapi.TYPE_STRING),
+                    "fold_width": openapi.Schema(type=openapi.TYPE_STRING),
+                    "wt": openapi.Schema(type=openapi.TYPE_NUMBER),
+                    "gsm": openapi.Schema(type=openapi.TYPE_NUMBER),
+                }
+            )
+        )
+    }
+)
+
+
+@swagger_auto_schema(
+    method="post",
+    operation_summary="Update Gusset Program Specifications (TQM/PPC editable fields)",
+    request_body=gusset_specs_update_schema,
+)
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@transaction.atomic
+def update_gusset_specs(request):
+
+    specs = request.data.get("specs", [])
+
+    if not specs:
+        return Response({"error": "specs list is required"}, status=400)
+
+    updated_count = 0
+
+    for item in specs:
+        spec_id = item.get("spec_id")
+        if not spec_id:
+            continue
+
+        try:
+            spec = GussetProgramSpecification.objects.get(id=spec_id)
+        except GussetProgramSpecification.DoesNotExist:
+            continue
+
+        spec.size = item.get("size")
+        spec.fold_length = item.get("fold_length")
+        spec.fold_width = item.get("fold_width")
+        spec.gusset_name = item.get("gusset_name")
+        spec.wt = item.get("wt")
+        spec.gsm = item.get("gsm")
+        spec.is_finalized_by_tqm = True
+        spec.save()
+
+        updated_count += 1
+
+    create_log(
+        module_name="GussetProgramSpecification",
+        record_id=0,
+        action="Updated",
+        message=f"{updated_count} gusset specification row(s) updated",
+        user=request.user
+    )
+
+    return Response({"message": "Specifications updated successfully", "updated_count": updated_count})
+
+
+# ------------------------------------------------------------------
+# SUPERADMIN APIs
+# Description:
+#   Dashboard for SUPER_ADMIN role — lists ALL Carton + Gusset programs
+#   (regardless of who created/is assigned to them) and allows permanent
+#   deletion with a dedicated audit log entry.
+# ------------------------------------------------------------------
+
+def _is_super_admin(user):
+    return getattr(user, "role", None) == "SUPER_ADMIN"
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def superadmin_list_all_programs(request):
+
+    if not _is_super_admin(request.user):
+        return Response({"error": "Access restricted to Super Admin"}, status=403)
+
+    records = ActivityProgramStatus.objects.select_related(
+        "program", "gusset_program", "created_by", "sent_to"
+    ).all().order_by("-created_on")
+
+    data = []
+    for obj in records:
+        if not obj.program_id and not obj.gusset_program_id:
+            continue
+
+        data.append({
+            "activity_program_status_id": obj.id,
+            "activity": obj.activity,
+            "program_id": obj.gusset_program_id or obj.program_id,
+            "program_name": obj.program_name,
+            "customer_name": obj.customer_name,
+            "program_type_group": obj.program_type_group,
+            "program_type": obj.program.program_type if obj.program_id else "GUSSET",
+            "status": obj.status,
+            "created_by": obj.created_by.username if obj.created_by else None,
+            "sent_to": obj.sent_to.username if obj.sent_to else None,
+            "created_on": obj.created_on.strftime("%d-%m-%Y %H:%M:%S") if obj.created_on else None,
+        })
+
+    return Response(data)
+
+
+superadmin_delete_schema = openapi.Schema(
+    type=openapi.TYPE_OBJECT,
+    required=["activity_program_status_id"],
+    properties={
+        "activity_program_status_id": openapi.Schema(type=openapi.TYPE_INTEGER),
+    }
+)
+
+
+@swagger_auto_schema(
+    method="post",
+    operation_summary="Super Admin: Permanently delete a Carton or Gusset program",
+    request_body=superadmin_delete_schema,
+)
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@transaction.atomic
+def superadmin_delete_program(request):
+
+    if not _is_super_admin(request.user):
+        return Response({"error": "Access restricted to Super Admin"}, status=403)
+
+    aps_id = request.data.get("activity_program_status_id")
+
+    if not aps_id:
+        return Response({"error": "activity_program_status_id is required"}, status=400)
+
+    try:
+        aps = ActivityProgramStatus.objects.select_related("program", "gusset_program").get(id=aps_id)
+    except ActivityProgramStatus.DoesNotExist:
+        return Response({"error": "Invalid activity_program_status_id"}, status=404)
+
+    if not aps.program_id and not aps.gusset_program_id:
+        return Response({"error": "This activity is not linked to any program"}, status=400)
+
+    program_type = "GUSSET" if aps.gusset_program_id else "CARTON"
+    program_obj = aps.gusset_program if aps.gusset_program_id else aps.program
+    program_id = program_obj.id
+    program_name = obj_name = getattr(program_obj, "program_name", None)
+    customer_name = getattr(program_obj, "customer_name", None)
+
+    snapshot = {
+        "activity": aps.activity,
+        "status": aps.status,
+        "program_type": program_type,
+        "program_id": program_id,
+        "program_name": program_name,
+        "customer_name": customer_name,
+    }
+
+    # Create the log BEFORE deleting, so we have a record even if delete
+    # cascades cause issues.
+    SuperAdminDeleteLog.objects.create(
+        program_type=program_type,
+        program_id=program_id,
+        program_name=program_name,
+        customer_name=customer_name,
+        activity_program_status_id=aps.id,
+        deleted_by=request.user,
+        snapshot=snapshot,
+    )
+
+    # Delete the ActivityProgramStatus row first (it has FK to the program)
+    aps.delete()
+
+    # Delete the actual program (CASCADE will clean up subprograms/samples/
+    # attachments/specifications automatically via on_delete=models.CASCADE)
+    program_obj.delete()
+
+    return Response({"message": f"{program_type} program '{program_name}' permanently deleted"})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def superadmin_delete_logs(request):
+
+    if not _is_super_admin(request.user):
+        return Response({"error": "Access restricted to Super Admin"}, status=403)
+
+    logs = SuperAdminDeleteLog.objects.select_related("deleted_by").all()
+
+    data = []
+    for log in logs:
+        data.append({
+            "id": log.id,
+            "program_type": log.program_type,
+            "program_id": log.program_id,
+            "program_name": log.program_name,
+            "customer_name": log.customer_name,
+            "activity_program_status_id": log.activity_program_status_id,
+            "deleted_by": log.deleted_by.username if log.deleted_by else "Unknown",
+            "deleted_on": to_ist_str(log.deleted_on),
+        })
+
+    return Response(data)

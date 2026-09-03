@@ -330,13 +330,24 @@ function CartonMainTTQM() {
         ? response.data
         : response.data?.results || [];
 
+      // const parseDateTime = (dateTime) => {
+      //   if (!dateTime) return 0;
+
+      //   const [datePart, timePart] = dateTime.split(" ");
+      //   const [day, month, year] = datePart.split("-");
+
+      //   return new Date(`${year}-${month}-${day}T${timePart}`).getTime();
+      // };
       const parseDateTime = (dateTime) => {
         if (!dateTime) return 0;
 
-        const [datePart, timePart] = dateTime.split(" ");
+        const [datePart, timePart] = dateTime.trim().split(" ");
         const [day, month, year] = datePart.split("-");
 
-        return new Date(`${year}-${month}-${day}T${timePart}`).getTime();
+        const isoString = `${year}-${month}-${day}T${timePart || "00:00:00"}`;
+        const parsed = new Date(isoString).getTime();
+
+        return isNaN(parsed) ? 0 : parsed;
       };
 
       const sorted = [...list].sort(
@@ -362,14 +373,14 @@ function CartonMainTTQM() {
     fetchData();
   }, []);
 
-const formatDateOnly = (dateTime) => {
-  if (!dateTime) return "-";
+  const formatDateOnly = (dateTime) => {
+    if (!dateTime) return "-";
 
-  const [datePart] = dateTime.split(" ");
-  const [day, month, year] = datePart.split("-");
+    const [datePart] = dateTime.split(" ");
+    const [day, month, year] = datePart.split("-");
 
-  return `${day}-${month}-${year}`;
-};
+    return `${day}-${month}-${year}`;
+  };
 
 
   // Row styling
@@ -436,7 +447,11 @@ const formatDateOnly = (dateTime) => {
   };
 
   const handleView = (row) => {
-    navigate(`/carton/view/${row.activity_program_status_id}`);
+    if (row.program_type_group === 'gusset') {
+      navigate(`/gusset/view/${row.activity_program_status_id}`);
+    } else {
+      navigate(`/carton/view/${row.activity_program_status_id}`);
+    }
   };
 
 
@@ -460,6 +475,19 @@ const formatDateOnly = (dateTime) => {
       render: (row) => (
         <span className={`font-medium ${getStatusTextStyle(row.status)}`}>
           {row.status || 'Unknown'}
+        </span>
+      ),
+    },
+    {
+      key: 'program_type_group',
+      header: 'Type',
+      render: (row) => (
+        <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
+          row.program_type_group === 'gusset'
+            ? 'bg-purple-100 text-purple-700'
+            : 'bg-blue-100 text-blue-700'
+        }`}>
+          {row.program_type_group === 'gusset' ? 'Gusset' : 'Carton'}
         </span>
       ),
     },

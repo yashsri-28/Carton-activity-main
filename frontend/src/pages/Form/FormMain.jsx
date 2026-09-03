@@ -12,6 +12,7 @@ function FormMain({ onBack }) {
   const [formData, setFormData] = useState({
     productCategory: "",
     companyName: '',
+    remark: '',
     customerName: '',
     customerType: 'old', // Add this for old/new toggle
     programName: '',
@@ -37,11 +38,12 @@ function FormMain({ onBack }) {
     separatorRequired: '',
     ribbonPacking: '',
     bellyBandPacking: '',
-    
+
     // ===== BEDSHEET FIELDS =====
     fabric: '',
     folding: '',
     required_pcs_per_polybag: '',
+    elasticRequired: '',
     polybagSize: '',
     productType: '',
     productRequirements: '',
@@ -49,6 +51,8 @@ function FormMain({ onBack }) {
     PackingType: '',
     ProductDimension: '',
     FoldSize: '',
+    foldLength: '',
+    foldWidth: '',
     pallet: '',
     BlisterPacking: '',
     BlisterRequired: '',
@@ -58,7 +62,7 @@ function FormMain({ onBack }) {
     PolyFoldCondition: '',
     filled_product_gsm: '',
     Bagtype: '',
-    
+
     // ===== TERRY TOWEL FIELDS =====
     towelSizes: '',
     requiredPcsCartonSize: '',
@@ -68,7 +72,7 @@ function FormMain({ onBack }) {
     terryFoldingDetails: '',
     terryPcsPerPolybag: '',
     terrySpecialCartonDetails: '',
-    
+
     // ===== BATH ROBE FIELDS =====
     originalBathRobe: '',
     bathRobeSizes: '',
@@ -79,6 +83,17 @@ function FormMain({ onBack }) {
     bathRobePcsPerCarton: '',
     bathRobePolybagType: '',
     bathRobePolybagSizeCarton: '',
+
+    gussetActivityName: '',
+    gussetProgramName: '',
+    gussetCustomerName: '',
+    gussetFoldLength: '',
+    gussetFoldWidth: '',
+    gussetBank: '',
+    gussetSectionOpen: false,
+    bedsheetSectionOpen: false,
+    gussetSizes: [],        // NEW: array of selected sizes, e.g. ["Twin", "King"]
+    gussetOtherSizeText: '', // NEW: free text when "Other" is checked
   });
 
   const [companies, setCompanies] = useState([]);
@@ -89,13 +104,17 @@ function FormMain({ onBack }) {
   const [successMessage, setSuccessMessage] = useState('');
   const [lastProgramId, setLastProgramId] = useState(null);
 
-  // Table States
+    // Table States
   const [setsTables, setSetsTables] = useState([]);
   const [unitTables, setUnitTables] = useState([]);
   const [sampleRows, setSampleRows] = useState([]);
 
+  // Gusset "Program Specifications" rows — auto-generated from checked
+  // sizes, but user can also add/edit/remove rows manually.
+  const [gussetSpecRows, setGussetSpecRows] = useState([]);
   // User dropdown
   const [users, setUsers] = useState([]);
+  const [selectedRole, setSelectedRole] = useState('');
   const [selectedUserId, setSelectedUserId] = useState('');
 
   // ==================== EFFECTS ====================
@@ -114,6 +133,18 @@ function FormMain({ onBack }) {
       }));
     }
   }, [companies]);
+    // NEW: Keep gusset spec rows' Fold Length/Width in sync with the
+  // top-level Gusset "Fold Length x Fold Width" fields — but only for
+  // rows the user hasn't manually edited themselves.
+  useEffect(() => {
+    setGussetSpecRows(prev =>
+      prev.map(row => ({
+        ...row,
+        foldLength: row.foldLengthTouched ? row.foldLength : (formData.gussetFoldLength || ''),
+        foldWidth: row.foldWidthTouched ? row.foldWidth : (formData.gussetFoldWidth || ''),
+      }))
+    );
+  }, [formData.gussetFoldLength, formData.gussetFoldWidth]);
 
   useEffect(() => {
     if (setsTables.length === 0) {
@@ -165,13 +196,13 @@ function FormMain({ onBack }) {
   const fetchUsers = useCallback(async () => {
     try {
       const response = await api.get('/api/users/list/');
+      // Exclude admin user from the dropdown list
       const filteredUsers = response.data.filter(
         user => user.username !== 'admin'
       );
       setUsers(filteredUsers);
-      if (filteredUsers.length > 0) {
-        setSelectedUserId(filteredUsers[0].id);
-      }
+      // Note: No default user is auto-selected anymore.
+      // User must first select a Role, then a User.
     } catch (error) {
       console.error('Failed to fetch users:', error);
     }
@@ -181,6 +212,99 @@ function FormMain({ onBack }) {
   const handleInputChange = useCallback((e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  }, []);
+
+  // NEW: Handles checking/unchecking a size checkbox in Gusset Finalization.
+  // Checking a size adds a new row to gussetSpecRows; unchecking removes
+  // any row(s) with that size.
+  const handleGussetSizeToggle = useCallback((size) => {
+    setFormData(prev => {
+      const current = prev.gussetSizes || [];
+      const isChecked = current.includes(size);
+      const updated = isChecked
+        ? current.filter(s => s !== size)
+        : [...current, size];
+      return { ...prev, gussetSizes: updated };
+    });
+
+    setGussetSpecRows(prev => {
+      const alreadyHasRow = prev.some(row => row.size === size);
+      if (alreadyHasRow) {
+        // Unchecking — remove all rows matching this size
+        return prev.filter(row => row.size !== size);
+      } else {
+        // Checking — add one new row for this size, pre-filled with the
+        // top-level Fold Length/Width (if already set) as a default.
+        return [
+          ...prev,
+          {
+            size: size,
+            foldLength: formData.gussetFoldLength || '',
+            foldWidth: formData.gussetFoldWidth || '',
+            gussetName: '',
+            wt: '',
+            gsm: '',
+            foldLengthTouched: false,
+            foldWidthTouched: false,
+          }
+        ];
+      }
+    });
+  }, []);
+
+  // NEW: Update a single cell in a gusset spec row
+  const handleGussetSpecCellChange = useCallback((rowIdx, field, value) => {
+    setGussetSpecRows(prev =>
+      prev.map((row, idx) => {
+        if (idx !== rowIdx) return row;
+        const updated = { ...row, [field]: value };
+        if (field === 'foldLength') updated.foldLengthTouched = true;
+        if (field === 'foldWidth') updated.foldWidthTouched = true;
+        return updated;
+      })
+    );
+  }, []);
+
+  // NEW: Manually add a blank row (no size pre-filled)
+  const handleAddGussetSpecRow = useCallback(() => {
+    setGussetSpecRows(prev => [
+      ...prev,
+      {
+        size: '',
+        foldLength: formData.gussetFoldLength || '',
+        foldWidth: formData.gussetFoldWidth || '',
+        gussetName: '',
+        wt: '',
+        gsm: '',
+        foldLengthTouched: false,
+        foldWidthTouched: false,
+      }
+    ]);
+  }, [formData.gussetFoldLength, formData.gussetFoldWidth]);
+
+  // NEW: Manually delete a row (also unchecks the matching size checkbox
+  // if it was one of the auto-generated ones)
+  const handleDeleteGussetSpecRow = useCallback((rowIdx) => {
+    setGussetSpecRows(prev => {
+      const rowToDelete = prev[rowIdx];
+      if (rowToDelete && rowToDelete.size) {
+        setFormData(fd => ({
+          ...fd,
+          gussetSizes: (fd.gussetSizes || []).filter(s => s !== rowToDelete.size)
+        }));
+      }
+      return prev.filter((_, idx) => idx !== rowIdx);
+    });
+  }, []);
+
+  const handleRemarkChange = useCallback((e) => {
+    const { value } = e.target;
+    const wordCount = value.trim().split(/\s+/).filter(Boolean).length;
+
+    // Block further typing once word limit is reached
+    if (wordCount <= 100) {
+      setFormData(prev => ({ ...prev, remark: value }));
+    }
   }, []);
 
   const handleCompanyChange = useCallback((e) => {
@@ -219,6 +343,25 @@ function FormMain({ onBack }) {
     }]
   }), [formData.programName]);
 
+  // const programHeaders = [
+  //   { label: "Program", key: "program" },
+  //   { label: "Style", key: "style", hasAddBtn: true },
+  //   { label: "W-In", key: "w_in" },
+  //   { label: "W-Cm", key: "w_cm" },
+  //   { label: "L-In", key: "l_in" },
+  //   { label: "L-Cm", key: "l_cm" },
+  //   { label: "Wt/Unit", key: "wt_unit" },
+  //   { label: "GSM", key: "gsm" },
+  //   { label: "Unit/Carton", key: "unit_carton" },
+  //   { label: "Inner Pack Unit Quantity", key: "inner_pack" },
+  //   { label: "Fold", key: "fold" },
+  //   { label: "", key: "actions" }
+  // ];
+
+  const isStandardBedsheet =
+    formData.productCategory === "Bedsheet" &&
+    (formData.formMode ?? "gusset") === "bedsheet";
+
   const programHeaders = [
     { label: "Program", key: "program" },
     { label: "Style", key: "style", hasAddBtn: true },
@@ -227,7 +370,7 @@ function FormMain({ onBack }) {
     { label: "L-In", key: "l_in" },
     { label: "L-Cm", key: "l_cm" },
     { label: "Wt/Unit", key: "wt_unit" },
-    { label: "GSM", key: "gsm" },
+    { label: isStandardBedsheet ? "TC" : "GSM", key: "gsm" },
     { label: "Unit/Carton", key: "unit_carton" },
     { label: "Inner Pack Unit Quantity", key: "inner_pack" },
     { label: "Fold", key: "fold" },
@@ -246,6 +389,8 @@ function FormMain({ onBack }) {
     { label: "W-Cm", key: "col9" },
     { label: "L-In", key: "col10" },
     { label: "L-Cm", key: "col11" },
+    { label: "Sample Code", key: "col12" },
+    { label: "Attachment", key: "col13", type: "file" },
     { label: "", key: "actions" }
   ];
 
@@ -361,6 +506,7 @@ function FormMain({ onBack }) {
       sampleCarton: '',
       singleOrMonsterPDQ: '',
       pdqLayers: '',
+      remark: '',
       commonPDQ: '',
       smallPDQRequirement: '',
       smallPDQQuantity: '',
@@ -408,6 +554,36 @@ function FormMain({ onBack }) {
     }
   };
 
+    // ==================== SAMPLE ATTACHMENT UPLOAD FUNCTION ====================
+  const uploadSampleAttachment = async (sampleId, file) => {
+    try {
+      const formData = new FormData();
+      formData.append('sample_id', sampleId);
+      formData.append('file', file);
+
+      const response = await api.post(
+        '/api/carton-program/sample-attachment/upload/',
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          }
+        }
+      );
+
+      return {
+        success: true,
+        message: response.data?.message || 'Sample attachment uploaded successfully'
+      };
+    } catch (error) {
+      console.warn('Sample attachment upload failed:', error);
+      return {
+        success: false,
+        message: error.response?.data?.error || 'Sample attachment upload failed'
+      };
+    }
+  };
+
   // ==================== GET PROGRAM TYPE ====================
   const getProgramType = () => {
     switch (formData.productCategory) {
@@ -425,7 +601,24 @@ function FormMain({ onBack }) {
   // ==================== BUILD PRODUCT-SPECIFIC DETAILS ====================
   const buildProductDetails = () => {
     const programType = getProgramType();
-    
+
+    // Terry Towel fields are now merged into the default Towel form,
+    // so send terry_details whenever it's a TOWEL program too.
+    if (programType === 'TOWEL') {
+      return {
+        terry_details: {
+          towel_sizes: formData.towelSizes?.trim() || "",
+          required_pcs_carton_size: formData.requiredPcsCartonSize?.trim() || "",
+          required_polybags_carton_size: formData.requiredPolybagsCartonSize?.trim() || "",
+          towel_dimensions: formData.towelDimensions?.trim() || "",
+          towel_weight_per_piece: Number(formData.towelWeightPerPiece) || 0,
+          folding_details: formData.terryFoldingDetails?.trim() || "",
+          required_pcs_per_polybag: Number(formData.terryPcsPerPolybag) || 0,
+          special_carton_details: formData.terrySpecialCartonDetails?.trim() || "",
+        }
+      };
+    }
+
     if (programType === 'BEDSHEET') {
       return {
         bedsheet_details: {
@@ -445,10 +638,12 @@ function FormMain({ onBack }) {
           required_sets_per_carton: (formData.required_sets_per_carton) || 0,
           polyfold_condition: formData.PolyFoldCondition?.trim() || "",
           filled_product_gsm: (formData.filled_product_gsm) || 0,
+          fold_length: formData.foldLength || null,
+          fold_width: formData.foldWidth || null,
         }
       };
     }
-    
+
     if (programType === 'TERRY_TOWEL') {
       return {
         terry_details: {
@@ -463,7 +658,7 @@ function FormMain({ onBack }) {
         }
       };
     }
-    
+
     if (programType === 'BATH_ROBE') {
       return {
         bathrobe_details: {
@@ -479,8 +674,173 @@ function FormMain({ onBack }) {
         }
       };
     }
-    
+
     return {};
+  };
+   const handleGussetSubmit = async () => {
+    if (!formData.gussetProgramName?.trim() || !formData.gussetCustomerName?.trim()) {
+      toast.error('Program Name and Customer Name are required');
+      return;
+    }
+
+    // NEW: Activity name and assigned user are required, same as carton submit
+    if (!formData.gussetActivityName?.trim()) {
+      toast.error('Activity Name is required');
+      return;
+    }
+    if (!selectedUserId) {
+      toast.error('Please select a role and a user to send the request');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const payload = {
+        activity_name: formData.gussetActivityName?.trim() || '',
+        sent_to_user_id: selectedUserId,
+        btn: 'Pending',
+        customer_name: formData.gussetCustomerName.trim(),
+        program_name: formData.gussetProgramName.trim(),
+
+        tc: formData.fabric?.trim() || "",   // agar TC field alag hai to us naam se replace karo
+        weave: formData.gussetWeave?.trim() || "",
+        product_group: formData.gussetProductGroup?.trim() || "",
+        size: (formData.gussetSizes || [])
+          .map(s => (s === "Other" ? formData.gussetOtherSizeText?.trim() : s))
+          .filter(Boolean)
+          .join(", "),
+        down: formData.gussetDown?.trim() || "",
+
+        value_addition_flat_sheet: formData.gussetValueAdditionFlatSheet?.trim() || "",
+        value_addition_duvet_cover: formData.gussetValueAdditionDuvetCover?.trim() || "",
+        value_addition_fitted_sheet: formData.gussetValueAdditionFittedSheet?.trim() || "",
+        value_addition_pillowcase: formData.gussetValueAdditionPillowcase?.trim() || "",
+
+        fold_length: formData.gussetFoldLength || null,
+        fold_width: formData.gussetFoldWidth || null,
+
+        cardboard_required: formData.cardboardRequired === "Yes",
+        fold_type: formData.cardboardFoldType?.trim() || "",
+        ply: formData.cardboardPly?.trim() || "",
+        fold_on_side: formData.cardboardFoldOnSide?.trim() || "",
+
+        reference_program: formData.referenceProgram?.trim() || "",
+        comments: formData.comments?.trim() || "",
+
+        polybag_required: formData.polybagRequired === "Yes",
+        material_type: formData.polybagMaterialType?.trim() || "",
+        opening_type: formData.polybagOpeningType?.trim() || "",
+        opening_on_side: formData.polybagOpeningOnSide?.trim() || "",
+        inlay_or_belly_band: formData.polybagInlayOrBellyBand?.trim() || "",
+        polybag_type: formData.polybagType?.trim() || "",
+
+        gusset_bank: formData.gussetBank?.trim() || "",
+
+        program_specifications: gussetSpecRows
+          .filter(row => row.size?.trim())
+          .map(row => ({
+            size: row.size?.trim() || "",
+            fold_length: row.foldLength || null,
+            fold_width: row.foldWidth || null,
+            gusset_name: row.gussetName?.trim() || "",
+            wt: row.wt ? Number(row.wt) : null,
+            gsm: row.gsm ? Number(row.gsm) : null,
+          })),
+        samples: sampleRows
+          .filter(row => row.col1 || row.col2)
+          .map(row => ({
+            program_name: row.col3?.trim() || "",
+            size: row.col2?.trim() || "",
+            sample: row.col1?.trim() || "",
+            sample_code: row.col12?.trim() || "",
+            quality: row.col4?.trim() || "",
+            lbs_per_dz: Number(row.col5) || 0,
+            gsm: Number(row.col6) || 0,
+            shade: row.col7?.trim() || "",
+            width_in: Number(row.col8) || 0,
+            length_in: Number(row.col10) || 0,
+            width_cm: Number(row.col9) || 0,
+            length_cm: Number(row.col11) || 0,
+          })),
+      };
+
+      const response = await api.post('/api/gusset-program/submit/', payload);
+      const { program_id, sample_ids } = response.data;
+
+      // Upload program-level attachment (if selected)
+      if (selectedFile && program_id) {
+        try {
+          const attFormData = new FormData();
+          attFormData.append('program_id', program_id);
+          attFormData.append('file', selectedFile);
+          await api.post('/api/gusset-program/attachment/upload/', attFormData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+        } catch (attErr) {
+          console.warn('Gusset attachment upload failed:', attErr);
+        }
+      }
+
+      // Upload sample-level attachments (if any)
+      const filteredSampleRows = sampleRows.filter(row => row.col1 || row.col2);
+      if (sample_ids && sample_ids.length) {
+        const sampleUploadPromises = filteredSampleRows
+          .map((row, idx) => {
+            const file = row.col13;
+            const sampleId = sample_ids[idx];
+            if (file instanceof File && sampleId) {
+              const sFormData = new FormData();
+              sFormData.append('sample_id', sampleId);
+              sFormData.append('file', file);
+              return api.post('/api/gusset-program/sample-attachment/upload/', sFormData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+              });
+            }
+            return null;
+          })
+          .filter(Boolean);
+
+        if (sampleUploadPromises.length) {
+          await Promise.allSettled(sampleUploadPromises);
+        }
+      }
+
+      toast.success('Gusset Program Submitted Successfully');
+      setTimeout(() => navigate('/'), 1500);
+    } catch (error) {
+      console.error('Gusset submit failed:', error);
+      const errMsg = error.response?.data?.error || error.message || 'Unknown error';
+      toast.error(`Submission failed: ${errMsg}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
+    // Decides what to submit based on which section is open, when the
+  // single bottom "Submit" button is clicked. For product categories
+  // other than Bedsheet, behaves exactly like before.
+  const handleMainSubmit = async (status = 'Pending') => {
+    if (formData.productCategory !== 'Bedsheet') {
+      await handleSubmit(status);
+      return;
+    }
+
+    const gusset = formData.gussetSectionOpen === true;
+    const bedsheet = formData.bedsheetSectionOpen === true;
+
+    if (!gusset && !bedsheet) {
+      toast.error('Please open and fill Gusset Finalization or Standard Bedsheet form first');
+      return;
+    }
+
+    if (gusset) {
+      await handleGussetSubmit();
+    }
+    if (bedsheet) {
+      await handleSubmit(status);
+    }
   };
 
   // ==================== MAIN SUBMIT WITH SEQUENTIAL API CALLS ====================
@@ -493,6 +853,13 @@ function FormMain({ onBack }) {
       return;
     }
 
+    // NEW: Validate that a user has been selected to receive the request
+    if (!selectedUserId) {
+      setSubmitStatus('error');
+      setErrorMessage('Please select a role and a user to send the request');
+      setTimeout(() => setSubmitStatus(null), 5000);
+      return;
+    }
     setLoading(true);
     setSubmitStatus(null);
     setErrorMessage('');
@@ -509,9 +876,11 @@ function FormMain({ onBack }) {
         program_type: programType,
         btn: status,
         sent_to_user_id: selectedUserId,
-        
+        // remark: formData.remark?.trim() || '',  
+
         carton_program: {
           customer_name: formData.customerName.trim(),
+          remark: formData.remark?.trim() || '',
           customer_protocol: formData.customerProtocol?.trim() || "",
           confirm_new_or_shifted_from_vapi: formData.newOrShifted?.trim() || "",
           original_towel: formData.original_towel?.trim() || "",
@@ -533,7 +902,8 @@ function FormMain({ onBack }) {
           towel_folded_and_poly_packed_before_carton: formData.towel_folded_and_poly_packed_before_carton?.trim() || "",
           separator_protector_stiffener_required: formData.separatorRequired?.trim() || "",
           ribbon_packing_required: formData.ribbonPacking?.trim() || "",
-          belly_band_packing_required: formData.bellyBandPacking?.trim() || ""
+          belly_band_packing_required: formData.bellyBandPacking?.trim() || "",
+          elastic_required: formData.elasticRequired === "Yes",
         },
 
         subprograms: [...setsTables, ...unitTables]
@@ -570,6 +940,7 @@ function FormMain({ onBack }) {
             program_name: row.col3?.trim() || "",
             size: row.col2?.trim() || "",
             sample: row.col1?.trim() || "",
+            sample_code: row.col12?.trim() || "",
             quality: row.col4?.trim() || "",
             lbs_per_dz: Number(row.col5) || 0,
             gsm: Number(row.col6) || 0,
@@ -590,18 +961,39 @@ function FormMain({ onBack }) {
         }
       });
 
-      // Extract program_id from response
-      const { message: submitMessage, program_id } = submitResponse.data;
+      // Extract program_id and sample_ids from response
+      const { message: submitMessage, program_id, sample_ids } = submitResponse.data;
 
       // Store program_id
       setLastProgramId(program_id);
       localStorage.setItem('last_submitted_program_id', program_id);
 
-      // ========== STEP 2: UPLOAD ATTACHMENT (if exists) ==========
+      // ========== STEP 2: UPLOAD MAIN ATTACHMENT (if exists) ==========
       let attachmentResult = null;
       if (selectedFile && program_id) {
         console.log('📎 Uploading attachment...', selectedFile.name);
         attachmentResult = await uploadAttachment(program_id, selectedFile);
+      }
+
+      // ========== STEP 2.5: UPLOAD SAMPLE-LEVEL ATTACHMENTS ==========
+      const filteredSampleRows = sampleRows.filter(row => row.col1 || row.col2);
+
+      if (sample_ids && sample_ids.length) {
+        const sampleUploadPromises = filteredSampleRows
+          .map((row, idx) => {
+            const file = row.col13;
+            const sampleId = sample_ids[idx];
+            if (file instanceof File && sampleId) {
+              return uploadSampleAttachment(sampleId, file);
+            }
+            return null;
+          })
+          .filter(Boolean);
+
+        if (sampleUploadPromises.length) {
+          console.log(`📎 Uploading ${sampleUploadPromises.length} sample attachment(s)...`);
+          await Promise.all(sampleUploadPromises);
+        }
       }
 
       // ========== STEP 3: SUCCESS HANDLING ==========
@@ -635,8 +1027,22 @@ function FormMain({ onBack }) {
       setLoading(false);
     }
   };
+  const uniqueRoles = [...new Set(users.map(user => user.role))];
+
+  // Handles when user selects a role from the "Select Role" dropdown
+  const handleRoleChange = (e) => {
+    const role = e.target.value;
+    setSelectedRole(role);
+    setSelectedUserId('');
+  };
+
+  // Filters users list to only show users matching the selected role
+  const usersForSelectedRole = users.filter(user => user.role === selectedRole);
 
   // ==================== RENDER ====================
+
+  // ==================== RENDER ====================
+  const isGussetMode = formData.productCategory === "Bedsheet" && (formData.formMode ?? "gusset") === "gusset";
   return (
     <div className="h-full overflow-y-auto bg-gray-50 font-sans text-sm">
       <div className="pb-4 pr-4 pl-4 max-w-7xl mx-auto">
@@ -657,10 +1063,15 @@ function FormMain({ onBack }) {
         </div>
 
         {/* Form */}
-        <Form
+                <Form
           formData={formData}
           onInputChange={handleInputChange}
+          onRemarkChange={handleRemarkChange}
           onCompanyChange={handleCompanyChange}
+          onGussetSubmit={handleGussetSubmit}
+          onSubmitBoth={handleMainSubmit}
+          onGussetSizeToggle={handleGussetSizeToggle}
+
           companies={companies}
           selectedFile={selectedFile}
           onFileChange={handleFileChange}
@@ -669,19 +1080,43 @@ function FormMain({ onBack }) {
         />
 
         {/* Tables */}
+                {/* Tables */}
         <div className="space-y-10 mt-8">
-          <Table
-            title="Program Specifications"
-            headers={programHeaders}
-            data={setsTables}
-            type="grouped"
-            onAddRow={() => addVariantToLastGroup(setSetsTables)}
-            onDeleteRow={handleSetsActions.onDeleteRow}
-            onAddTable={handleSetsActions.onAddTable}
-            onCopyTable={handleSetsActions.onCopyTable}
-            onDeleteTable={handleSetsActions.onDeleteTable}
-            onUpdateCell={handleUpdateSetsCell}
-          />
+          {!isGussetMode && (
+            <Table
+              title="Program Specifications"
+              headers={programHeaders}
+              data={setsTables}
+              type="grouped"
+              onAddRow={() => addVariantToLastGroup(setSetsTables)}
+              onDeleteRow={handleSetsActions.onDeleteRow}
+              onAddTable={handleSetsActions.onAddTable}
+              onCopyTable={handleSetsActions.onCopyTable}
+              onDeleteTable={handleSetsActions.onDeleteTable}
+              onUpdateCell={handleUpdateSetsCell}
+            />
+          )}
+
+          {isGussetMode && (
+            <Table
+              title="Program Specifications"
+              headers={[
+                { label: "Size", key: "size" },
+                { label: "Fold Length", key: "foldLength" },
+                { label: "Fold Width", key: "foldWidth" },
+                { label: "Gusset Name", key: "gussetName" },
+                { label: "WT", key: "wt" },
+                { label: "GSM", key: "gsm" },
+                { label: "", key: "actions", hasAddBtn: true },
+              ]}
+              data={gussetSpecRows}
+              type="flat"
+              onAddRow={handleAddGussetSpecRow}
+              onDeleteRow={handleDeleteGussetSpecRow}
+              onUpdateCell={(idx, _, key, value) => handleGussetSpecCellChange(idx, key, value)}
+            />
+          )}
+       
 
           <Table
             title="Sample Specifications"
@@ -696,26 +1131,70 @@ function FormMain({ onBack }) {
 
         {/* Footer */}
         <div className="bg-white p-6 my-12 rounded-lg shadow-sm border border-gray-100 flex justify-between items-end">
-          <div className="w-72">
-            <label className="block text-xs font-bold text-gray-700 mb-2 uppercase tracking-wide">
-              Request Sent To
-            </label>
-            <select
-              className="w-full border border-gray-300 rounded-md p-3 bg-white text-gray-700
-             focus:outline-none focus:border-[#0f3460] focus:ring-1 focus:ring-[#0f3460] cursor-pointer"
-              value={selectedUserId}
-              onChange={(e) => setSelectedUserId(Number(e.target.value))}
-              disabled={loading}
-            >
-              {users.map(user => (
-                <option key={user.id} value={user.id}>
-                  {user.username} ({user.role})
-                </option>
-              ))}
-            </select>
+          <div className="flex gap-4 bg-gradient-to-br from-[#f8faff] to-[#eef3fb] p-4 rounded-xl border border-[#0f3460]/10">
+            {/* Role Dropdown */}
+            <div className="w-56">
+              <label className="flex items-center gap-1.5 text-xs font-bold text-[#0f3460] mb-2 uppercase tracking-wide">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-8a4 4 0 11-8 0 4 4 0 018 0zm6 3a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+                Select Role
+              </label>
+              <div className="relative">
+                <select
+                  className="w-full appearance-none border border-gray-300 rounded-lg py-3 pl-3 pr-9 bg-white text-gray-700 font-medium
+                 focus:outline-none focus:border-[#0f3460] focus:ring-2 focus:ring-[#0f3460]/20 cursor-pointer
+                 transition-all duration-200 shadow-sm hover:border-[#0f3460]/50"
+                  value={selectedRole}
+                  onChange={handleRoleChange}
+                  disabled={loading}
+                >
+                  <option value="">-- Select Role --</option>
+                  {uniqueRoles.map(role => (
+                    <option key={role} value={role}>
+                      {role}
+                    </option>
+                  ))}
+                </select>
+                <svg className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </div>
+
+            {/* User Dropdown - enabled only after a role is selected */}
+            <div className="w-56">
+              <label className="flex items-center gap-1.5 text-xs font-bold text-[#0f3460] mb-2 uppercase tracking-wide">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+                Request Sent To
+              </label>
+              <div className="relative">
+                <select
+                  className="w-full appearance-none border border-gray-300 rounded-lg py-3 pl-3 pr-9 bg-white text-gray-700 font-medium
+                 focus:outline-none focus:border-[#0f3460] focus:ring-2 focus:ring-[#0f3460]/20 cursor-pointer
+                 transition-all duration-200 shadow-sm hover:border-[#0f3460]/50
+                 disabled:bg-gray-100 disabled:cursor-not-allowed disabled:hover:border-gray-300"
+                  value={selectedUserId}
+                  onChange={(e) => setSelectedUserId(Number(e.target.value))}
+                  disabled={loading || !selectedRole}
+                >
+                  <option value="">-- Select User --</option>
+                  {usersForSelectedRole.map(user => (
+                    <option key={user.id} value={user.id}>
+                      {user.username}
+                    </option>
+                  ))}
+                </select>
+                <svg className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </div>
           </div>
           <div>
-            <button
+            {/* <button
               onClick={() => handleSubmit('Save As Draft')}
               disabled={loading}
               className={`px-10 mr-3 py-3 rounded-md font-semibold shadow-md hover:shadow-lg
@@ -728,6 +1207,27 @@ function FormMain({ onBack }) {
             </button>
             <button
               onClick={() => handleSubmit('Pending')}
+              disabled={loading}
+              className={`px-10 py-3 rounded-md font-semibold shadow-md hover:shadow-lg
+                  transition-all transform active:scale-95 cursor-pointer text-white ${loading
+                  ? 'bg-gray-400 cursor-not-allowed opacity-70'
+                  : 'bg-[#0f3460] hover:bg-[#0a2545]'
+                }`}
+            > */}
+
+            <button
+              onClick={() => handleMainSubmit('Save As Draft')}
+              disabled={loading}
+              className={`px-10 mr-3 py-3 rounded-md font-semibold shadow-md hover:shadow-lg
+                  transition-all transform active:scale-95 cursor-pointer text-white ${loading
+                  ? 'bg-gray-400 cursor-not-allowed opacity-70'
+                  : 'bg-[#0f3460] hover:bg-[#0a2545]'
+                }`}
+            >
+              {loading ? 'Saving Draft...' : 'Save as Draft'}
+            </button>
+            <button
+              onClick={() => handleMainSubmit('Pending')}
               disabled={loading}
               className={`px-10 py-3 rounded-md font-semibold shadow-md hover:shadow-lg
                   transition-all transform active:scale-95 cursor-pointer text-white ${loading

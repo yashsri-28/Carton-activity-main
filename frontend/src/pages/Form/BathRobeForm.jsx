@@ -56,6 +56,26 @@ const RadioField = ({ label, name, value, onChange }) => (
     </div>
   </div>
 );
+const TextareaField = ({ label, name, value, onChange, placeholder, maxWords = 100 }) => {
+  const wordCount = (value || "").trim().split(/\s+/).filter(Boolean).length;
+
+  return (
+    <div className="flex flex-col gap-2 w-full">
+      <label className="text-sm font-semibold text-gray-700">{label}</label>
+      <textarea
+        name={name}
+        value={value || ""}
+        onChange={onChange}
+        placeholder={placeholder}
+        rows={1}
+        className="w-full border border-gray-200 rounded-md p-2 text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-sm resize-none"
+      />
+      <span className={`text-xs self-end ${wordCount >= maxWords ? 'text-red-500' : 'text-gray-400'}`}>
+        {wordCount}/{maxWords} words
+      </span>
+    </div>
+  );
+};
 
 const FormItem = ({ children }) => (
 
@@ -65,10 +85,12 @@ const FormItem = ({ children }) => (
 
 );
 
+
 // MAIN COMPONENT
 
 function BathRobeForm({ formData,
   onInputChange,
+  onRemarkChange,
   selectedFile,
   onFileChange,
   onRemoveFile,
@@ -405,6 +427,20 @@ function BathRobeForm({ formData,
             onChange={onInputChange}
           />
         </FormItem>
+
+        {/* Remark */}
+        {/* <div className="w-full px-4 mb-6"> */}
+        <div className="w-full md:w-1/2 lg:w-2/3 px-4 mb-6">
+          <TextareaField
+            label="Remark"
+            name="remark"
+            value={formData.remark}
+            onChange={onRemarkChange}
+            placeholder="Enter remark (max 100 words)"
+            maxWords={100}
+          />
+        </div>
+
         {/* Attachment */}
         <Attachment
           selectedFile={selectedFile}

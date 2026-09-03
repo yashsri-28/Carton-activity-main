@@ -6,27 +6,6 @@ const STATUS_LABELS = {
   VENDOR_UPLOAD_PENDING: 'PROCUREMENT UPLOAD PENDING',
   VENDOR_UPLOADED: 'PROCUREMENT UPLOADED',
 };
-
-const TERMINAL_STATUSES = ['APPROVED', 'RELEASED', 'REJECTED'];
-
-function daysBetween(d1, d2) {
-  const ms = new Date(d2) - new Date(d1);
-  return Math.max(0, Math.round(ms / (1000 * 60 * 60 * 24)));
-}
-
-// Ageing — how many days this artwork has been sitting in the pipeline
-// (from creation to today, regardless of status).
-function getAgeing(artwork) {
-  return `${daysBetween(artwork.created_on, new Date())}d`;
-}
-
-// Turnaround — how long it actually took to reach a final decision.
-// Blank for artworks still in progress (not yet APPROVED/RELEASED/REJECTED).
-function getTurnaround(artwork) {
-  if (!TERMINAL_STATUSES.includes(artwork.status)) return '—';
-  return `${daysBetween(artwork.created_on, artwork.updated_on)}d`;
-}
-
 const STATUS_COLORS = {
   DRAFT: 'bg-gray-100 text-gray-700',
   VENDOR_UPLOAD_PENDING: 'bg-yellow-100 text-yellow-800',
@@ -123,9 +102,7 @@ function ArtworkList({ role }) {
           onChange={(e) => setFilters({ ...filters, status: e.target.value })}
         >
           <option value="">All Statuses</option>
-          {Object.keys(STATUS_COLORS).map((s) => (
-            <option key={s} value={s}>{STATUS_LABELS[s] || s.replace(/_/g, ' ')}</option>
-          ))}
+          {Object.keys(STATUS_COLORS).map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
       <button
         onClick={fetchArtworks}
@@ -147,17 +124,15 @@ function ArtworkList({ role }) {
               <th className="text-left px-4 py-3">SKU</th>
               <th className="text-left px-4 py-3">Brand</th>
               <th className="text-left px-4 py-3">Status</th>
-              <th className="text-left px-4 py-3">Ageing</th>
-              <th className="text-left px-4 py-3">TAT</th>
               <th className="text-left px-4 py-3">Created</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={8} className="text-center py-6 text-gray-400">Loading...</td></tr>
+              <tr><td colSpan={6} className="text-center py-6 text-gray-400">Loading...</td></tr>
             )}
             {!loading && artworks.length === 0 && (
-              <tr><td colSpan={8} className="text-center py-6 text-gray-400">No artwork requests found.</td></tr>
+              <tr><td colSpan={6} className="text-center py-6 text-gray-400">No artwork requests found.</td></tr>
             )}
             {!loading && artworks.map((a) => (
               <tr
@@ -171,15 +146,10 @@ function ArtworkList({ role }) {
                 <td className="px-4 py-3">{a.brand_name || '-'}</td>
                 <td className="px-4 py-3">
                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[a.status] || 'bg-gray-100'}`}>
-                    {STATUS_LABELS[a.status] || a.status.replace(/_/g, ' ')}
+                   {STATUS_LABELS[a.status] || a.status.replace(/_/g, ' ')}
                   </span>
                 </td>
-              <td className="px-4 py-3 text-gray-600">{getAgeing(a)}</td>
-              <td className="px-4 py-3 text-gray-600">{getTurnaround(a)}</td>
-              {/* <td className="px-4 py-3 text-gray-500">{new Date(a.created_on).toLocaleString()}</td> */}
-              <td className="px-4 py-3 text-gray-500">
-                {new Date(a.created_on).toLocaleDateString()} {new Date(a.created_on).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </td>
+                <td className="px-4 py-3 text-gray-500">{new Date(a.created_on).toLocaleDateString()}</td>
               </tr>
             ))}
           </tbody>

@@ -23,16 +23,19 @@ function CartonMain({ onCreateRequest }) {
         ? response.data
         : response.data?.results || [];
 
-      // ✅ sort by last_action_date (latest first)
+      // program_type_group ('carton' / 'gusset') already comes from the
+      // backend now, since ActivityProgramStatus covers both.
+
+      // Sort by last_action_date (latest first)
       const sorted = [...list].sort((a, b) => {
         const parseDateTime = (dateTime) => {
           if (!dateTime) return 0;
 
-          // Split date and time
-          const [datePart, timePart] = dateTime.split(' ');
+          const [datePart, timePart] = dateTime.trim().split(' ');
+          if (!datePart) return 0;
           const [day, month, year] = datePart.split('-');
 
-          return new Date(`${year}-${month}-${day}T${timePart}`).getTime();
+          return new Date(`${year}-${month}-${day}T${timePart || '00:00:00'}`).getTime();
         };
 
         return (
@@ -115,7 +118,11 @@ function CartonMain({ onCreateRequest }) {
   };
 
   const handleView = (row) => {
-    navigate(`/carton/view/${row.id}`);
+    if (row.program_type_group === 'gusset') {
+      navigate(`/gusset/view/${row.id}`);
+    } else {
+      navigate(`/carton/view/${row.id}`);
+    }
   };
   // Row styling
   const getRowStyle = (row, index) => {
@@ -154,13 +161,37 @@ function CartonMain({ onCreateRequest }) {
     }
   };
 
-  const formatDateOnly = (dateTime) => {
+const formatDateTime = (dateTime) => {
   if (!dateTime) return "-";
 
-  const [datePart] = dateTime.split(" ");
+  const [datePart, timePart] = dateTime.trim().split(" ");
+  if (!datePart) return "-";
+
   const [day, month, year] = datePart.split("-");
 
-  return `${day}-${month}-${year}`;
+  if (!timePart) return `${day}-${month}-${year}`;
+
+  // Backend UTC deta hai, isliye 'Z' laga ke UTC date banao
+  const utcDate = new Date(`${year}-${month}-${day}T${timePart}Z`);
+
+  if (isNaN(utcDate.getTime())) return `${day}-${month}-${year}`;
+
+  // IST mein convert karo
+  const istOptions = {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "Asia/Kolkata",
+  };
+
+  const formatted = new Intl.DateTimeFormat("en-GB", istOptions).format(utcDate);
+  const [datePartOut, timePartOut] = formatted.split(", ");
+  const [d, m, y] = datePartOut.split("/");
+
+  return `${d}-${m}-${y}, ${timePartOut.toUpperCase()}`;
 };
 
   // Column config
@@ -186,28 +217,41 @@ function CartonMain({ onCreateRequest }) {
         </span>
       ),
     },
-    {
-      key: 'created_date',
-      header: 'Created Date',
-      className: 'text-gray-500 whitespace-nowrap',
+        {
+      key: 'program_type_group',
+      header: 'Type',
       render: (row) => (
-        <div className="flex items-center gap-2">
-          <Calendar size={14} className="text-gray-400" />
-          {formatDateOnly(row.created_date) || '-'}
-        </div>
+        <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
+          row.program_type_group === 'gusset'
+            ? 'bg-purple-100 text-purple-700'
+            : 'bg-blue-100 text-blue-700'
+        }`}>
+          {row.program_type_group === 'gusset' ? 'Gusset' : 'Carton'}
+        </span>
       ),
     },
     {
-      key: 'last_action_date',
-      header: 'Last Action Date',
-      className: 'text-gray-500 whitespace-nowrap',
-      render: (row) => (
-        <div className="flex items-center gap-2">
-          <Calendar size={14} className="text-gray-400" />
-          {formatDateOnly(row.last_action_date) || '-'}
-        </div>
-      ),
-    },
+  key: 'created_date',
+  header: 'Created Date',
+  className: 'text-gray-500 whitespace-nowrap',
+  render: (row) => (
+    <div className="flex items-center gap-2">
+      <Calendar size={14} className="text-gray-400" />
+      {formatDateTime(row.created_date)}
+    </div>
+  ),
+},
+{
+  key: 'last_action_date',
+  header: 'Last Action Date',
+  className: 'text-gray-500 whitespace-nowrap',
+  render: (row) => (
+    <div className="flex items-center gap-2">
+      <Calendar size={14} className="text-gray-400" />
+      {formatDateTime(row.last_action_date)}
+    </div>
+  ),
+},
   ];
 
   // // Actions (Copy + Re-Name)

@@ -19,6 +19,17 @@ import logging
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+from django.utils import timezone
+import pytz
+
+IST = pytz.timezone("Asia/Kolkata")
+
+def to_ist_str(dt):
+    """Converts a UTC-aware datetime to IST and formats it as a string."""
+    if not dt:
+        return None
+    return timezone.localtime(dt, IST).strftime("%d-%m-%Y %H:%M:%S")
+
 
 # ============================================================
 # EXTERNAL CONFIGURATION FILE LOADER
@@ -217,6 +228,18 @@ AUTH_PASSWORD_VALIDATORS = [
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
 LANGUAGE_CODE = "en-us"
+
+
+from django.utils import timezone
+import pytz
+
+IST = pytz.timezone("Asia/Kolkata")
+
+def to_ist_str(dt):
+    """Converts a UTC-aware datetime to IST and formats it as a string."""
+    if not dt:
+        return None
+    return timezone.localtime(dt, IST).strftime("%d-%m-%Y %H:%M:%S")
 
 TIME_ZONE = "UTC"
 

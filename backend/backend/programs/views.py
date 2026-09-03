@@ -408,6 +408,8 @@ def submit_carton_program(request):
     if not program_name:
         return Response({"error": "program_name is required"}, status=400)
 
+    status_value = "Draft" if btn.lower() == "save as draft" else "Pending"
+
     carton_program_data = data.get("carton_program", {})
     subprograms = data.get("subprograms", [])
     samples = data.get("samples", [])
@@ -530,51 +532,17 @@ def submit_carton_program(request):
 
         result = calc.compute(sp)
 
-        # -------- Yes/No dropdown validation --------
-        ribbon_val, err = _validate_yes_no(sp.get("ribbon"), "ribbon")
-        if err:
-            return err
-
-        belly_band_val, err = _validate_yes_no(sp.get("belly_band"), "belly_band")
-        if err:
-            return err
-
-        self_fabric_bag_val, err = _validate_yes_no(sp.get("self_fabric_bag"), "self_fabric_bag")
-        if err:
-            return err
-
-        # -------- width/length in cm (open-form packed dimension) --------
-        width_cm = sp.get("width_cm")
-        length_cm = sp.get("length_cm")
-
-        if width_cm is None and sp.get("width_in") is not None:
-            width_cm = round(Decimal(str(sp.get("width_in"))) * Decimal("2.54"), 2)
-
-        if length_cm is None and sp.get("length_in") is not None:
-            length_cm = round(Decimal(str(sp.get("length_in"))) * Decimal("2.54"), 2)
-
         CartonProgramSubProgram.objects.create(
             carton_program=carton_program,
 
             program_name=sp.get("program_name"),
             style=sp.get("style"),
 
-            # NEW: Size (King/Queen/etc.) + Product Type (Sheet Set/Flat Sheet/etc.)
-            size=sp.get("size"),
-            product_type=sp.get("product_type"),
-
             width_in=sp.get("width_in"),
             length_in=sp.get("length_in"),
 
-            # Packed product dimension - open form (now actually populated)
-            width_cm=width_cm,
-            length_cm=length_cm,
-
             gsm=sp.get("gsm"),
-            # Weight is always editable - honors marketing's input if given,
-            # otherwise falls back to the calculator's estimate.
             wt_per_unit=result["weight"],
-            weight_uom=sp.get("weight_uom", "GM"),
 
             unit_per_carton=sp.get("unit_per_carton"),
             inner_pack_unit_qty=sp.get("inner_pack_unit_qty"),
@@ -583,15 +551,11 @@ def submit_carton_program(request):
             pcs_per_set=sp.get("pcs_per_set"),
             remark=sp.get("remark"),
 
-            ribbon=ribbon_val,
-            belly_band=belly_band_val,
-            self_fabric_bag=self_fabric_bag_val,
-
-            # Packed product dimension - folded form
+            # 🔥 NEW
             folded_length=result["folded_length"],
             folded_width=result["folded_width"],
 
-            # Carton dims - now consistently in cm (see carton_calculator.py fix)
+            # 🔥 CARTON AUTO
             carton_length=result["carton"]["length"],
             carton_width=result["carton"]["width"],
             carton_height=result["carton"]["height"],

@@ -10,11 +10,15 @@ function GussetView() {
   const navigate = useNavigate();
 
   const userRole = localStorage.getItem('userRole') || '';
-  const isTTQM = userRole.toLowerCase() === 'ttqm';
-  const isMarketing = userRole.toLowerCase() === 'marketing';
+  const role = userRole.toLowerCase();
+  const isTTQM = role === 'ttqm';
+  const isMarketing = role === 'marketing';
 
   const [details, setDetails] = useState(null);
+  const normalizedStatus = details?.status?.toLowerCase()?.trim();
+  const canApprove = (role === 'ttqm' || role === 'ppc') && normalizedStatus === 'pending';
   const [subprograms, setSubprograms] = useState([]);
+  const [savingSpecs, setSavingSpecs] = useState(false);
   const [samples, setSamples] = useState([]);
   const [attachments, setAttachments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -26,20 +30,28 @@ function GussetView() {
   const [showRejectPopup, setShowRejectPopup] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [submittingFinal, setSubmittingFinal] = useState(false);
 
   // Expected Date States
   const [expectedDate, setExpectedDate] = useState('');
   const [savingDate, setSavingDate] = useState(false);
 
   // ==================== FETCH GUSSET DETAILS ====================
+  // NOTE: `id` here is the activity_program_status_id (same id scheme
+  // used by CartonView), not the raw GussetProgram id.
+  const [gussetProgramId, setGussetProgramId] = useState(null);
+
   useEffect(() => {
     const fetchDetails = async () => {
       try {
         setLoading(true);
-        const response = await api.post('/api/details/', { program_id: id });
+        const response = await api.post('/api/gusset-program/details/', {
+          activity_program_status_id: id,
+        });
         const data = response.data;
 
         setDetails(data);
+        setGussetProgramId(data.program_id);
         setSubprograms(data.program_specifications || []);
         setSamples(data.samples || []);
         setAttachments(data.attachments || []);
@@ -71,8 +83,8 @@ function GussetView() {
 
     setSavingDate(true);
     try {
-      await api.post('/api/edit/', {
-        program_id: parseInt(id),
+      await api.post('/api/gusset-program/edit/', {
+        program_id: gussetProgramId,
         expected_date_confirmation: expectedDate,
       });
 
@@ -85,11 +97,50 @@ function GussetView() {
     }
   };
 
+
+    // ==================== SPEC ROW EDIT HANDLERS (TTQM/PPC only) ====================
+  const handleSpecFieldChange = (specId, field, value) => {
+    setSubprograms(prev =>
+      prev.map(sp => (sp.spec_id === specId ? { ...sp, [field]: value } : sp))
+    );
+  };
+
+  const handleSaveSpecs = async () => {
+    setSavingSpecs(true);
+    try {
+      await api.post('/api/gusset-program/specs/update/', {
+        specs: subprograms.map(sp => ({
+          spec_id: sp.spec_id,
+          size: sp.size,
+          fold_length: sp.fold_length,
+          fold_width: sp.fold_width,
+          gusset_name: sp.gusset_name,
+          wt: sp.wt !== '' ? sp.wt : null,
+          gsm: sp.gsm !== '' ? sp.gsm : null,
+        }))
+      });
+      toast.success('Specifications updated successfully!');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to update specifications.');
+    } finally {
+      setSavingSpecs(false);
+    }
+  };
+
   // ==================== ACCEPT & REJECT HANDLERS ====================
+  // Use the SAME generic pipeline endpoints that CartonView uses — these
+  // work on ActivityProgramStatus regardless of whether it points to a
+  // CartonProgram or a GussetProgram.
   const handleAccept = async () => {
     setActionLoading(true);
     try {
-      await api.post('/api/accept/', { program_id: parseInt(id) });
+      const endpoint = role === 'ppc'
+        ? '/api/activity-program/accept-ppc/'
+        : '/api/activity-program/accept/';
+      await api.post(endpoint, {
+        activity_program_status_id: parseInt(id),
+      });
       toast.success('Program Accepted Successfully!');
       setTimeout(() => navigate(-1), 1500);
     } catch (err) {
@@ -107,9 +158,9 @@ function GussetView() {
 
     setActionLoading(true);
     try {
-      await api.post('/api/reject/', {
-        program_id: parseInt(id),
-        rejection_reason: rejectionReason.trim(),
+      await api.post('/api/activity-program/reject/', {
+        activity_program_status_id: parseInt(id),
+        reason: rejectionReason.trim(),
       });
       toast.success('Program Rejected Successfully!');
       setShowRejectPopup(false);
@@ -119,6 +170,22 @@ function GussetView() {
       toast.error('Failed to reject the program.');
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handleSubmitFinal = async () => {
+    setSubmittingFinal(true);
+    try {
+      await api.post('/api/gusset-program/submit-final/', {
+        activity_program_status_id: parseInt(id),
+      });
+      toast.success('Gusset Program marked as Final Working Submitted!');
+      setTimeout(() => navigate(-1), 1500);
+    } catch (err) {
+      const msg = err.response?.data?.error || 'Failed to submit final';
+      toast.error(msg);
+    } finally {
+      setSubmittingFinal(false);
     }
   };
 
@@ -177,8 +244,8 @@ function GussetView() {
               <h1 className="text-2xl font-bold">Gusset Program – {details.program_name}</h1>
             </div>
 
-            {/* Action Buttons - Only for TTQM */}
-            {isTTQM && (
+            {/* Action Buttons - visible to TTQM/PPC only while status is Pending */}
+            {canApprove && (
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setShowRejectPopup(true)}
@@ -198,6 +265,18 @@ function GussetView() {
                   Accept
                 </button>
               </div>
+            )}
+
+            {/* Submit Final button - visible to TTQM only while status is In Progress */}
+            {isTTQM && normalizedStatus === 'in progress' && (
+              <button
+                onClick={handleSubmitFinal}
+                disabled={submittingFinal}
+                className="flex items-center gap-2 px-6 py-2.5 bg-green-700 hover:bg-green-800 text-white rounded-lg font-medium transition-all disabled:opacity-50"
+              >
+                <CheckCircle size={18} />
+                {submittingFinal ? 'Submitting...' : 'Submit Final'}
+              </button>
             )}
           </div>
         </div>
@@ -233,7 +312,91 @@ function GussetView() {
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Size</p>
-                  <p className="font-medium">{details.size || '-'}</p>
+                  <p className="font-medium">
+                    {details.size === "Other" ? details.other_size : details.size || '-'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Fold Length x Fold Width</p>
+                  <p className="font-medium">
+                    {details.fold_length && details.fold_width
+                      ? `${details.fold_length} x ${details.fold_width}`
+                      : (details.fold_length || details.fold_width || '-')}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Gusset Bank</p>
+                  <p className="font-medium">{details.gusset_bank || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Reference Program</p>
+                  <p className="font-medium">{details.reference_program || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Comments</p>
+                  <p className="font-medium">{details.comments || '-'}</p>
+                </div>
+              </div>
+
+              {/* Cardboard Stiffener Section */}
+              <div className="mt-6 pt-4 border-t border-gray-200">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Cardboard Stiffener</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <div>
+                    <p className="text-sm text-gray-500">Cardboard Required</p>
+                    <p className="font-medium">{details.cardboard_required ? "Yes" : "No"}</p>
+                  </div>
+                  {details.cardboard_required && (
+                    <>
+                      <div>
+                        <p className="text-sm text-gray-500">Fold Type</p>
+                        <p className="font-medium">{details.fold_type || '-'}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Ply</p>
+                        <p className="font-medium">{details.ply || '-'}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Fold on Side</p>
+                        <p className="font-medium">{details.fold_on_side || '-'}</p>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Polybag Section */}
+              <div className="mt-6 pt-4 border-t border-gray-200">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Polybag</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+                  <div>
+                    <p className="text-sm text-gray-500">Polybag Required</p>
+                    <p className="font-medium">{details.polybag_required ? "Yes" : "No"}</p>
+                  </div>
+                  {details.polybag_required && (
+                    <>
+                      <div>
+                        <p className="text-sm text-gray-500">Material Type</p>
+                        <p className="font-medium">{details.material_type || '-'}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Opening Type</p>
+                        <p className="font-medium">{details.opening_type || '-'}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Opening on Side</p>
+                        <p className="font-medium">{details.opening_on_side || '-'}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Inlay / Belly Band</p>
+                        <p className="font-medium">{details.inlay_or_belly_band || '-'}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Polybag Type</p>
+                        <p className="font-medium">{details.polybag_type || '-'}</p>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -331,32 +494,103 @@ function GussetView() {
             </div>
           </div>
 
-          {/* Tables remain same */}
+          {/* Program Specifications — editable by TTQM/PPC only */}
           {subprograms && subprograms.length > 0 && (
             <div className="bg-white shadow-sm rounded-lg border mb-8">
               <div className="p-3 border-b">
                 <h2 className="text-lg font-semibold">Program Specifications</h2>
               </div>
               <div className="p-2 overflow-x-auto">
-                <Table
-                  title="Program Specifications"
-                  headers={[
-                    { label: "Program", key: "program" },
-                    { label: "Style", key: "style" },
-                    { label: "W-In", key: "width_in" },
-                    { label: "W-Cm", key: "width_cm" },
-                    { label: "L-In", key: "length_in" },
-                    { label: "L-Cm", key: "length_cm" },
-                    { label: "Wt/Unit", key: "wt_per_unit" },
-                    { label: gsmLabel, key: "gsm" },
-                    { label: "Unit/Carton", key: "unit_per_carton" },
-                    { label: "Inner Pack Unit Quantity", key: "inner_pack_unit_qty" },
-                    { label: "Fold", key: "fold" },
-                  ]}
-                  data={subprograms}
-                  type="flat"
-                  readOnly={true}
-                />
+                <table className="min-w-full border-collapse text-sm">
+                  <thead className="text-white">
+                    <tr>
+                      <th className="px-4 py-3 text-left bg-[#0f3460]">Size</th>
+                      <th className="px-4 py-3 text-left bg-[#0f3460]">Fold Length</th>
+                      <th className="px-4 py-3 text-left bg-[#0f3460]">Fold Width</th>
+                      <th className="px-4 py-3 text-left bg-[#0f3460]">Gusset Name</th>
+                      <th className="px-4 py-3 text-left bg-[#0f3460]">WT</th>
+                      <th className="px-4 py-3 text-left bg-[#0f3460]">GSM</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {subprograms.map((sp) => (
+                      <tr key={sp.spec_id} className="border-t">
+                        <td className="px-4 py-2">
+                          {(role === 'ttqm' || role === 'ppc') ? (
+                            <input
+                              type="text"
+                              value={sp.size ?? ''}
+                              onChange={(e) => handleSpecFieldChange(sp.spec_id, 'size', e.target.value)}
+                              className="border px-2 py-1 rounded w-28 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                          ) : (sp.size ?? "-")}
+                        </td>
+                        <td className="px-4 py-2">
+                          {(role === 'ttqm' || role === 'ppc') ? (
+                            <input
+                              type="number"
+                              value={sp.fold_length ?? ''}
+                              onChange={(e) => handleSpecFieldChange(sp.spec_id, 'fold_length', e.target.value)}
+                              className="border px-2 py-1 rounded w-24 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                          ) : (sp.fold_length ?? "-")}
+                        </td>
+                        <td className="px-4 py-2">
+                          {(role === 'ttqm' || role === 'ppc') ? (
+                            <input
+                              type="number"
+                              value={sp.fold_width ?? ''}
+                              onChange={(e) => handleSpecFieldChange(sp.spec_id, 'fold_width', e.target.value)}
+                              className="border px-2 py-1 rounded w-24 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                          ) : (sp.fold_width ?? "-")}
+                        </td>
+                        <td className="px-4 py-2">
+                          {(role === 'ttqm' || role === 'ppc') ? (
+                            <input
+                              type="text"
+                              value={sp.gusset_name ?? ''}
+                              onChange={(e) => handleSpecFieldChange(sp.spec_id, 'gusset_name', e.target.value)}
+                              className="border px-2 py-1 rounded w-32 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                          ) : (sp.gusset_name ?? "-")}
+                        </td>
+                        <td className="px-4 py-2">
+                          {(role === 'ttqm' || role === 'ppc') ? (
+                            <input
+                              type="number"
+                              value={sp.wt ?? ''}
+                              onChange={(e) => handleSpecFieldChange(sp.spec_id, 'wt', e.target.value)}
+                              className="border px-2 py-1 rounded w-24 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                          ) : (sp.wt ?? "-")}
+                        </td>
+                        <td className="px-4 py-2">
+                          {(role === 'ttqm' || role === 'ppc') ? (
+                            <input
+                              type="number"
+                              value={sp.gsm ?? ''}
+                              onChange={(e) => handleSpecFieldChange(sp.spec_id, 'gsm', e.target.value)}
+                              className="border px-2 py-1 rounded w-24 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                          ) : (sp.gsm ?? "-")}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {(role === 'ttqm' || role === 'ppc') && (
+                  <div className="flex justify-end p-3">
+                    <button
+                      onClick={handleSaveSpecs}
+                      disabled={savingSpecs}
+                      className="px-6 py-2 bg-[#0f3460] hover:bg-[#0a2545] text-white rounded-lg font-medium disabled:opacity-50"
+                    >
+                      {savingSpecs ? 'Saving...' : 'Save Specifications'}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -378,6 +612,7 @@ function GussetView() {
                     { label: "Width (Cm)", key: "width_cm" },
                     { label: "Length (In)", key: "length_in" },
                     { label: "Length (Cm)", key: "length_cm" },
+                    { label: "Attachment", key: "attachments", type: "attachment_list" },
                   ]}
                   data={samples}
                   type="flat"

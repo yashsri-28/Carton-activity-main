@@ -27,31 +27,6 @@ class ArtworkIDSequence(models.Model):
             seq.last_number += 1
             seq.save(update_fields=["last_number"])
             return f"ART-{year}-{seq.last_number:05d}"
-        
-# ============================================================
-# Unique Matcode generator — same race-safe pattern as
-# ArtworkIDSequence, but for auto-generated Material Codes
-# (used by category workflows where Procurement generates the
-# matcode themselves, e.g. BW_STICKER, instead of it being typed
-# in manually).
-# Format: MAT-<YEAR>-<00001>
-# ============================================================
-
-class MatcodeSequence(models.Model):
-    year = models.PositiveIntegerField(unique=True)
-    last_number = models.PositiveIntegerField(default=0)
-
-    class Meta:
-        db_table = "artwork_matcode_sequence"
-
-    @classmethod
-    def next_code(cls):
-        year = timezone.now().year
-        with transaction.atomic():
-            seq, _ = cls.objects.select_for_update().get_or_create(year=year)
-            seq.last_number += 1
-            seq.save(update_fields=["last_number"])
-            return f"MAT-{year}-{seq.last_number:05d}"        
 
 
 # ============================================================
@@ -76,14 +51,6 @@ class ArtworkRequest(models.Model):
         ("RELEASED", "Released"),
         ("ARCHIVED", "Archived"),
         ("OBSOLETE", "Obsolete"),
-        
-        
-         # --- Custom category workflow statuses (e.g. RIBBON) ---
-        ("PHYSICAL_SAMPLE_PENDING", "Physical Sample Pending"),
-        ("SAMPLE_SENT", "Sample Sent - Awaiting Receipt"),
-        ("SAMPLE_RECEIVED_REVIEW", "Sample Received - Review Pending"),
-        ("SAMPLE_REJECTED", "Sample Rejected"),
-        ("MATCODE_PENDING", "Matcode Generation Pending"),
     )
 
     # --------------------------------------------------
@@ -135,14 +102,6 @@ class ArtworkRequest(models.Model):
     # --------------------------------------------------
 
     customer_approval_required = models.BooleanField(default=False)
-      # --------------------------------------------------
-    # Which workflow this artwork follows — decided once at creation
-    # time based on its category, and stays fixed even if the
-    # category->workflow mapping changes later for future artworks.
-    # "STANDARD" = existing Marketing -> PPC -> TQM chain.
-    # --------------------------------------------------
-
-    workflow_key = models.CharField(max_length=50, default="STANDARD", db_index=True)
 
     # --------------------------------------------------
     # Workflow
@@ -352,10 +311,6 @@ class ArtworkComment(models.Model):
         blank=True,
         related_name="comments",
     )
-       # Marks the ONE remark/attachment added at request-creation time
-    # (via the Packaging Spec form) — permanently distinguishes it from
-    # any later comment, regardless of whether a version exists yet.
-    is_initial_remark = models.BooleanField(default=False)
 
     message = models.TextField(blank=True, default="")
 
@@ -423,154 +378,3 @@ class PackagingSpecification(models.Model):
 
     def __str__(self):
         return f"{self.artwork.artwork_id} - {self.category}" 
-    
-    
-
-# ============================================================
-# Notification Bell — whenever an artwork moves to a stage that
-# needs someone's action (created & assigned, uploaded, approved
-# to next stage, rejected), a notification row is created for the
-# relevant person(s). Read by the bell icon in the top bar.
-# ============================================================
-
-class ArtworkNotification(models.Model):
-
-    recipient = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="artwork_notifications",
-    )
-
-    artwork = models.ForeignKey(
-        ArtworkRequest,
-        on_delete=models.CASCADE,
-        related_name="notifications",
-    )
-
-    message = models.CharField(max_length=255)
-
-    is_read = models.BooleanField(default=False)
-
-    created_on = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = "artwork_notification"
-        ordering = ["-created_on"]
-
-    def __str__(self):
-        return f"To {self.recipient} — {self.message}"
-    
-    
-    
-    # ============================================================
-# Custom-workflow tracking (RIBBON and any future category with
-# its own lifecycle). The STANDARD flow keeps using ArtworkApproval
-# exactly as before — this model is ONLY used when
-# ArtworkRequest.workflow_key != "STANDARD".
-# ============================================================
-
-class WorkflowStep(models.Model):
-
-    STEP_STATUS_CHOICES = (
-        ("PENDING", "Pending"),
-        ("DONE", "Done"),
-        ("REJECTED", "Rejected"),
-    )
-
-    artwork = models.ForeignKey(
-        ArtworkRequest,
-        on_delete=models.CASCADE,
-        related_name="workflow_steps",
-    )
-
-    workflow_key = models.CharField(max_length=50)
-    step_code = models.CharField(max_length=50)
-    step_type = models.CharField(max_length=30)   # APPROVAL / PHYSICAL_SAMPLE / SAMPLE_APPROVAL / MATCODE
-    step_label = models.CharField(max_length=100)
-    actor_role = models.CharField(max_length=30)
-    sequence = models.PositiveSmallIntegerField()
-
-    status = models.CharField(max_length=10, choices=STEP_STATUS_CHOICES, default="PENDING")
-    comments = models.TextField(blank=True, default="")
-
-    acted_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="workflow_steps_acted",
-    )
-    acted_on = models.DateTimeField(null=True, blank=True)
-
-    created_on = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = "artwork_workflow_step"
-        ordering = ["sequence"]
-
-    def __str__(self):
-        return f"{self.artwork.artwork_id} - {self.step_code} - {self.status}"
-
-
-# ============================================================
-# Physical Sample stage data (Procurement sends -> Marketing
-# receives -> Marketing approves/rejects). Only used by categories
-# whose workflow includes a PHYSICAL_SAMPLE-type step.
-# ============================================================
-
-class PhysicalSample(models.Model):
-
-    DECISION_CHOICES = (
-        ("PENDING", "Pending"),
-        ("APPROVED", "Approved"),
-        ("REJECTED", "Rejected"),
-    )
-
-    artwork = models.ForeignKey(
-        ArtworkRequest,
-        on_delete=models.CASCADE,
-        related_name="physical_samples",
-    )
-
-    # --- Sent by Procurement ---
-    sent_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        related_name="physical_samples_sent",
-    )
-    attachment = models.FileField(upload_to="physical_samples/%Y/%m/", null=True, blank=True)
-    date_sent = models.DateField(null=True, blank=True)
-    est_arrival_date = models.DateField(null=True, blank=True)
-    comments = models.TextField(blank=True, default="")
-    sent_on = models.DateTimeField(auto_now_add=True)
-
-    # --- Received by Marketing (physical arrival confirmation) ---
-    is_received = models.BooleanField(default=False)
-    received_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="physical_samples_received",
-    )
-    received_on = models.DateTimeField(null=True, blank=True)
-
-    # --- Marketing's decision on the received sample ---
-    decision = models.CharField(max_length=10, choices=DECISION_CHOICES, default="PENDING")
-    decision_comments = models.TextField(blank=True, default="")
-    decided_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="physical_samples_decided",
-    )
-    decided_on = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        db_table = "artwork_physical_sample"
-        ordering = ["-sent_on"]
-
-    def __str__(self):
-        return f"{self.artwork.artwork_id} - Sample sent {self.sent_on}"

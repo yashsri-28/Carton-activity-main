@@ -951,3 +951,42 @@ class GussetSampleProgram(models.Model):
 
     class Meta:
         db_table = "gusset_sample_program"
+
+
+class SuperAdminDeleteLog(models.Model):
+    """
+    Dedicated audit log for SuperAdmin delete actions — separate from the
+    general activity_logs app, specifically for tracking permanent
+    deletions of Carton/Gusset programs.
+    """
+
+    PROGRAM_TYPE_CHOICES = (
+        ("CARTON", "Carton Program"),
+        ("GUSSET", "Gusset Program"),
+    )
+
+    program_type = models.CharField(max_length=20, choices=PROGRAM_TYPE_CHOICES)
+    program_id = models.IntegerField(help_text="ID of the deleted CartonProgram or GussetProgram")
+    program_name = models.CharField(max_length=255, null=True, blank=True)
+    customer_name = models.CharField(max_length=255, null=True, blank=True)
+    activity_program_status_id = models.IntegerField(null=True, blank=True)
+
+    deleted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="superadmin_deletions"
+    )
+    deleted_on = models.DateTimeField(auto_now_add=True)
+
+    # Snapshot of key details at time of deletion, for reference since the
+    # actual record will no longer exist.
+    snapshot = models.JSONField(null=True, blank=True)
+
+    class Meta:
+        db_table = "superadmin_delete_log"
+        ordering = ["-deleted_on"]
+
+    def __str__(self):
+        return f"{self.program_type} #{self.program_id} deleted by {self.deleted_by} on {self.deleted_on}"

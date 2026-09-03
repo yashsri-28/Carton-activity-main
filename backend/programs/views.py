@@ -2290,23 +2290,23 @@ def accept_program_ppc(request):
         )
     except ActivityProgramStatus.DoesNotExist:
         return Response({"error": "Invalid record"}, status=404)
-    
-    try:
-        tqm_user = User.objects.get(id=5)
-    except User.DoesNotExist:
-        return Response({"error": "TQM user not found"}, status=404)
+
+    # Role-based lookup instead of hardcoded user id — picks any active
+    # TTQM-role user. If multiple exist, the first one (by id) is used.
+    tqm_user = User.objects.filter(role="TTQM", is_active=True).order_by("id").first()
+
+    if not tqm_user:
+        return Response({"error": "No active TTQM user found to forward this request to"}, status=404)
 
     aps.status = "In Progress"
     aps.sent_to = tqm_user
     aps.rejection_reason = None
-    aps.sent_to_id = 5
     aps.save()
-    
 
     notification = NotificationService()
-    
+
     try:
-        notification.send_tqm_notification(aps.program)
+        notification.send_tqm_notification(aps.program or aps.gusset_program)
     except Exception as e:
         print("Email failed:", str(e))
 
@@ -2314,11 +2314,11 @@ def accept_program_ppc(request):
         module_name="Activity Status",
         record_id=aps.id,
         action="Accepted_PPC",
-        message=f"Program {aps.program_name} accepted by ppc",
+        message=f"Program {aps.program_name} accepted by ppc, forwarded to {tqm_user.username}",
         user=request.user
     )
 
-    return Response({"message": "Program Accepted By PPC"})
+    return Response({"message": f"Program Accepted By PPC and forwarded to {tqm_user.username}"})
  
 
 

@@ -378,3 +378,186 @@ class PackagingSpecification(models.Model):
 
     def __str__(self):
         return f"{self.artwork.artwork_id} - {self.category}" 
+    
+    
+
+# ============================================================
+# Notification Bell — whenever an artwork moves to a stage that
+# needs someone's action (created & assigned, uploaded, approved
+# to next stage, rejected), a notification row is created for the
+# relevant person(s). Read by the bell icon in the top bar.
+# ============================================================
+
+class ArtworkNotification(models.Model):
+
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="artwork_notifications",
+    )
+
+    artwork = models.ForeignKey(
+        ArtworkRequest,
+        on_delete=models.CASCADE,
+        related_name="notifications",
+    )
+
+    message = models.CharField(max_length=255)
+
+    is_read = models.BooleanField(default=False)
+
+    created_on = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "artwork_notification"
+        ordering = ["-created_on"]
+
+    def __str__(self):
+        return f"To {self.recipient} — {self.message}"
+    
+    
+    
+    # ============================================================
+# Custom-workflow tracking (RIBBON and any future category with
+# its own lifecycle). The STANDARD flow keeps using ArtworkApproval
+# exactly as before — this model is ONLY used when
+# ArtworkRequest.workflow_key != "STANDARD".
+# ============================================================
+
+class WorkflowStep(models.Model):
+
+    STEP_STATUS_CHOICES = (
+        ("PENDING", "Pending"),
+        ("DONE", "Done"),
+        ("REJECTED", "Rejected"),
+    )
+
+    artwork = models.ForeignKey(
+        ArtworkRequest,
+        on_delete=models.CASCADE,
+        related_name="workflow_steps",
+    )
+
+    # Which version this step belongs to — old versions' rejection
+    # history is NEVER deleted (same rule as the STANDARD flow's
+    # ArtworkApproval), so a full reject/re-upload trail always stays
+    # traceable, per version.
+    version = models.ForeignKey(
+        "ArtworkVersion",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="workflow_steps_for_version",
+    )
+
+    workflow_key = models.CharField(max_length=50)
+    step_code = models.CharField(max_length=50)
+    step_type = models.CharField(max_length=30)   # APPROVAL / PHYSICAL_SAMPLE / SAMPLE_APPROVAL / MATCODE
+    step_label = models.CharField(max_length=100)
+    actor_role = models.CharField(max_length=30)
+    sequence = models.PositiveSmallIntegerField()
+
+    status = models.CharField(max_length=10, choices=STEP_STATUS_CHOICES, default="PENDING")
+    comments = models.TextField(blank=True, default="")
+
+    acted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="workflow_steps_acted",
+    )
+    acted_on = models.DateTimeField(null=True, blank=True)
+
+    created_on = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "artwork_workflow_step"
+        ordering = ["sequence"]
+
+    def __str__(self):
+        return f"{self.artwork.artwork_id} - {self.step_code} - {self.status}"
+
+
+# ============================================================
+# Physical Sample stage data (Procurement sends -> Marketing
+# receives -> Marketing approves/rejects). Only used by categories
+# whose workflow includes a PHYSICAL_SAMPLE-type step.
+# ============================================================
+
+class PhysicalSample(models.Model):
+
+    DECISION_CHOICES = (
+        ("PENDING", "Pending"),
+        ("APPROVED", "Approved"),
+        ("REJECTED", "Rejected"),
+    )
+
+    REJECT_LEVEL_CHOICES = (
+        ("SAMPLE", "Sample Level"),
+        ("ARTWORK", "Artwork Level"),
+    )
+
+    artwork = models.ForeignKey(
+        ArtworkRequest,
+        on_delete=models.CASCADE,
+        related_name="physical_samples",
+    )
+
+    # Which artwork version this sample was sent for — same
+    # history-preservation rule as everywhere else.
+    version = models.ForeignKey(
+        "ArtworkVersion",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="physical_samples_for_version",
+    )
+
+    # --- Sent by Procurement ---
+    sent_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="physical_samples_sent",
+    )
+    attachment = models.FileField(upload_to="physical_samples/%Y/%m/", null=True, blank=True)
+    date_sent = models.DateField(null=True, blank=True)
+    est_arrival_date = models.DateField(null=True, blank=True)
+    comments = models.TextField(blank=True, default="")
+    sent_on = models.DateTimeField(auto_now_add=True)
+
+    # --- Received by Marketing (physical arrival confirmation) ---
+    is_received = models.BooleanField(default=False)
+    received_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="physical_samples_received",
+    )
+    received_on = models.DateTimeField(null=True, blank=True)
+
+    # --- Marketing's decision on the received sample ---
+       # --- Marketing's decision on the received sample ---
+    decision = models.CharField(max_length=10, choices=DECISION_CHOICES, default="PENDING")
+    # Permanently records WHICH TYPE of rejection this was — so
+    # history always shows "was this a sample-only reject, or a
+    # full-artwork reject" even long after the fact.
+    reject_level = models.CharField(max_length=10, choices=REJECT_LEVEL_CHOICES, null=True, blank=True)
+    decision_comments = models.TextField(blank=True, default="")
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="physical_samples_decided",
+    )
+    decided_on = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "artwork_physical_sample"
+        ordering = ["-sent_on"]
+
+    def __str__(self):
+        return f"{self.artwork.artwork_id} - Sample sent {self.sent_on}"

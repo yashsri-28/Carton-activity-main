@@ -984,3 +984,128 @@ class SuperAdminDeleteLog(models.Model):
 
     def __str__(self):
         return f"{self.program_type} #{self.program_id} deleted by {self.deleted_by} on {self.deleted_on}"
+    
+    
+class BedsheetFreezingNoteRow(models.Model):
+    """
+    "Freezing Note" — Carton and Packing Details table for Bedsheet/Fashion
+    Bedding programs. One row per Sr.No / Size-Style variant, matching the
+    client's standard Excel format exactly.
+
+    Visible only for BEDSHEET program_type, and only when the Standard
+    Bedsheet section is filled (not shown for Gusset-only submissions).
+
+    Editable only by MARKETING role (enforced in the view). TQM/PPC can
+    view but never edit.
+    """
+
+    carton_program = models.ForeignKey(
+        "CartonProgram",
+        on_delete=models.CASCADE,
+        related_name="freezing_note_rows"
+    )
+
+    sr_no = models.IntegerField(null=True, blank=True)
+
+    # ---------------- GENERAL INFORMATION ----------------
+    buyer = models.CharField(max_length=255, null=True, blank=True)
+    tc = models.CharField(max_length=100, null=True, blank=True)
+    program = models.CharField(max_length=255, null=True, blank=True)
+    date_of_carton_dimension_finalization = models.DateField(null=True, blank=True)
+    product = models.CharField(max_length=255, null=True, blank=True)
+    size = models.CharField(max_length=100, null=True, blank=True)
+    product_dimension = models.CharField(max_length=255, null=True, blank=True)
+
+    # ---------------- PACKING STATUS ----------------
+    pcs_per_bag_or_inner_box = models.CharField(max_length=100, null=True, blank=True)
+    bag_or_innerbox_per_carton = models.CharField(max_length=100, null=True, blank=True)
+    pcs_per_carton = models.CharField(max_length=100, null=True, blank=True)
+
+    # ---------------- CARTON DETAILS (PART # 1) ----------------
+    carton_type_paper = models.CharField(max_length=255, null=True, blank=True)
+    carton_length_cm = models.FloatField(null=True, blank=True)
+    carton_width_cm = models.FloatField(null=True, blank=True)
+    carton_height_cm = models.FloatField(null=True, blank=True)
+
+    # ---------------- CARTON WEIGHT DETAILS ----------------
+    net_weight_kgs = models.FloatField(null=True, blank=True)
+    gross_weight_kgs = models.FloatField(null=True, blank=True)
+
+    # ---------------- CARTON DETAILS (PART # 2) ----------------
+    carton_ply_no = models.CharField(max_length=50, null=True, blank=True)
+    carton_min_bursting_strength = models.CharField(max_length=100, null=True, blank=True)
+    carton_min_edge_crush_test = models.CharField(max_length=100, null=True, blank=True)
+
+    # ---------------- STIFFENER DETAILS ----------------
+    stiffener_dimension = models.CharField(max_length=255, null=True, blank=True)
+    stiffener_no_of_ply = models.CharField(max_length=50, null=True, blank=True)
+    stiffener_type_cut = models.CharField(max_length=255, null=True, blank=True)
+
+    # ---------------- SIDE STIFFENERS DETAILS ----------------
+    side_stiffener_dimension = models.CharField(max_length=255, null=True, blank=True)
+    side_stiffener_no_of_ply = models.CharField(max_length=50, null=True, blank=True)
+    side_stiffener_type_cut = models.CharField(max_length=255, null=True, blank=True)
+
+    # ---------------- SEPARATOR DETAILS ----------------
+    separator_dimension = models.CharField(max_length=255, null=True, blank=True)
+    separator_no_of_ply = models.CharField(max_length=50, null=True, blank=True)
+
+    # ---------------- PVC BAG / SELF BAG / INNER BOX DETAILS ----------------
+    bag_or_innerbox_size = models.CharField(max_length=255, null=True, blank=True)
+    bag_type_or_box_type = models.CharField(max_length=255, null=True, blank=True)
+
+    # ---------------- LD POLYBAG DETAILS ----------------
+    ld_polybag_length_cm = models.FloatField(null=True, blank=True)
+    ld_polybag_width_cm = models.FloatField(null=True, blank=True)
+    ld_polybag_flap_cm = models.FloatField(null=True, blank=True)
+    ld_polybag_thickness_micron = models.CharField(max_length=100, null=True, blank=True)
+    ld_polybag_quality = models.CharField(max_length=100, null=True, blank=True)
+
+    # ---------------- LD POLYBAG PRINTING MATTER ----------------
+    printing_matter_polybag = models.TextField(null=True, blank=True)
+
+    # ---------------- OTHER INFORMATION ----------------
+    product_position_in_carton = models.CharField(max_length=255, null=True, blank=True)
+    folded_product_length = models.CharField(max_length=100, null=True, blank=True)
+    folded_product_width = models.CharField(max_length=100, null=True, blank=True)
+    folded_product_height = models.CharField(max_length=100, null=True, blank=True)
+    bellyband_ribbon_dimension = models.CharField(max_length=255, null=True, blank=True)
+    bellyband_ribbon_quality = models.CharField(max_length=255, null=True, blank=True)
+
+    # ---------------- FOR MACY'S ONLY ----------------
+    macys_tmcl_placement = models.CharField(max_length=255, null=True, blank=True)
+    macys_carton_type = models.CharField(max_length=255, null=True, blank=True)
+    macys_tmcl_placement_type = models.CharField(max_length=255, null=True, blank=True)
+
+    # ---------------- ADDITIONAL INFORMATION ----------------
+    pdq_accessories_others = models.CharField(max_length=255, null=True, blank=True)
+    remarks = models.TextField(null=True, blank=True)
+
+    created_on = models.DateTimeField(auto_now_add=True)
+    updated_on = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "bedsheet_freezing_note_row"
+        ordering = ["sr_no", "id"]
+
+    def __str__(self):
+        return f"Freezing Note #{self.sr_no or self.id} - {self.carton_program.program_name}"
+
+    # ---------------- CALCULATED FIELDS (Excel formulas, not stored) ----------------
+    @property
+    def cbm(self):
+        """CBM = (L x W x H) / 1,000,000 — matches Excel formula =M*N*O/1000000"""
+        if self.carton_length_cm and self.carton_width_cm and self.carton_height_cm:
+            return round(
+                (self.carton_length_cm * self.carton_width_cm * self.carton_height_cm) / 1000000,
+                6
+            )
+        return None
+
+    @property
+    def max_outside_carton_dimension(self):
+        """L + W + H total — matches Excel formula =SUM(M:O)"""
+        vals = [self.carton_length_cm, self.carton_width_cm, self.carton_height_cm]
+        if all(v is not None for v in vals):
+            return sum(vals)
+        return None

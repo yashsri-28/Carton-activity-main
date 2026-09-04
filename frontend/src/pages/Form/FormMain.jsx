@@ -4,6 +4,7 @@ import Form from './Form';
 import Table from './Table';
 import api from '../../api/axiosInstance';
 import { toast } from 'react-toastify';
+import { FREEZING_NOTE_FIELDS } from './freezingNoteFields';
 
 function FormMain({ onBack }) {
   const navigate = useNavigate();
@@ -112,6 +113,74 @@ function FormMain({ onBack }) {
   // Gusset "Program Specifications" rows — auto-generated from checked
   // sizes, but user can also add/edit/remove rows manually.
   const [gussetSpecRows, setGussetSpecRows] = useState([]);
+
+  // Freezing Note rows — Bedsheet-only, Marketing-editable table shown
+  // below Program Specifications in the Standard Bedsheet section.
+  const [freezingNoteRows, setFreezingNoteRows] = useState([]);
+
+  const emptyFreezingNoteRow = () => ({
+    sr_no: '',
+    buyer: '',
+    tc: '',
+    program: '',
+    date_of_carton_dimension_finalization: '',
+    product: '',
+    size: '',
+    product_dimension: '',
+    pcs_per_bag_or_inner_box: '',
+    bag_or_innerbox_per_carton: '',
+    pcs_per_carton: '',
+    carton_type_paper: '',
+    carton_length_cm: '',
+    carton_width_cm: '',
+    carton_height_cm: '',
+    net_weight_kgs: '',
+    gross_weight_kgs: '',
+    carton_ply_no: '',
+    carton_min_bursting_strength: '',
+    carton_min_edge_crush_test: '',
+    stiffener_dimension: '',
+    stiffener_no_of_ply: '',
+    stiffener_type_cut: '',
+    side_stiffener_dimension: '',
+    side_stiffener_no_of_ply: '',
+    side_stiffener_type_cut: '',
+    separator_dimension: '',
+    separator_no_of_ply: '',
+    bag_or_innerbox_size: '',
+    bag_type_or_box_type: '',
+    ld_polybag_length_cm: '',
+    ld_polybag_width_cm: '',
+    ld_polybag_flap_cm: '',
+    ld_polybag_thickness_micron: '',
+    ld_polybag_quality: '',
+    printing_matter_polybag: '',
+    product_position_in_carton: '',
+    folded_product_length: '',
+    folded_product_width: '',
+    folded_product_height: '',
+    bellyband_ribbon_dimension: '',
+    bellyband_ribbon_quality: '',
+    macys_tmcl_placement: '',
+    macys_carton_type: '',
+    macys_tmcl_placement_type: '',
+    pdq_accessories_others: '',
+    remarks: '',
+  });
+
+  const handleAddFreezingNoteRow = () => {
+    setFreezingNoteRows(prev => [...prev, emptyFreezingNoteRow()]);
+  };
+
+  const handleFreezingNoteCellChange = (idx, field, value) => {
+    setFreezingNoteRows(prev =>
+      prev.map((row, i) => (i === idx ? { ...row, [field]: value } : row))
+    );
+  };
+
+  const handleDeleteFreezingNoteRow = (idx) => {
+    setFreezingNoteRows(prev => prev.filter((_, i) => i !== idx));
+  };
   // User dropdown
   const [users, setUsers] = useState([]);
   const [selectedRole, setSelectedRole] = useState('');
@@ -358,9 +427,15 @@ function FormMain({ onBack }) {
   //   { label: "", key: "actions" }
   // ];
 
-  const isStandardBedsheet =
-    formData.productCategory === "Bedsheet" &&
-    (formData.formMode ?? "gusset") === "bedsheet";
+  const isBedsheetCategory = formData.productCategory === "Bedsheet";
+
+  // NEW: reflects the independent accordion toggles in BedSheetForm.jsx
+  // (gussetSectionOpen / bedsheetSectionOpen), not the old single formMode.
+  const showGussetSpecs = isBedsheetCategory && formData.gussetSectionOpen === true;
+  const showCartonSpecs = !isBedsheetCategory || formData.bedsheetSectionOpen === true;
+  const showFreezingNote = isBedsheetCategory && formData.bedsheetSectionOpen === true;
+
+  const isStandardBedsheet = isBedsheetCategory && formData.bedsheetSectionOpen === true;
 
   const programHeaders = [
     { label: "Program", key: "program" },
@@ -951,6 +1026,23 @@ function FormMain({ onBack }) {
             length_cm: Number(row.col11) || 0
           })),
 
+        // Freezing Note rows — only meaningful for Bedsheet; backend
+        // ignores this array for other program types anyway.
+        freezing_note_rows: freezingNoteRows
+          .filter(row => Object.values(row).some(v => v !== '' && v !== null))
+          .map(row => ({
+            ...row,
+            carton_length_cm: row.carton_length_cm ? Number(row.carton_length_cm) : null,
+            carton_width_cm: row.carton_width_cm ? Number(row.carton_width_cm) : null,
+            carton_height_cm: row.carton_height_cm ? Number(row.carton_height_cm) : null,
+            net_weight_kgs: row.net_weight_kgs ? Number(row.net_weight_kgs) : null,
+            gross_weight_kgs: row.gross_weight_kgs ? Number(row.gross_weight_kgs) : null,
+            ld_polybag_length_cm: row.ld_polybag_length_cm ? Number(row.ld_polybag_length_cm) : null,
+            ld_polybag_width_cm: row.ld_polybag_width_cm ? Number(row.ld_polybag_width_cm) : null,
+            ld_polybag_flap_cm: row.ld_polybag_flap_cm ? Number(row.ld_polybag_flap_cm) : null,
+            date_of_carton_dimension_finalization: row.date_of_carton_dimension_finalization || null,
+          })),
+
         // Add product-specific details
         ...productDetails
       };
@@ -1042,7 +1134,7 @@ function FormMain({ onBack }) {
   // ==================== RENDER ====================
 
   // ==================== RENDER ====================
-  const isGussetMode = formData.productCategory === "Bedsheet" && (formData.formMode ?? "gusset") === "gusset";
+  // const isGussetMode = formData.productCategory === "Bedsheet" && (formData.formMode ?? "gusset") === "gusset";
   return (
     <div className="h-full overflow-y-auto bg-gray-50 font-sans text-sm">
       <div className="pb-4 pr-4 pl-4 max-w-7xl mx-auto">
@@ -1082,7 +1174,7 @@ function FormMain({ onBack }) {
         {/* Tables */}
                 {/* Tables */}
         <div className="space-y-10 mt-8">
-          {!isGussetMode && (
+          {showCartonSpecs && (
             <Table
               title="Program Specifications"
               headers={programHeaders}
@@ -1097,7 +1189,83 @@ function FormMain({ onBack }) {
             />
           )}
 
-          {isGussetMode && (
+          {/* Freezing Note (Carton and Packing Details) — Bedsheet only.
+              Only shown when Standard Bedsheet is filled, regardless of
+              whether Gusset is also filled. Marketing-only (this whole
+              page is the Marketing submit flow, so always editable here). */}
+          {showFreezingNote && (
+            <div className="bg-white shadow-sm rounded-lg border">
+              <div className="p-3 border-b flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Freezing Note — Carton and Packing Details</h2>
+                <button
+                  type="button"
+                  onClick={handleAddFreezingNoteRow}
+                  className="px-4 py-1.5 bg-[#0f3460] text-white text-sm rounded-md hover:bg-[#0a2545] cursor-pointer"
+                >
+                  + Add Row
+                </button>
+              </div>
+              <div className="p-2 overflow-x-auto">
+                <table className="min-w-full border-collapse text-sm">
+                  <thead className="text-white">
+                    <tr>
+                      {FREEZING_NOTE_FIELDS.map((f) => (
+                        <th key={f.key} className="px-3 py-2 text-left bg-[#0f3460] whitespace-nowrap">
+                          {f.label}
+                        </th>
+                      ))}
+                      <th className="px-3 py-2 bg-[#0f3460]"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {freezingNoteRows.length === 0 && (
+                      <tr>
+                        <td colSpan={FREEZING_NOTE_FIELDS.length + 1} className="px-4 py-6 text-center text-gray-400 italic">
+                          Click "+ Add Row" to add carton/packing details for this Bedsheet program.
+                        </td>
+                      </tr>
+                    )}
+                    {freezingNoteRows.map((row, idx) => (
+                      <tr key={idx} className="border-t">
+                        {FREEZING_NOTE_FIELDS.map((f) => (
+                          <td key={f.key} className="px-2 py-2">
+                            {f.type === 'readonly' ? (
+                              <span className="text-gray-400 text-xs italic">Auto</span>
+                            ) : f.type === 'textarea' ? (
+                              <textarea
+                                value={row[f.key] || ''}
+                                onChange={(e) => handleFreezingNoteCellChange(idx, f.key, e.target.value)}
+                                rows={2}
+                                className={`border px-2 py-1 rounded ${f.width} text-xs focus:outline-none focus:ring-1 focus:ring-blue-500`}
+                              />
+                            ) : (
+                              <input
+                                type={f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text'}
+                                value={row[f.key] || ''}
+                                onChange={(e) => handleFreezingNoteCellChange(idx, f.key, e.target.value)}
+                                className={`border px-2 py-1 rounded ${f.width} text-xs focus:outline-none focus:ring-1 focus:ring-blue-500`}
+                              />
+                            )}
+                          </td>
+                        ))}
+                        <td className="px-2 py-2">
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteFreezingNoteRow(idx)}
+                            className="text-red-500 hover:text-red-700 cursor-pointer"
+                          >
+                            ✕
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {showGussetSpecs && (
             <Table
               title="Program Specifications"
               headers={[

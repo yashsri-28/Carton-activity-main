@@ -928,6 +928,7 @@ import { ArrowLeft, Paperclip, Eye } from 'lucide-react';
 import Table from '../Form/Table';
 import AICalculationsDisplay from './AICalculationsDisplay';
 import { toast } from 'react-toastify';
+import { FREEZING_NOTE_FIELDS } from '../Form/freezingNoteFields';
 
 function CartonView() {
   const { id } = useParams();
@@ -941,6 +942,9 @@ function CartonView() {
 
   const [details, setDetails] = useState(null);
   const [actualProgramId, setActualProgramId] = useState(null);
+  const [freezingNoteRows, setFreezingNoteRows] = useState([]);
+  const [canEditFreezingNote, setCanEditFreezingNote] = useState(false);
+  const [savingFreezingNote, setSavingFreezingNote] = useState(false);
   const [calculationMode, setCalculationMode] = useState(false);
   const [recalculating, setRecalculating] = useState(false);
   const [subprograms, setSubprograms] = useState([]);
@@ -993,6 +997,8 @@ function CartonView() {
         setDetails(data);
         setCurrentStatus(data.status);
         setActualProgramId(data.program_id);
+        setFreezingNoteRows(data.freezing_note_rows || []);
+        setCanEditFreezingNote(data.can_edit_freezing_note === true);
         setSubprograms(
           (data.subprograms || [])
             .filter(sp => {
@@ -1322,6 +1328,36 @@ function CartonView() {
         return updated;
       })
     );
+  };
+
+  // ==================== FREEZING NOTE HANDLERS (Marketing only) ====================
+  const handleFreezingNoteFieldChange = (idx, field, value) => {
+    setFreezingNoteRows(prev =>
+      prev.map((row, i) => (i === idx ? { ...row, [field]: value } : row))
+    );
+  };
+
+  const handleSaveFreezingNote = async () => {
+    setSavingFreezingNote(true);
+    try {
+      await api.post('/api/carton-program/edit/', {
+        activity_program_status_id: parseInt(id),
+        program_type: programType,
+        carton_program: details.carton_program,
+        bedsheet_details: details.bedsheet_details,
+        terry_details: details.terry_details,
+        bathrobe_details: details.bathrobe_details,
+        subprograms: subprograms,
+        samples: samples,
+        freezing_note_rows: freezingNoteRows,
+      });
+      toast.success('Freezing Note updated successfully!');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to update Freezing Note.');
+    } finally {
+      setSavingFreezingNote(false);
+    }
   };
 
   const handlePurchaseAccept = async () => {
@@ -1978,7 +2014,72 @@ function CartonView() {
               </div>
             </div>
           )}
+          
+                    {/* Freezing Note — Bedsheet only, shown for everyone, editable
+              only by Marketing (canEditFreezingNote comes from backend). */}
+          {programType === 'BEDSHEET' && freezingNoteRows.length > 0 && (
+            <div className="bg-white shadow-sm rounded-lg border mb-8">
+              <div className="p-3 border-b flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Freezing Note — Carton and Packing Details</h2>
+                {canEditFreezingNote && (
+                  <button
+                    onClick={handleSaveFreezingNote}
+                    disabled={savingFreezingNote}
+                    className="px-5 py-2 bg-[#0f3460] hover:bg-[#0a2545] text-white rounded-lg text-sm font-medium disabled:opacity-50"
+                  >
+                    {savingFreezingNote ? 'Saving...' : 'Save Freezing Note'}
+                  </button>
+                )}
+              </div>
+              <div className="p-2 overflow-x-auto">
+                <table className="min-w-full border-collapse text-sm">
+                  <thead className="text-white">
+                    <tr>
+                      {FREEZING_NOTE_FIELDS.map((f) => (
+                        <th key={f.key} className="px-3 py-2 text-left bg-[#0f3460] whitespace-nowrap">
+                          {f.label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {freezingNoteRows.map((row, idx) => (
+                      <tr key={row.freezing_note_id ?? idx} className="border-t">
+                        {FREEZING_NOTE_FIELDS.map((f) => (
+                          <td key={f.key} className="px-2 py-2">
+                            {f.type === 'readonly' ? (
+                              <span className="text-xs">{row[f.key] ?? '-'}</span>
+                            ) : canEditFreezingNote ? (
+                              f.type === 'textarea' ? (
+                                <textarea
+                                  value={row[f.key] || ''}
+                                  onChange={(e) => handleFreezingNoteFieldChange(idx, f.key, e.target.value)}
+                                  rows={2}
+                                  className={`border px-2 py-1 rounded ${f.width} text-xs focus:outline-none focus:ring-1 focus:ring-blue-500`}
+                                />
+                              ) : (
+                                <input
+                                  type={f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text'}
+                                  value={row[f.key] || ''}
+                                  onChange={(e) => handleFreezingNoteFieldChange(idx, f.key, e.target.value)}
+                                  className={`border px-2 py-1 rounded ${f.width} text-xs focus:outline-none focus:ring-1 focus:ring-blue-500`}
+                                />
+                              )
+                            ) : (
+                              <span className="text-xs">{row[f.key] ?? '-'}</span>
+                            )}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
+          {/* AI Carton Calculations */}
+  
           {/* AI Carton Calculations */}
           {actualProgramId && (
             <AICalculationsDisplay

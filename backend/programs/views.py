@@ -37,6 +37,7 @@ from .models import (
     BathRobeProgramDetails,
     GussetProgram,
     GussetProgramSpecification,
+    BedsheetFreezingNoteRow,
     GussetSampleProgram,
     SampleProgramAttachment,
     GussetProgramAttachment,
@@ -537,6 +538,61 @@ def submit_carton_program(request):
             length_cm=sm.get("length_cm"),
         )
         sample_ids.append(sample_obj.id)
+
+    # 5.5️⃣ FREEZING NOTE ROWS (Bedsheet only — Marketing fills at submit time)
+    freezing_note_rows = data.get("freezing_note_rows", [])
+    if program_type == "BEDSHEET":
+        for fn in freezing_note_rows:
+            BedsheetFreezingNoteRow.objects.create(
+                carton_program=carton_program,
+                sr_no=fn.get("sr_no"),
+                buyer=fn.get("buyer"),
+                tc=fn.get("tc"),
+                program=fn.get("program"),
+                date_of_carton_dimension_finalization=fn.get("date_of_carton_dimension_finalization") or None,
+                product=fn.get("product"),
+                size=fn.get("size"),
+                product_dimension=fn.get("product_dimension"),
+                pcs_per_bag_or_inner_box=fn.get("pcs_per_bag_or_inner_box"),
+                bag_or_innerbox_per_carton=fn.get("bag_or_innerbox_per_carton"),
+                pcs_per_carton=fn.get("pcs_per_carton"),
+                carton_type_paper=fn.get("carton_type_paper"),
+                carton_length_cm=fn.get("carton_length_cm"),
+                carton_width_cm=fn.get("carton_width_cm"),
+                carton_height_cm=fn.get("carton_height_cm"),
+                net_weight_kgs=fn.get("net_weight_kgs"),
+                gross_weight_kgs=fn.get("gross_weight_kgs"),
+                carton_ply_no=fn.get("carton_ply_no"),
+                carton_min_bursting_strength=fn.get("carton_min_bursting_strength"),
+                carton_min_edge_crush_test=fn.get("carton_min_edge_crush_test"),
+                stiffener_dimension=fn.get("stiffener_dimension"),
+                stiffener_no_of_ply=fn.get("stiffener_no_of_ply"),
+                stiffener_type_cut=fn.get("stiffener_type_cut"),
+                side_stiffener_dimension=fn.get("side_stiffener_dimension"),
+                side_stiffener_no_of_ply=fn.get("side_stiffener_no_of_ply"),
+                side_stiffener_type_cut=fn.get("side_stiffener_type_cut"),
+                separator_dimension=fn.get("separator_dimension"),
+                separator_no_of_ply=fn.get("separator_no_of_ply"),
+                bag_or_innerbox_size=fn.get("bag_or_innerbox_size"),
+                bag_type_or_box_type=fn.get("bag_type_or_box_type"),
+                ld_polybag_length_cm=fn.get("ld_polybag_length_cm"),
+                ld_polybag_width_cm=fn.get("ld_polybag_width_cm"),
+                ld_polybag_flap_cm=fn.get("ld_polybag_flap_cm"),
+                ld_polybag_thickness_micron=fn.get("ld_polybag_thickness_micron"),
+                ld_polybag_quality=fn.get("ld_polybag_quality"),
+                printing_matter_polybag=fn.get("printing_matter_polybag"),
+                product_position_in_carton=fn.get("product_position_in_carton"),
+                folded_product_length=fn.get("folded_product_length"),
+                folded_product_width=fn.get("folded_product_width"),
+                folded_product_height=fn.get("folded_product_height"),
+                bellyband_ribbon_dimension=fn.get("bellyband_ribbon_dimension"),
+                bellyband_ribbon_quality=fn.get("bellyband_ribbon_quality"),
+                macys_tmcl_placement=fn.get("macys_tmcl_placement"),
+                macys_carton_type=fn.get("macys_carton_type"),
+                macys_tmcl_placement_type=fn.get("macys_tmcl_placement_type"),
+                pdq_accessories_others=fn.get("pdq_accessories_others"),
+                remarks=fn.get("remarks"),
+            )
 
     # 6️⃣ LOGGING
     create_log(
@@ -1448,8 +1504,68 @@ def edit_carton_program(request):
         )
 
     # --------------------------------------------------
-    # 6️⃣ LOG
+    # 5.5️⃣ REPLACE FREEZING NOTE ROWS (Bedsheet only, Marketing-editable)
     # --------------------------------------------------
+
+    freezing_note_rows = data.get("freezing_note_rows", [])
+
+    if new_program_type == "BEDSHEET":
+        BedsheetFreezingNoteRow.objects.filter(carton_program=program).delete()
+
+        for fn in freezing_note_rows:
+            BedsheetFreezingNoteRow.objects.create(
+                carton_program=program,
+                sr_no=fn.get("sr_no"),
+                buyer=fn.get("buyer"),
+                tc=fn.get("tc"),
+                program=fn.get("program"),
+                date_of_carton_dimension_finalization=fn.get("date_of_carton_dimension_finalization") or None,
+                product=fn.get("product"),
+                size=fn.get("size"),
+                product_dimension=fn.get("product_dimension"),
+                pcs_per_bag_or_inner_box=fn.get("pcs_per_bag_or_inner_box"),
+                bag_or_innerbox_per_carton=fn.get("bag_or_innerbox_per_carton"),
+                pcs_per_carton=fn.get("pcs_per_carton"),
+                carton_type_paper=fn.get("carton_type_paper"),
+                carton_length_cm=fn.get("carton_length_cm"),
+                carton_width_cm=fn.get("carton_width_cm"),
+                carton_height_cm=fn.get("carton_height_cm"),
+                net_weight_kgs=fn.get("net_weight_kgs"),
+                gross_weight_kgs=fn.get("gross_weight_kgs"),
+                carton_ply_no=fn.get("carton_ply_no"),
+                carton_min_bursting_strength=fn.get("carton_min_bursting_strength"),
+                carton_min_edge_crush_test=fn.get("carton_min_edge_crush_test"),
+                stiffener_dimension=fn.get("stiffener_dimension"),
+                stiffener_no_of_ply=fn.get("stiffener_no_of_ply"),
+                stiffener_type_cut=fn.get("stiffener_type_cut"),
+                side_stiffener_dimension=fn.get("side_stiffener_dimension"),
+                side_stiffener_no_of_ply=fn.get("side_stiffener_no_of_ply"),
+                side_stiffener_type_cut=fn.get("side_stiffener_type_cut"),
+                separator_dimension=fn.get("separator_dimension"),
+                separator_no_of_ply=fn.get("separator_no_of_ply"),
+                bag_or_innerbox_size=fn.get("bag_or_innerbox_size"),
+                bag_type_or_box_type=fn.get("bag_type_or_box_type"),
+                ld_polybag_length_cm=fn.get("ld_polybag_length_cm"),
+                ld_polybag_width_cm=fn.get("ld_polybag_width_cm"),
+                ld_polybag_flap_cm=fn.get("ld_polybag_flap_cm"),
+                ld_polybag_thickness_micron=fn.get("ld_polybag_thickness_micron"),
+                ld_polybag_quality=fn.get("ld_polybag_quality"),
+                printing_matter_polybag=fn.get("printing_matter_polybag"),
+                product_position_in_carton=fn.get("product_position_in_carton"),
+                folded_product_length=fn.get("folded_product_length"),
+                folded_product_width=fn.get("folded_product_width"),
+                folded_product_height=fn.get("folded_product_height"),
+                bellyband_ribbon_dimension=fn.get("bellyband_ribbon_dimension"),
+                bellyband_ribbon_quality=fn.get("bellyband_ribbon_quality"),
+                macys_tmcl_placement=fn.get("macys_tmcl_placement"),
+                macys_carton_type=fn.get("macys_carton_type"),
+                macys_tmcl_placement_type=fn.get("macys_tmcl_placement_type"),
+                pdq_accessories_others=fn.get("pdq_accessories_others"),
+                remarks=fn.get("remarks"),
+            )
+    elif old_program_type == "BEDSHEET" and new_program_type != "BEDSHEET":
+        # Type changed away from Bedsheet — freezing note no longer applies
+        BedsheetFreezingNoteRow.objects.filter(carton_program=program).delete()
 
     create_log(
         module_name="Carton Program",
@@ -1755,6 +1871,66 @@ def get_carton_program_details(request):
         })
 
     # --------------------------------------------------
+    # FREEZING NOTE ROWS (Bedsheet only)
+    # --------------------------------------------------
+
+    freezing_note_rows = []
+    if program_type == "BEDSHEET":
+        for fn in program.freezing_note_rows.all():
+            freezing_note_rows.append({
+                "freezing_note_id": fn.id,
+                "sr_no": fn.sr_no,
+                "buyer": fn.buyer,
+                "tc": fn.tc,
+                "program": fn.program,
+                "date_of_carton_dimension_finalization": fn.date_of_carton_dimension_finalization,
+                "product": fn.product,
+                "size": fn.size,
+                "product_dimension": fn.product_dimension,
+                "pcs_per_bag_or_inner_box": fn.pcs_per_bag_or_inner_box,
+                "bag_or_innerbox_per_carton": fn.bag_or_innerbox_per_carton,
+                "pcs_per_carton": fn.pcs_per_carton,
+                "carton_type_paper": fn.carton_type_paper,
+                "carton_length_cm": fn.carton_length_cm,
+                "carton_width_cm": fn.carton_width_cm,
+                "carton_height_cm": fn.carton_height_cm,
+                "cbm": fn.cbm,
+                "max_outside_carton_dimension": fn.max_outside_carton_dimension,
+                "net_weight_kgs": fn.net_weight_kgs,
+                "gross_weight_kgs": fn.gross_weight_kgs,
+                "carton_ply_no": fn.carton_ply_no,
+                "carton_min_bursting_strength": fn.carton_min_bursting_strength,
+                "carton_min_edge_crush_test": fn.carton_min_edge_crush_test,
+                "stiffener_dimension": fn.stiffener_dimension,
+                "stiffener_no_of_ply": fn.stiffener_no_of_ply,
+                "stiffener_type_cut": fn.stiffener_type_cut,
+                "side_stiffener_dimension": fn.side_stiffener_dimension,
+                "side_stiffener_no_of_ply": fn.side_stiffener_no_of_ply,
+                "side_stiffener_type_cut": fn.side_stiffener_type_cut,
+                "separator_dimension": fn.separator_dimension,
+                "separator_no_of_ply": fn.separator_no_of_ply,
+                "bag_or_innerbox_size": fn.bag_or_innerbox_size,
+                "bag_type_or_box_type": fn.bag_type_or_box_type,
+                "ld_polybag_length_cm": fn.ld_polybag_length_cm,
+                "ld_polybag_width_cm": fn.ld_polybag_width_cm,
+                "ld_polybag_flap_cm": fn.ld_polybag_flap_cm,
+                "ld_polybag_thickness_micron": fn.ld_polybag_thickness_micron,
+                "ld_polybag_quality": fn.ld_polybag_quality,
+                "printing_matter_polybag": fn.printing_matter_polybag,
+                "product_position_in_carton": fn.product_position_in_carton,
+                "folded_product_length": fn.folded_product_length,
+                "folded_product_width": fn.folded_product_width,
+                "folded_product_height": fn.folded_product_height,
+                "bellyband_ribbon_dimension": fn.bellyband_ribbon_dimension,
+                "bellyband_ribbon_quality": fn.bellyband_ribbon_quality,
+                "macys_tmcl_placement": fn.macys_tmcl_placement,
+                "macys_carton_type": fn.macys_carton_type,
+                "macys_tmcl_placement_type": fn.macys_tmcl_placement_type,
+                "pdq_accessories_others": fn.pdq_accessories_others,
+                "remarks": fn.remarks,
+            })
+
+    # --------------------------------------------------
     # FINAL RESPONSE
     # --------------------------------------------------
 
@@ -1803,6 +1979,8 @@ def get_carton_program_details(request):
         "subprograms": subprogram_list,
         "samples": sample_list,
         "attachments": attachments,
+        "freezing_note_rows": freezing_note_rows,
+        "can_edit_freezing_note": request.user.role == "MARKETING",
     }
 
     return Response(response_data)

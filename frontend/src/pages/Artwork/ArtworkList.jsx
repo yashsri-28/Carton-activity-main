@@ -43,6 +43,7 @@ function ArtworkList({ role }) {
   const [artworks, setArtworks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({ artwork_id: '', sku_code: '', brand_name: '', status: '' });
+  const [viewMode, setViewMode] = useState('in_development'); // 'in_development' | 'completed'
   const navigate = useNavigate();
 
   const fetchArtworks = async () => {
@@ -62,6 +63,11 @@ function ArtworkList({ role }) {
   useEffect(() => { fetchArtworks(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const canCreate = role === 'marketing';
+  // In-Development = everything still moving through the pipeline.
+  // Completed = only RELEASED artworks (final, production-approved).
+  const displayedArtworks = artworks.filter((a) =>
+    viewMode === 'completed' ? a.status === 'RELEASED' : a.status !== 'RELEASED'
+  );
 
   return (
     <div className="p-6 h-full overflow-y-auto thin-scrollbar">
@@ -85,9 +91,36 @@ function ArtworkList({ role }) {
         )}
       </div>
 
+      {/* In-Development / Completed sub-tabs */}
+      <div className="flex gap-1 mb-4 border-b border-gray-200">
+        <button
+          // onClick={() => setViewMode('in_development')}
+          onClick={() => { setViewMode('in_development'); setFilters((f) => ({ ...f, status: '' })); }}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            viewMode === 'in_development'
+              ? 'border-[#003366] text-[#003366]'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          In-Development
+        </button>
+        <button
+          // onClick={() => setViewMode('completed')}
+          onClick={() => { setViewMode('completed'); setFilters((f) => ({ ...f, status: '' })); }}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            viewMode === 'completed'
+              ? 'border-[#003366] text-[#003366]'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Completed
+        </button>
+      </div>
+
       <div className="flex gap-3 mb-4">
         <input
           placeholder="Artwork ID"
+          
           className="border border-gray-300 rounded-md px-3 py-2 text-sm"
           value={filters.artwork_id}
           onChange={(e) => setFilters({ ...filters, artwork_id: e.target.value })}
@@ -104,16 +137,20 @@ function ArtworkList({ role }) {
           value={filters.brand_name}
           onChange={(e) => setFilters({ ...filters, brand_name: e.target.value })}
         />
-        <select
-          className="border border-gray-300 rounded-md px-3 py-2 text-sm"
-          value={filters.status}
-          onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-        >
-          <option value="">All Statuses</option>
-          {Object.keys(STATUS_COLORS).map((s) => (
-            <option key={s} value={s}>{STATUS_LABELS[s] || s.replace(/_/g, ' ')}</option>
-          ))}
-        </select>
+        {viewMode === 'in_development' && (
+          <select
+            className="border border-gray-300 rounded-md px-3 py-2 text-sm"
+            value={filters.status}
+            onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+          >
+            <option value="">All Statuses</option>
+            {Object.keys(STATUS_COLORS)
+              .filter((s) => s !== 'RELEASED')
+              .map((s) => (
+                <option key={s} value={s}>{STATUS_LABELS[s] || s.replace(/_/g, ' ')}</option>
+              ))}
+          </select>
+        )}
         <button
           onClick={fetchArtworks}
           className="bg-[#003366] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#002a52] flex items-center gap-1.5"
@@ -143,10 +180,12 @@ function ArtworkList({ role }) {
             {loading && (
               <tr><td colSpan={8} className="text-center py-6 text-gray-400">Loading...</td></tr>
             )}
-            {!loading && artworks.length === 0 && (
+            {/* {!loading && artworks.length === 0 && ( */}
+            {!loading && displayedArtworks.length === 0 && (
               <tr><td colSpan={8} className="text-center py-6 text-gray-400">No artwork requests found.</td></tr>
             )}
-            {!loading && artworks.map((a) => (
+            {/* {!loading && artworks.map((a) => ( */}
+            {!loading && displayedArtworks.map((a) => (
               <tr
                 key={a.artwork_id}
                 className="border-t border-gray-100 hover:bg-gray-50 cursor-pointer"

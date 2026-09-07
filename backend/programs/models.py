@@ -279,6 +279,9 @@ class CartonProgramSubProgram(models.Model):
         help_text="Unit per polybag"
     )
 
+    # NEW: how many polybags go into one carton
+    polybags_per_carton = models.PositiveIntegerField(null=True, blank=True)
+
     fold = models.CharField(max_length=500)
 
     # Folded product dimensions - used by get_carton_calculations_ai to
@@ -1008,11 +1011,8 @@ class BedsheetFreezingNoteRow(models.Model):
     sr_no = models.IntegerField(null=True, blank=True)
 
     # ---------------- GENERAL INFORMATION ----------------
-    buyer = models.CharField(max_length=255, null=True, blank=True)
-    tc = models.CharField(max_length=100, null=True, blank=True)
-    program = models.CharField(max_length=255, null=True, blank=True)
-    date_of_carton_dimension_finalization = models.DateField(null=True, blank=True)
-    product = models.CharField(max_length=255, null=True, blank=True)
+    # (Buyer/TC/Program/Date removed — already captured at the top-level
+    # Bedsheet program, no need to repeat per Freezing Note row)
     size = models.CharField(max_length=100, null=True, blank=True)
     product_dimension = models.CharField(max_length=255, null=True, blank=True)
 
@@ -1066,9 +1066,9 @@ class BedsheetFreezingNoteRow(models.Model):
 
     # ---------------- OTHER INFORMATION ----------------
     product_position_in_carton = models.CharField(max_length=255, null=True, blank=True)
-    folded_product_length = models.CharField(max_length=100, null=True, blank=True)
-    folded_product_width = models.CharField(max_length=100, null=True, blank=True)
-    folded_product_height = models.CharField(max_length=100, null=True, blank=True)
+    product_dim_length = models.CharField(max_length=100, null=True, blank=True)
+    product_dim_width = models.CharField(max_length=100, null=True, blank=True)
+    product_dim_height = models.CharField(max_length=100, null=True, blank=True)
     bellyband_ribbon_dimension = models.CharField(max_length=255, null=True, blank=True)
     bellyband_ribbon_quality = models.CharField(max_length=255, null=True, blank=True)
 

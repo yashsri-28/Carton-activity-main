@@ -4,7 +4,7 @@ import Form from './Form';
 import Table from './Table';
 import api from '../../api/axiosInstance';
 import { toast } from 'react-toastify';
-import { FREEZING_NOTE_FIELDS } from './freezingNoteFields';
+import FreezingNoteTable from './FreezingNoteTable';
 
 function FormMain({ onBack }) {
   const navigate = useNavigate();
@@ -120,11 +120,6 @@ function FormMain({ onBack }) {
 
   const emptyFreezingNoteRow = () => ({
     sr_no: '',
-    buyer: '',
-    tc: '',
-    program: '',
-    date_of_carton_dimension_finalization: '',
-    product: '',
     size: '',
     product_dimension: '',
     pcs_per_bag_or_inner_box: '',
@@ -156,9 +151,9 @@ function FormMain({ onBack }) {
     ld_polybag_quality: '',
     printing_matter_polybag: '',
     product_position_in_carton: '',
-    folded_product_length: '',
-    folded_product_width: '',
-    folded_product_height: '',
+    product_dim_length: '',
+    product_dim_width: '',
+    product_dim_height: '',
     bellyband_ribbon_dimension: '',
     bellyband_ribbon_quality: '',
     macys_tmcl_placement: '',
@@ -247,6 +242,8 @@ function FormMain({ onBack }) {
       col3: programName
     })));
   }, [formData.programName]);
+
+
 
   // ==================== API CALLS ====================
   const fetchCompanies = useCallback(async () => {
@@ -400,6 +397,7 @@ function FormMain({ onBack }) {
     program: formData.programName || '',
     unit_carton: '',
     inner_pack: '',
+    polybags_carton: '',
     fold: '',
     variants: [{
       style: '',
@@ -432,23 +430,27 @@ function FormMain({ onBack }) {
   // NEW: reflects the independent accordion toggles in BedSheetForm.jsx
   // (gussetSectionOpen / bedsheetSectionOpen), not the old single formMode.
   const showGussetSpecs = isBedsheetCategory && formData.gussetSectionOpen === true;
-  const showCartonSpecs = !isBedsheetCategory || formData.bedsheetSectionOpen === true;
+
+  // Old "Program Specifications" table only applies to non-Bedsheet
+  // categories now (Towel, BathRobe). For Bedsheet, Freezing Note +
+  // Gusset Specifications together replace it.
+  const showCartonSpecs = !isBedsheetCategory;
+
   const showFreezingNote = isBedsheetCategory && formData.bedsheetSectionOpen === true;
 
   const isStandardBedsheet = isBedsheetCategory && formData.bedsheetSectionOpen === true;
 
   const programHeaders = [
     { label: "Program", key: "program" },
-    { label: "Style", key: "style", hasAddBtn: true },
+    { label: "Size", key: "style", hasAddBtn: true },
     { label: "W-In", key: "w_in" },
-    { label: "W-Cm", key: "w_cm" },
     { label: "L-In", key: "l_in" },
-    { label: "L-Cm", key: "l_cm" },
     { label: "Wt/Unit", key: "wt_unit" },
     { label: isStandardBedsheet ? "TC" : "GSM", key: "gsm" },
-    { label: "Unit/Carton", key: "unit_carton" },
-    { label: "Inner Pack Unit Quantity", key: "inner_pack" },
-    { label: "Fold", key: "fold" },
+    { label: "Units/Polybag", key: "inner_pack" },
+    { label: "Units/Carton", key: "unit_carton" },
+    { label: "Polybags/Carton", key: "polybags_carton" },
+    { label: "Folding Details", key: "fold" },
     { label: "", key: "actions" }
   ];
 
@@ -532,6 +534,7 @@ function FormMain({ onBack }) {
           program: formData.programName || '',
           unit_carton: '',
           inner_pack: '',
+          polybags_carton: '',
           fold: '',
           variants: [{
             style: '',
@@ -1005,6 +1008,7 @@ function FormMain({ onBack }) {
                 gsm: Number(variant.gsm) || 0,
                 unit_per_carton: group.unit_carton?.trim() || "",
                 inner_pack_unit_qty: group.inner_pack?.trim() || "",
+                polybags_per_carton: group.polybags_carton ? Number(group.polybags_carton) : null,
                 fold: group.fold?.trim() || ""
               }));
           }),
@@ -1191,88 +1195,24 @@ function FormMain({ onBack }) {
 
           {/* Freezing Note (Carton and Packing Details) — Bedsheet only.
               Only shown when Standard Bedsheet is filled, regardless of
-              whether Gusset is also filled. Marketing-only (this whole
-              page is the Marketing submit flow, so always editable here). */}
+              whether Gusset is also filled. Marketing-only. */}
           {showFreezingNote && (
-            <div className="bg-white shadow-sm rounded-lg border">
-              <div className="p-3 border-b flex items-center justify-between">
-                <h2 className="text-lg font-semibold">Freezing Note — Carton and Packing Details</h2>
-                <button
-                  type="button"
-                  onClick={handleAddFreezingNoteRow}
-                  className="px-4 py-1.5 bg-[#0f3460] text-white text-sm rounded-md hover:bg-[#0a2545] cursor-pointer"
-                >
-                  + Add Row
-                </button>
-              </div>
-              <div className="p-2 overflow-x-auto">
-                <table className="min-w-full border-collapse text-sm">
-                  <thead className="text-white">
-                    <tr>
-                      {FREEZING_NOTE_FIELDS.map((f) => (
-                        <th key={f.key} className="px-3 py-2 text-left bg-[#0f3460] whitespace-nowrap">
-                          {f.label}
-                        </th>
-                      ))}
-                      <th className="px-3 py-2 bg-[#0f3460]"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {freezingNoteRows.length === 0 && (
-                      <tr>
-                        <td colSpan={FREEZING_NOTE_FIELDS.length + 1} className="px-4 py-6 text-center text-gray-400 italic">
-                          Click "+ Add Row" to add carton/packing details for this Bedsheet program.
-                        </td>
-                      </tr>
-                    )}
-                    {freezingNoteRows.map((row, idx) => (
-                      <tr key={idx} className="border-t">
-                        {FREEZING_NOTE_FIELDS.map((f) => (
-                          <td key={f.key} className="px-2 py-2">
-                            {f.type === 'readonly' ? (
-                              <span className="text-gray-400 text-xs italic">Auto</span>
-                            ) : f.type === 'textarea' ? (
-                              <textarea
-                                value={row[f.key] || ''}
-                                onChange={(e) => handleFreezingNoteCellChange(idx, f.key, e.target.value)}
-                                rows={2}
-                                className={`border px-2 py-1 rounded ${f.width} text-xs focus:outline-none focus:ring-1 focus:ring-blue-500`}
-                              />
-                            ) : (
-                              <input
-                                type={f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text'}
-                                value={row[f.key] || ''}
-                                onChange={(e) => handleFreezingNoteCellChange(idx, f.key, e.target.value)}
-                                className={`border px-2 py-1 rounded ${f.width} text-xs focus:outline-none focus:ring-1 focus:ring-blue-500`}
-                              />
-                            )}
-                          </td>
-                        ))}
-                        <td className="px-2 py-2">
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteFreezingNoteRow(idx)}
-                            className="text-red-500 hover:text-red-700 cursor-pointer"
-                          >
-                            ✕
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <FreezingNoteTable
+              rows={freezingNoteRows}
+              onAddRow={handleAddFreezingNoteRow}
+              onCellChange={handleFreezingNoteCellChange}
+              onDeleteRow={handleDeleteFreezingNoteRow}
+            />
           )}
 
           {showGussetSpecs && (
             <Table
-              title="Program Specifications"
+              title="Gusset Specifications"
               headers={[
                 { label: "Size", key: "size" },
                 { label: "Fold Length", key: "foldLength" },
                 { label: "Fold Width", key: "foldWidth" },
-                { label: "Gusset Name", key: "gussetName" },
+                { label: "Gusset", key: "gussetName" },
                 { label: "WT", key: "wt" },
                 { label: "GSM", key: "gsm" },
                 { label: "", key: "actions", hasAddBtn: true },

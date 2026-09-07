@@ -928,7 +928,7 @@ import { ArrowLeft, Paperclip, Eye } from 'lucide-react';
 import Table from '../Form/Table';
 import AICalculationsDisplay from './AICalculationsDisplay';
 import { toast } from 'react-toastify';
-import { FREEZING_NOTE_FIELDS } from '../Form/freezingNoteFields';
+import FreezingNoteTable from '../Form/FreezingNoteTable';
 
 function CartonView() {
   const { id } = useParams();
@@ -1589,7 +1589,11 @@ function CartonView() {
                 </button>
               )}
 
-              {canStartCalculation && !calculationMode && (
+              {/* TEMP: Bedsheet carton-dimension entry flow is being
+                  redesigned (Freezing Note now owns those fields but TQM
+                  can't edit it yet) — hide the old Submit Calculation
+                  button for Bedsheet until that's resolved. */}
+              {canStartCalculation && !calculationMode && programType !== 'BEDSHEET' && (
                 <button onClick={() => setCalculationMode(true)} className="px-5 py-2 bg-[#003366] text-white rounded cursor-pointer hover:bg-[#002244] transition-colors">
                   {hasCalculationData ? 'Update Calculation' : 'Submit Calculation'}
                 </button>
@@ -1679,8 +1683,9 @@ function CartonView() {
             </div>
           </div>
 
-          {/* Program Specifications Table */}
-          {subprograms && subprograms.length > 0 && (
+          {/* Program Specifications Table — hidden for Bedsheet now
+              (replaced by Freezing Note + Gusset Specifications) */}
+          {programType !== 'BEDSHEET' && subprograms && subprograms.length > 0 && (
             <div className="bg-white shadow-sm rounded-lg border mb-8">
               <div className="p-3 border-b">
                 <h2 className="text-lg font-semibold">Program Specifications</h2>
@@ -1690,16 +1695,22 @@ function CartonView() {
                   <thead className="text-white">
                     <tr>
                       <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">Program</th>
-                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">Style</th>
+                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">Size</th>
                       <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">W-In</th>
-                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">W-Cm</th>
                       <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">L-In</th>
-                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">L-Cm</th>
                       <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">Wt/Unit</th>
                       <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">GSM</th>
-                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">Unit/Carton</th>
-                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">Inner Pack Unit Quantity</th>
-                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">Fold</th>
+                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">Units/Polybag</th>
+                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">Units/Carton</th>
+                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">Polybags/Carton</th>
+                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">Folding Details</th>
+                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">Fold W</th>
+                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">Fold L</th>
+                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">Carton W</th>
+                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">Carton L</th>
+                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">Carton H</th>
+                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">CBM</th>
+                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">Wt/Carton</th>
 
                       {showCartonSizing && (
                         <th colSpan="5" className="px-4 py-3 text-center bg-[#04162B]">Carton Sizing</th>
@@ -1770,19 +1781,25 @@ function CartonView() {
                         )}
                         <td className="px-4 py-3">{sp.style ?? "-"}</td>
                         <td className="px-4 py-3">{sp.width_in ?? "-"}</td>
-                        <td className="px-4 py-3">{sp.width_cm ?? "-"}</td>
                         <td className="px-4 py-3">{sp.length_in ?? "-"}</td>
-                        <td className="px-4 py-3">{sp.length_cm ?? "-"}</td>
                         <td className="px-4 py-3">{sp.wt_per_unit ?? "-"}</td>
                         <td className="px-4 py-3">{sp.gsm ?? "-"}</td>
 
                         {index === 0 && (
                           <>
+                            <td rowSpan={subprograms.length} className="px-4 py-3 bg-gray-50 align-middle border-x text-center">{sp.inner_pack_unit_qty ?? "-"}</td>
                             <td rowSpan={subprograms.length} className="px-4 py-3 bg-gray-50 align-middle border-x text-center">{sp.unit_per_carton ?? "-"}</td>
-                            <td rowSpan={subprograms.length} className="px-4 py-3 bg-gray-50 align-middle border-r text-center">{sp.inner_pack_unit_qty ?? "-"}</td>
+                            <td rowSpan={subprograms.length} className="px-4 py-3 bg-gray-50 align-middle border-r text-center">{sp.polybags_per_carton ?? "-"}</td>
                             <td rowSpan={subprograms.length} className="px-4 py-3 bg-gray-50 align-middle border-r">{sp.fold ?? "-"}</td>
                           </>
                         )}
+                        <td className="px-4 py-3">{sp.folded_width ?? "-"}</td>
+                        <td className="px-4 py-3">{sp.folded_length ?? "-"}</td>
+                        <td className="px-4 py-3 text-sky-700 font-semibold">{sp.carton_width ?? "-"}</td>
+                        <td className="px-4 py-3 text-sky-700 font-semibold">{sp.carton_length ?? "-"}</td>
+                        <td className="px-4 py-3 text-sky-700 font-semibold">{sp.carton_height ?? "-"}</td>
+                        <td className="px-4 py-3 text-sky-700 font-semibold">{sp.calculated_cbm_per_carton ?? "-"}</td>
+                        <td className="px-4 py-3 text-sky-700 font-semibold">{sp.calculated_net_wt_carton ?? "-"}</td>
 
                         {showCartonSizing && (
                           <>
@@ -2015,66 +2032,28 @@ function CartonView() {
             </div>
           )}
           
-                    {/* Freezing Note — Bedsheet only, shown for everyone, editable
+          {/* Freezing Note — Bedsheet only, shown for everyone, editable
               only by Marketing (canEditFreezingNote comes from backend). */}
           {programType === 'BEDSHEET' && freezingNoteRows.length > 0 && (
-            <div className="bg-white shadow-sm rounded-lg border mb-8">
-              <div className="p-3 border-b flex items-center justify-between">
-                <h2 className="text-lg font-semibold">Freezing Note — Carton and Packing Details</h2>
-                {canEditFreezingNote && (
+            <div className="mb-8">
+              <FreezingNoteTable
+                rows={freezingNoteRows}
+                onCellChange={canEditFreezingNote ? handleFreezingNoteFieldChange : undefined}
+                onDeleteRow={undefined}
+                onAddRow={undefined}
+                readOnly={!canEditFreezingNote}
+              />
+              {canEditFreezingNote && (
+                <div className="flex justify-end mt-3">
                   <button
                     onClick={handleSaveFreezingNote}
                     disabled={savingFreezingNote}
-                    className="px-5 py-2 bg-[#0f3460] hover:bg-[#0a2545] text-white rounded-lg text-sm font-medium disabled:opacity-50"
+                    className="px-6 py-2 bg-[#0f3460] hover:bg-[#0a2545] text-white rounded-lg text-sm font-medium disabled:opacity-50"
                   >
                     {savingFreezingNote ? 'Saving...' : 'Save Freezing Note'}
                   </button>
-                )}
-              </div>
-              <div className="p-2 overflow-x-auto">
-                <table className="min-w-full border-collapse text-sm">
-                  <thead className="text-white">
-                    <tr>
-                      {FREEZING_NOTE_FIELDS.map((f) => (
-                        <th key={f.key} className="px-3 py-2 text-left bg-[#0f3460] whitespace-nowrap">
-                          {f.label}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {freezingNoteRows.map((row, idx) => (
-                      <tr key={row.freezing_note_id ?? idx} className="border-t">
-                        {FREEZING_NOTE_FIELDS.map((f) => (
-                          <td key={f.key} className="px-2 py-2">
-                            {f.type === 'readonly' ? (
-                              <span className="text-xs">{row[f.key] ?? '-'}</span>
-                            ) : canEditFreezingNote ? (
-                              f.type === 'textarea' ? (
-                                <textarea
-                                  value={row[f.key] || ''}
-                                  onChange={(e) => handleFreezingNoteFieldChange(idx, f.key, e.target.value)}
-                                  rows={2}
-                                  className={`border px-2 py-1 rounded ${f.width} text-xs focus:outline-none focus:ring-1 focus:ring-blue-500`}
-                                />
-                              ) : (
-                                <input
-                                  type={f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text'}
-                                  value={row[f.key] || ''}
-                                  onChange={(e) => handleFreezingNoteFieldChange(idx, f.key, e.target.value)}
-                                  className={`border px-2 py-1 rounded ${f.width} text-xs focus:outline-none focus:ring-1 focus:ring-blue-500`}
-                                />
-                              )
-                            ) : (
-                              <span className="text-xs">{row[f.key] ?? '-'}</span>
-                            )}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                </div>
+              )}
             </div>
           )}
 

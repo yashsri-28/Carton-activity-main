@@ -404,53 +404,7 @@ function GussetView() {
               <div className="mt-8 pt-6 border-t border-gray-200 grid grid-cols-1 lg:grid-cols-2 gap-8">
                 
                 {/* ==================== EXPECTED DATE SECTION ==================== */}
-                <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
-                    <Calendar size={16} />
-                    Expected Confirmation Date
-                  </h3>
-
-                  {isTTQM ? (
-                    /* Editable UI for TTQM */
-                    <div className="flex gap-3">
-                      <input
-                        type="date"
-                        value={expectedDate}
-                        onChange={(e) => setExpectedDate(e.target.value)}
-                        className="flex-1 border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#003366] text-sm"
-                      />
-                      <button
-                        onClick={handleSaveExpectedDate}
-                        disabled={savingDate || !expectedDate}
-                        className="px-6 py-2.5 bg-[#003366] hover:bg-[#002244] text-white rounded-lg font-medium disabled:opacity-50 flex items-center gap-2 whitespace-nowrap"
-                      >
-                        {savingDate ? 'Saving...' : 'Save Date'}
-                      </button>
-                    </div>
-                  ) : (
-                    /* Beautiful View-Only UI for Marketing */
-                    <div className="bg-gray-50 border border-gray-200 rounded-xl p-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center">
-                          <Calendar size={22} />
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-500">Expected Confirmation Date</p>
-                          <p className="text-xl font-semibold text-gray-800 mt-1">
-                            {expectedDate 
-                              ? new Date(expectedDate).toLocaleDateString('en-GB', {
-                                  day: '2-digit',
-                                  month: 'long',
-                                  year: 'numeric'
-                                })
-                              : 'Not Set'
-                            }
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
+               
 
                 {/* Attachments Section */}
                 <div>
@@ -507,7 +461,7 @@ function GussetView() {
                       <th className="px-4 py-3 text-left bg-[#0f3460]">Size</th>
                       <th className="px-4 py-3 text-left bg-[#0f3460]">Fold Length</th>
                       <th className="px-4 py-3 text-left bg-[#0f3460]">Fold Width</th>
-                      <th className="px-4 py-3 text-left bg-[#0f3460]">Gusset Name</th>
+                      <th className="px-4 py-3 text-left bg-[#0f3460]">Gusset</th>
                       <th className="px-4 py-3 text-left bg-[#0f3460]">WT</th>
                       <th className="px-4 py-3 text-left bg-[#0f3460]">GSM</th>
                     </tr>

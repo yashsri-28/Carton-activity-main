@@ -6,6 +6,8 @@ urlpatterns = [
     path("create-with-spec/", views.create_artwork_with_spec, name="create_artwork_with_spec"),
     path("list/", views.list_artwork_requests, name="list_artwork_requests"),
     path("procurement-team/", views.list_procurement_team, name="list_procurement_team"),
+    path("legal-team/", views.list_legal_team, name="list_legal_team"),
+    path("compliance-team/", views.list_compliance_team, name="list_compliance_team"),
     path("performance-stats/", views.artwork_performance_stats, name="artwork_performance_stats"),
     path("notifications/", views.list_artwork_notifications, name="list_artwork_notifications"),
     path("notifications/<int:notification_id>/read/", views.mark_notification_read, name="mark_notification_read"),
@@ -24,5 +26,7 @@ urlpatterns = [
     path("<str:artwork_id>/comments/add/", views.add_artwork_comment, name="add_artwork_comment"),
     path("<str:artwork_id>/spec/", views.get_packaging_spec, name="get_packaging_spec"),
     path("<str:artwork_id>/assign-procurement/", views.assign_procurement, name="assign_procurement"),
+    path("<str:artwork_id>/assign-legal/", views.assign_legal, name="assign_legal"),
+    path("<str:artwork_id>/assign-compliance/", views.assign_compliance, name="assign_compliance"),
     path("<str:artwork_id>/export-excel/", views.export_artwork_excel, name="export_artwork_excel"),
 ]

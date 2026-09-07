@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import DOMPurify from 'dompurify';
-import { createArtworkWithSpec, addArtworkComment, getProcurementList } from '../../api/artworkApi';
+// import { createArtworkWithSpec, addArtworkComment, getProcurementList } from '../../api/artworkApi';
+import { createArtworkWithSpec, addArtworkComment, getProcurementList, getLegalList, getComplianceList } from '../../api/artworkApi';
 import Attachment from '../Form/Attachment';
 import specConfig from './packagingSpecConfig.json';
 
@@ -200,14 +201,25 @@ function PackagingSpecForm() {
   const [specValues, setSpecValues] = useState({});
   const [assignedVendorId, setAssignedVendorId] = useState('');
   const [procurementUsers, setProcurementUsers] = useState([]);
+  const [legalUsers, setLegalUsers] = useState([]);
+  const [complianceUsers, setComplianceUsers] = useState([]);
+  const [assignedLegalId, setAssignedLegalId] = useState('');
+  const [assignedComplianceId, setAssignedComplianceId] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [remarkAttachment, setRemarkAttachment] = useState(null);
   const remarkInputRef = useRef(null);
 
-  useEffect(() => {
-    getProcurementList()
-      .then((res) => setProcurementUsers(res.data))
-      .catch(() => setProcurementUsers([]));
+  // useEffect(() => {
+  //   getProcurementList()
+  //     .then((res) => setProcurementUsers(res.data))
+  //     .catch(() => setProcurementUsers([]));
+  // }, []);
+
+
+    useEffect(() => {
+    getProcurementList().then((res) => setProcurementUsers(res.data)).catch(() => setProcurementUsers([]));
+    getLegalList().then((res) => setLegalUsers(res.data)).catch(() => setLegalUsers([]));
+    getComplianceList().then((res) => setComplianceUsers(res.data)).catch(() => setComplianceUsers([]));
   }, []);
 
   const handleRemarkPaste = (e) => {
@@ -248,10 +260,18 @@ function PackagingSpecForm() {
 
     setSubmitting(true);
     try {
+      // const payload = {
+      //   category,
+      //   spec_data: specValues,
+      //   assigned_vendor_id: assignedVendorId || null,
+      // };
+
       const payload = {
         category,
         spec_data: specValues,
         assigned_vendor_id: assignedVendorId || null,
+        assigned_legal_id: assignedLegalId || null,
+        assigned_compliance_id: assignedComplianceId || null,
       };
       const res = await createArtworkWithSpec(payload);
 
@@ -414,7 +434,23 @@ function PackagingSpecForm() {
               creation time; also add-later recovery is done via
               Assign Procurement + a future Material Code UI on the
               detail page. */}
-          <div className="bg-white border border-gray-200 rounded-lg p-6 mb-5">
+          {/* <div className="bg-white border border-gray-200 rounded-lg p-6 mb-5">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Assign Procurement (optional)</label>
+            <select
+              value={assignedVendorId}
+              onChange={(e) => setAssignedVendorId(e.target.value)}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+            >
+              <option value="">-- No procurement contact (assign later) --</option>
+              {procurementUsers.map((v) => (
+                <option key={v.id} value={v.id}>{v.username}</option>
+              ))}
+            </select>
+          </div> */}
+
+
+          <div className="bg-white border border-gray-200 rounded-lg p-6 mb-5 space-y-4">
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Assign Procurement (optional)</label>
             <select
               value={assignedVendorId}
@@ -427,6 +463,33 @@ function PackagingSpecForm() {
               ))}
             </select>
           </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Assign Legal (optional)</label>
+            <select
+              value={assignedLegalId}
+              onChange={(e) => setAssignedLegalId(e.target.value)}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+            >
+              <option value="">-- No legal contact (assign later) --</option>
+              {legalUsers.map((v) => (
+                <option key={v.id} value={v.id}>{v.username}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Assign Compliance (optional)</label>
+            <select
+              value={assignedComplianceId}
+              onChange={(e) => setAssignedComplianceId(e.target.value)}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+            >
+              <option value="">-- No compliance contact (assign later) --</option>
+              {complianceUsers.map((v) => (
+                <option key={v.id} value={v.id}>{v.username}</option>
+              ))}
+            </select>
+          </div>
+        </div>
 
           <div className="flex gap-3">
             <button

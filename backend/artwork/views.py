@@ -82,6 +82,8 @@ def _artwork_to_dict(artwork, request=None, include_versions=True, include_appro
         "material_code": artwork.material_code,
         "po_number": artwork.po_number,
         "assigned_vendor": artwork.assigned_vendor.username if artwork.assigned_vendor else None,
+        "assigned_legal": artwork.assigned_legal.username if artwork.assigned_legal else None,
+        "assigned_compliance": artwork.assigned_compliance.username if artwork.assigned_compliance else None,
         "customer_approval_required": artwork.customer_approval_required,
         "status": artwork.status,
         "remarks": artwork.remarks,
@@ -790,8 +792,16 @@ def release_artwork(request, artwork_id):
 def list_artwork_requests(request):
     qs = ArtworkRequest.objects.all()
 
-    if getattr(request.user, "role", None) == "PROCUREMENT":
+    # if getattr(request.user, "role", None) == "PROCUREMENT":
+    #     qs = qs.filter(assigned_vendor=request.user)
+    
+    user_role = getattr(request.user, "role", None)
+    if user_role == "PROCUREMENT":
         qs = qs.filter(assigned_vendor=request.user)
+    elif user_role == "LEGAL":
+        qs = qs.filter(assigned_legal=request.user)
+    elif user_role == "COMPLIANCE":
+        qs = qs.filter(assigned_compliance=request.user)
 
     params = request.query_params
     if params.get("artwork_id"):
@@ -830,7 +840,15 @@ def get_artwork_details(request, artwork_id):
         artwork_id=artwork_id,
     )
 
-    if getattr(request.user, "role", None) == "PROCUREMENT" and artwork.assigned_vendor_id != request.user.id:
+    # if getattr(request.user, "role", None) == "PROCUREMENT" and artwork.assigned_vendor_id != request.user.id:
+    #     return Response({"error": "Not authorized to view this artwork."}, status=http_status.HTTP_403_FORBIDDEN)
+    
+    user_role = getattr(request.user, "role", None)
+    if user_role == "PROCUREMENT" and artwork.assigned_vendor_id != request.user.id:
+        return Response({"error": "Not authorized to view this artwork."}, status=http_status.HTTP_403_FORBIDDEN)
+    if user_role == "LEGAL" and artwork.assigned_legal_id != request.user.id:
+        return Response({"error": "Not authorized to view this artwork."}, status=http_status.HTTP_403_FORBIDDEN)
+    if user_role == "COMPLIANCE" and artwork.assigned_compliance_id != request.user.id:
         return Response({"error": "Not authorized to view this artwork."}, status=http_status.HTTP_403_FORBIDDEN)
 
     return Response(_artwork_to_dict(artwork, request=request), status=http_status.HTTP_200_OK)
@@ -989,6 +1007,8 @@ def create_artwork_with_spec(request):
         material_code=data.get("material_code"),
         po_number=data.get("po_number"),
         assigned_vendor_id=data.get("assigned_vendor_id") or None,
+        assigned_legal_id=data.get("assigned_legal_id") or None,
+        assigned_compliance_id=data.get("assigned_compliance_id") or None,
         customer_approval_required=bool(data.get("customer_approval_required", False)),
         remarks=data.get("remarks"),
         status="VENDOR_UPLOAD_PENDING" if data.get("assigned_vendor_id") else "DRAFT",
@@ -1496,3 +1516,86 @@ def mark_notification_read(request, notification_id):
 def mark_all_notifications_read(request):
     ArtworkNotification.objects.filter(recipient=request.user, is_read=False).update(is_read=True)
     return Response({"status": "ok"}, status=http_status.HTTP_200_OK)
+
+
+# ------------------------------------------------------------------
+# Legal / Compliance dropdown data + assignment — same pattern as
+# Procurement's list_procurement_team / assign_procurement.
+# ------------------------------------------------------------------
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def list_legal_team(request):
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    users = User.objects.filter(role="LEGAL").values("id", "username")
+    return Response(list(users), status=http_status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def list_compliance_team(request):
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    users = User.objects.filter(role="COMPLIANCE").values("id", "username")
+    return Response(list(users), status=http_status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@transaction.atomic
+def assign_legal(request, artwork_id):
+    artwork = get_object_or_404(ArtworkRequest, artwork_id=artwork_id)
+
+    if request.user.role not in ["MARKETING", "ADMIN"]:
+        return Response({"error": "Only Marketing or Admin can assign a legal contact."}, status=http_status.HTTP_403_FORBIDDEN)
+
+    user_id = request.data.get("user_id")
+    if not user_id:
+        return Response({"error": "user_id is required."}, status=http_status.HTTP_400_BAD_REQUEST)
+
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    try:
+        legal_user = User.objects.get(id=user_id, role="LEGAL")
+    except User.DoesNotExist:
+        return Response({"error": "Invalid legal user."}, status=http_status.HTTP_400_BAD_REQUEST)
+
+    artwork.assigned_legal = legal_user
+    artwork.updated_by = request.user
+    artwork.save(update_fields=["assigned_legal", "updated_by", "updated_on"])
+
+    _log_activity(request, artwork, "Legal Assigned", f"{request.user.username} assigned legal contact '{legal_user.username}' to {artwork.artwork_id}.")
+    _notify(legal_user, artwork, f"You have been assigned artwork {artwork.artwork_id} for legal review.")
+
+    return Response(_artwork_to_dict(artwork, request=request), status=http_status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@transaction.atomic
+def assign_compliance(request, artwork_id):
+    artwork = get_object_or_404(ArtworkRequest, artwork_id=artwork_id)
+
+    if request.user.role not in ["MARKETING", "ADMIN"]:
+        return Response({"error": "Only Marketing or Admin can assign a compliance contact."}, status=http_status.HTTP_403_FORBIDDEN)
+
+    user_id = request.data.get("user_id")
+    if not user_id:
+        return Response({"error": "user_id is required."}, status=http_status.HTTP_400_BAD_REQUEST)
+
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    try:
+        compliance_user = User.objects.get(id=user_id, role="COMPLIANCE")
+    except User.DoesNotExist:
+        return Response({"error": "Invalid compliance user."}, status=http_status.HTTP_400_BAD_REQUEST)
+
+    artwork.assigned_compliance = compliance_user
+    artwork.updated_by = request.user
+    artwork.save(update_fields=["assigned_compliance", "updated_by", "updated_on"])
+
+    _log_activity(request, artwork, "Compliance Assigned", f"{request.user.username} assigned compliance contact '{compliance_user.username}' to {artwork.artwork_id}.")
+    _notify(compliance_user, artwork, f"You have been assigned artwork {artwork.artwork_id} for compliance review.")
+
+    return Response(_artwork_to_dict(artwork, request=request), status=http_status.HTTP_200_OK)

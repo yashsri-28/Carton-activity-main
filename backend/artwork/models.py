@@ -102,12 +102,41 @@ class ArtworkRequest(models.Model):
         blank=True,
         related_name="artworks_assigned_as_vendor",
     )
+    
+    
+    
+    # Same pattern as assigned_vendor (Procurement) — Legal and
+    # Compliance are separately assignable per artwork, each seeing
+    # only the artworks assigned to them.
+    assigned_legal = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="artworks_assigned_as_legal",
+    )
+    assigned_compliance = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="artworks_assigned_as_compliance",
+    )
 
     # --------------------------------------------------
     # Customer approval optionality (BR: "Customer, wherever applicable")
     # --------------------------------------------------
 
     customer_approval_required = models.BooleanField(default=False)
+    
+    
+      # Extra optional approval stages — Marketing picks these AT
+    # REQUEST-CREATION TIME to decide which approvals this specific
+    # request needs, on top of the standard Marketing -> PPC -> TQM
+    # chain. Same pattern as customer_approval_required above.
+    legal_approval_required = models.BooleanField(default=False)
+    compliance_approval_required = models.BooleanField(default=False)
+    lab_approval_required = models.BooleanField(default=False)
     
     # Which workflow this artwork follows — decided once at creation
     # time based on its category. "STANDARD" = the original
@@ -224,10 +253,20 @@ class ArtworkVersion(models.Model):
 
 class ArtworkApproval(models.Model):
 
+    # STAGE_CHOICES = (
+    #     ("MARKETING", "Marketing"),
+    #     ("PPC", "PPC"),
+    #     ("TQM", "TQM"),
+    #     ("CUSTOMER", "Customer"),
+    # )
+    
     STAGE_CHOICES = (
         ("MARKETING", "Marketing"),
         ("PPC", "PPC"),
         ("TQM", "TQM"),
+        ("LEGAL", "Legal"),
+        ("COMPLIANCE", "Compliance"),
+        ("LAB", "Lab"),
         ("CUSTOMER", "Customer"),
     )
 
@@ -239,10 +278,20 @@ class ArtworkApproval(models.Model):
 
     # Role permitted to act on each stage — single source of truth,
     # used by the view to authorize decisions.
+    # STAGE_ROLE_MAP = {
+    #     "MARKETING": "MARKETING",
+    #     "PPC": "PPC",   # Packaging Procurement team role in this system
+    #     "TQM": "TTQM",
+    #     "CUSTOMER": "ADMIN",       # customer has no direct login yet (Phase 2); logged on their behalf
+    # }
+    
     STAGE_ROLE_MAP = {
         "MARKETING": "MARKETING",
         "PPC": "PPC",   # Packaging Procurement team role in this system
         "TQM": "TTQM",
+        "LEGAL": "LEGAL",
+        "COMPLIANCE": "COMPLIANCE",
+        "LAB": "LAB",
         "CUSTOMER": "ADMIN",       # customer has no direct login yet (Phase 2); logged on their behalf
     }
 

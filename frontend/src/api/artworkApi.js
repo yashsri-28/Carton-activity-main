@@ -98,3 +98,16 @@ export const receivePhysicalSample = (artworkId) =>
 
 export const decidePhysicalSample = (artworkId, decision, comments = '', rejectLevel = null) =>
   api.post(`/api/artwork/${artworkId}/physical-sample/decide/`, { decision, comments, reject_level: rejectLevel });
+
+
+export const getLegalList = () =>
+  api.get('/api/artwork/legal-team/');
+
+export const getComplianceList = () =>
+  api.get('/api/artwork/compliance-team/');
+
+export const assignLegal = (artworkId, userId) =>
+  api.post(`/api/artwork/${artworkId}/assign-legal/`, { user_id: userId });
+
+export const assignCompliance = (artworkId, userId) =>
+  api.post(`/api/artwork/${artworkId}/assign-compliance/`, { user_id: userId });

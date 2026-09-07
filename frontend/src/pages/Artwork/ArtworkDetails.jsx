@@ -68,7 +68,8 @@ function normalizeExcelPaste(html) {
 }
 
 // Which role is allowed to act on which STANDARD-flow approval stage.
-const STAGE_ROLE_MAP = { MARKETING: 'marketing', PPC: 'ppc', TQM: 'ttqm', CUSTOMER: 'admin' };
+// const STAGE_ROLE_MAP = { MARKETING: 'marketing', PPC: 'ppc', TQM: 'ttqm', CUSTOMER: 'admin' };
+const STAGE_ROLE_MAP = { MARKETING: 'marketing', PPC: 'ppc', TQM: 'ttqm', LEGAL: 'legal', COMPLIANCE: 'compliance', LAB: 'lab', CUSTOMER: 'admin' };
 
 // Custom-workflow step actor_role -> frontend role strings.
 const WORKFLOW_ROLE_MAP = { MARKETING: 'marketing', PPC: 'ppc', TTQM: 'ttqm', PROCUREMENT: 'procurement', ADMIN: 'admin' };
@@ -369,7 +370,8 @@ function ArtworkDetails({ role }) {
 
   // STANDARD-flow gating — approve/reject only appears while actively
   // in a review status (never after a rejection).
-  const ACTIVE_REVIEW_STATUSES = ['MARKETING_REVIEW', 'PPC_REVIEW', 'TQM_REVIEW', 'CUSTOMER_REVIEW'];
+  // const ACTIVE_REVIEW_STATUSES = ['MARKETING_REVIEW', 'PPC_REVIEW', 'TQM_REVIEW', 'CUSTOMER_REVIEW'];
+  const ACTIVE_REVIEW_STATUSES = ['MARKETING_REVIEW', 'PPC_REVIEW', 'TQM_REVIEW', 'LEGAL_REVIEW', 'COMPLIANCE_REVIEW', 'LAB_REVIEW', 'CUSTOMER_REVIEW'];
   const pendingStage = ACTIVE_REVIEW_STATUSES.includes(artwork.status)
     ? artwork.approvals?.find((a) => a.decision === 'PENDING')
     : null;

@@ -84,7 +84,11 @@ def _artwork_to_dict(artwork, request=None, include_versions=True, include_appro
         "assigned_vendor": artwork.assigned_vendor.username if artwork.assigned_vendor else None,
         "assigned_legal": artwork.assigned_legal.username if artwork.assigned_legal else None,
         "assigned_compliance": artwork.assigned_compliance.username if artwork.assigned_compliance else None,
+        "assigned_lab": artwork.assigned_lab.username if artwork.assigned_lab else None,
         "customer_approval_required": artwork.customer_approval_required,
+        "legal_approval_required": artwork.legal_approval_required,
+        "compliance_approval_required": artwork.compliance_approval_required,
+        "lab_approval_required": artwork.lab_approval_required,
         "status": artwork.status,
         "remarks": artwork.remarks,
         "workflow_key": artwork.workflow_key,
@@ -302,9 +306,26 @@ def upload_artwork_version(request, artwork_id):
         uploaded_by=request.user,
     )
 
+    # if artwork.workflow_key == "STANDARD":
+    #     # Existing behavior — completely untouched.
+    #     stages = ["MARKETING", "PPC", "TQM"]
+    #     if artwork.customer_approval_required:
+    #         stages.append("CUSTOMER")
+    #     for i, stage in enumerate(stages, start=1):
+    #         ArtworkApproval.objects.create(artwork=artwork, version=version, stage=stage, sequence=i)
+    #     artwork.status = "MARKETING_REVIEW"
+    
     if artwork.workflow_key == "STANDARD":
-        # Existing behavior — completely untouched.
+        # Base chain, plus whichever OPTIONAL stages were selected at
+        # request-creation time (legal_approval_required etc.) — chosen
+        # per-request by Marketing, not fixed per category.
         stages = ["MARKETING", "PPC", "TQM"]
+        if artwork.legal_approval_required:
+            stages.append("LEGAL")
+        if artwork.compliance_approval_required:
+            stages.append("COMPLIANCE")
+        if artwork.lab_approval_required:
+            stages.append("LAB")
         if artwork.customer_approval_required:
             stages.append("CUSTOMER")
         for i, stage in enumerate(stages, start=1):
@@ -355,7 +376,8 @@ def upload_artwork_version(request, artwork_id):
 def act_on_artwork_approval(request, artwork_id):
     artwork = get_object_or_404(ArtworkRequest.objects.select_for_update(), artwork_id=artwork_id)
 
-    ACTIVE_REVIEW_STATUSES = ["MARKETING_REVIEW", "PPC_REVIEW", "TQM_REVIEW", "CUSTOMER_REVIEW"]
+    # ACTIVE_REVIEW_STATUSES = ["MARKETING_REVIEW", "PPC_REVIEW", "TQM_REVIEW", "CUSTOMER_REVIEW"]
+    ACTIVE_REVIEW_STATUSES = ["MARKETING_REVIEW", "PPC_REVIEW", "TQM_REVIEW", "LEGAL_REVIEW", "COMPLIANCE_REVIEW", "LAB_REVIEW", "CUSTOMER_REVIEW"]
     if artwork.status not in ACTIVE_REVIEW_STATUSES:
         return Response(
             {"error": f"Artwork is '{artwork.status}' — no approval action can be taken right now."},
@@ -999,6 +1021,18 @@ def create_artwork_with_spec(request):
     title = data.get("title") or spec_data.get("PRODUCT") or f"{category} Artwork Request"
     sku_code = data.get("sku_code") or category
 
+    # artwork = ArtworkRequest.objects.create(
+    #     title=title,
+    #     sku_code=sku_code,
+    #     brand_name=data.get("brand_name") or spec_data.get("BUYER NAME"),
+    #     customer_name=data.get("customer_name"),
+    #     material_code=data.get("material_code"),
+    #     po_number=data.get("po_number"),
+    #     assigned_vendor_id=data.get("assigned_vendor_id") or None,
+    #     assigned_legal_id=data.get("assigned_legal_id") or None,
+    #     assigned_compliance_id=data.get("assigned_compliance_id") or None,
+    #     customer_approval_required=bool(data.get("customer_approval_required", False)),
+    
     artwork = ArtworkRequest.objects.create(
         title=title,
         sku_code=sku_code,
@@ -1009,7 +1043,11 @@ def create_artwork_with_spec(request):
         assigned_vendor_id=data.get("assigned_vendor_id") or None,
         assigned_legal_id=data.get("assigned_legal_id") or None,
         assigned_compliance_id=data.get("assigned_compliance_id") or None,
+        assigned_lab_id=data.get("assigned_lab_id") or None,
         customer_approval_required=bool(data.get("customer_approval_required", False)),
+        legal_approval_required=bool(data.get("legal_approval_required", False)),
+        compliance_approval_required=bool(data.get("compliance_approval_required", False)),
+        lab_approval_required=bool(data.get("lab_approval_required", False)),
         remarks=data.get("remarks"),
         status="VENDOR_UPLOAD_PENDING" if data.get("assigned_vendor_id") else "DRAFT",
         workflow_key=get_workflow_key(category),
@@ -1538,6 +1576,15 @@ def list_compliance_team(request):
     from django.contrib.auth import get_user_model
     User = get_user_model()
     users = User.objects.filter(role="COMPLIANCE").values("id", "username")
+    return Response(list(users), status=http_status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def list_lab_team(request):
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    users = User.objects.filter(role="LAB").values("id", "username")
     return Response(list(users), status=http_status.HTTP_200_OK)
 
 

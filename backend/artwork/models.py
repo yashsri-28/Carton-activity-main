@@ -122,6 +122,14 @@ class ArtworkRequest(models.Model):
         blank=True,
         related_name="artworks_assigned_as_compliance",
     )
+    
+    assigned_lab = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="artworks_assigned_as_lab",
+    )
 
     # --------------------------------------------------
     # Customer approval optionality (BR: "Customer, wherever applicable")

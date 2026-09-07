@@ -111,3 +111,7 @@ export const assignLegal = (artworkId, userId) =>
 
 export const assignCompliance = (artworkId, userId) =>
   api.post(`/api/artwork/${artworkId}/assign-compliance/`, { user_id: userId });
+
+
+export const getLabList = () =>
+  api.get('/api/artwork/lab-team/');

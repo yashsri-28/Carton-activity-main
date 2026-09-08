@@ -860,13 +860,6 @@ function BedSheetForm({
                                 {/* PRODUCT COLUMN */}
                                 <div className="space-y-6">
                                     <InputField
-                                        label="Activity Name"
-                                        name="gussetActivityName"
-                                        placeholder="Enter activity name"
-                                        value={formData.gussetActivityName}
-                                        onChange={onInputChange}
-                                    />
-                                    <InputField
                                         label="Program Name"
                                         name="gussetProgramName"
                                         placeholder="Enter program name"
@@ -997,16 +990,6 @@ function BedSheetForm({
                         <div className="flex flex-wrap -mx-4 p-6 border border-gray-200 rounded-xl bg-gray-50">
                             <FormItem>
                                 <InputField
-                                    label="Activity Name"
-                                    name="activityName"
-                                    placeholder="Enter activity name"
-                                    value={formData.activityName}
-                                    onChange={onInputChange}
-                                />
-                            </FormItem>
-
-                            <FormItem>
-                                <InputField
                                     label="Customer Name"
                                     name="customerName"
                                     placeholder="Enter customer name"
@@ -1055,7 +1038,7 @@ function BedSheetForm({
                                 />
                             </FormItem>
 
-                            <FormItem>
+                            {/* <FormItem>
                                 <InputField
                                     label="Required Pcs / Polybag"
                                     name="required_pcs_per_polybag"
@@ -1064,7 +1047,7 @@ function BedSheetForm({
                                     onChange={onInputChange}
                                     type="number"
                                 />
-                            </FormItem>
+                            </FormItem> */}
 
                             <FormItem>
                                 <InputField
@@ -1076,7 +1059,7 @@ function BedSheetForm({
                                 />
                             </FormItem>
 
-                            <FormItem>
+                            {/* <FormItem>
                                 <InputField
                                     label="Polybag Size (Twin / Full / Queen / King)"
                                     name="polybagSize"
@@ -1084,16 +1067,22 @@ function BedSheetForm({
                                     value={formData.polybagSize}
                                     onChange={onInputChange}
                                 />
-                            </FormItem>
+                            </FormItem> */}
 
                             <FormItem>
-                                <InputField
-                                    label="Product Type"
+                                <label className="text-sm font-semibold text-gray-700 block mb-1">Product Type</label>
+                                <select
                                     name="productType"
-                                    placeholder="Sheet Set / Duvet Set / Mattress Pad / Comforter"
-                                    value={formData.productType}
+                                    value={formData.productType || ""}
                                     onChange={onInputChange}
-                                />
+                                    className="w-full border border-gray-200 rounded-md p-3 text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+                                >
+                                    <option value="">Select Product Type</option>
+                                    <option value="Sheet Set">Sheet Set</option>
+                                    <option value="Duvet Set">Duvet Set</option>
+                                    <option value="Mattress Pad">Mattress Pad</option>
+                                    <option value="Comforter">Comforter</option>
+                                </select>
                             </FormItem>
 
                             <FormItem>
@@ -1125,7 +1114,7 @@ function BedSheetForm({
                                     onChange={onInputChange}
                                 />
                             </FormItem>
-
+{/* 
                             <FormItem>
                                 <InputField
                                     label="Product Dimension"
@@ -1134,29 +1123,27 @@ function BedSheetForm({
                                     value={formData.ProductDimension}
                                     onChange={onInputChange}
                                 />
-                            </FormItem>
+                            </FormItem> */}
 
                             <FormItem>
                                 <label className="text-sm font-semibold text-gray-700 mb-2 block">
-                                    Fold Length x Fold Width
+                                    Fold Length x Fold Width <span className="text-xs font-normal text-gray-400">(from Gusset Finalization)</span>
                                 </label>
                                 <div className="flex items-center gap-2">
                                     <input
-                                        type="number"
-                                        name="foldLength"
-                                        value={formData.foldLength || ""}
-                                        onChange={onInputChange}
+                                        type="text"
+                                        value={formData.gussetFoldLength || ""}
+                                        readOnly
                                         placeholder="Fold Length"
-                                        className="w-full border border-gray-200 rounded-md p-3 text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-sm"
+                                        className="w-full border border-gray-200 rounded-md p-3 text-gray-500 bg-gray-50 cursor-not-allowed"
                                     />
                                     <span className="text-gray-500 font-semibold">x</span>
                                     <input
-                                        type="number"
-                                        name="foldWidth"
-                                        value={formData.foldWidth || ""}
-                                        onChange={onInputChange}
+                                        type="text"
+                                        value={formData.gussetFoldWidth || ""}
+                                        readOnly
                                         placeholder="Fold Width"
-                                        className="w-full border border-gray-200 rounded-md p-3 text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-sm"
+                                        className="w-full border border-gray-200 rounded-md p-3 text-gray-500 bg-gray-50 cursor-not-allowed"
                                     />
                                 </div>
                             </FormItem>
@@ -1264,13 +1251,20 @@ function BedSheetForm({
                             </FormItem>
 
                             <FormItem>
-                                <InputField
-                                    label="Bag Type"
+                                <label className="text-sm font-semibold text-gray-700 block mb-1">Bag Type</label>
+                                <select
                                     name="Bagtype"
-                                    placeholder="LD Polybag / PP Polybag / PVC Bag / Self Bag / Metal Wire Bag"
-                                    value={formData.Bagtype}
+                                    value={formData.Bagtype || ""}
                                     onChange={onInputChange}
-                                />
+                                    className="w-full border border-gray-200 rounded-md p-3 text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+                                >
+                                    <option value="">Select Bag Type</option>
+                                    <option value="LD Polybag">LD Polybag</option>
+                                    <option value="PP Polybag">PP Polybag</option>
+                                    <option value="PVC Bag">PVC Bag</option>
+                                    <option value="Self Bag">Self Bag</option>
+                                    <option value="Metal Wire Bag">Metal Wire Bag</option>
+                                </select>
                             </FormItem>
 
                             <FormItem>
@@ -1284,10 +1278,9 @@ function BedSheetForm({
                             </FormItem>
 
                             <FormItem>
-                                <InputField
+                                <RadioField
                                     label="Common PDQ"
                                     name="commonPDQ"
-                                    placeholder="Yes / No"
                                     value={formData.commonPDQ}
                                     onChange={onInputChange}
                                 />
@@ -1303,7 +1296,7 @@ function BedSheetForm({
                                 />
                             </FormItem>
 
-                            <FormItem>
+                            {/* <FormItem>
                                 <InputField
                                     label="Required Pcs (sets / Carton)"
                                     name="required_sets_per_carton"
@@ -1312,7 +1305,7 @@ function BedSheetForm({
                                     onChange={onInputChange}
                                     type="number"
                                 />
-                            </FormItem>
+                            </FormItem> */}
 
                             <FormItem>
                                 <InputField
@@ -1324,7 +1317,7 @@ function BedSheetForm({
                                 />
                             </FormItem>
 
-                            <FormItem>
+                            {/* <FormItem>
                                 <InputField
                                     label="Warehouse Handling"
                                     name="warehouse"
@@ -1332,7 +1325,7 @@ function BedSheetForm({
                                     value={formData.warehouse}
                                     onChange={onInputChange}
                                 />
-                            </FormItem>
+                            </FormItem> */}
 
                             <FormItem>
                                 <InputField
@@ -1345,13 +1338,23 @@ function BedSheetForm({
                             </FormItem>
 
                             <FormItem>
-                                <InputField
+                                <RadioField
                                     label="Separator Required"
                                     name="separatorRequired"
-                                    placeholder="Yes / No / Details"
                                     value={formData.separatorRequired}
                                     onChange={onInputChange}
                                 />
+                                {formData.separatorRequired === "Yes" && (
+                                    <div className="mt-3">
+                                        <InputField
+                                            label="Separator Details"
+                                            name="separatorRequiredDetails"
+                                            value={formData.separatorRequiredDetails}
+                                            onChange={onInputChange}
+                                            placeholder="Enter details"
+                                        />
+                                    </div>
+                                )}
                             </FormItem>
 
                             <FormItem>

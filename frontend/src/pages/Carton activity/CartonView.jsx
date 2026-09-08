@@ -1417,13 +1417,9 @@ function CartonView() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <DetailItem label="Fabric TC" value={bedsheet.fabric_tc} />
             <DetailItem label="Folding Details" value={bedsheet.folding_details} />
-            <DetailItem label="Required Pcs/Polybag" value={bedsheet.required_pcs_per_polybag} />
-            <DetailItem label="Polybag Size" value={bedsheet.polybag_size} />
             <DetailItem label="Product Type" value={bedsheet.product_type} />
             <DetailItem label="Special Packing Requirement" value={bedsheet.special_packing_requirement} />
             <DetailItem label="Packing Type" value={bedsheet.packing_type} />
-            <DetailItem label="Product Dimension" value={bedsheet.product_dimension} />
-            {/* <DetailItem label="Fold Size" value={bedsheet.fold_size} /> */}
             <DetailItem
               label="Fold Length x Fold Width"
               value={
@@ -1436,7 +1432,6 @@ function CartonView() {
             <DetailItem label="Blister Packing Details" value={bedsheet.blister_packing_details} />
             <DetailItem label="Bag Type" value={bedsheet.bag_type} />
             <DetailItem label="Special Box Required" value={bedsheet.special_box_required} />
-            <DetailItem label="Required Sets/Carton" value={bedsheet.required_sets_per_carton} />
             <DetailItem label="PolyFold Condition" value={bedsheet.polyfold_condition} />
             <DetailItem label="Filled Product GSM" value={bedsheet.filled_product_gsm} />
             <DetailItem label="Elastic Required" value={bedsheet.elastic_required} boolean />
@@ -1454,12 +1449,6 @@ function CartonView() {
           <h3 className="text-md font-semibold text-green-900 mb-4">Terry Towel Specific Details</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <DetailItem label="Towel Sizes" value={terry.towel_sizes} />
-            <DetailItem label="Required Pcs/Carton (Size-wise)" value={terry.required_pcs_carton_size} />
-            <DetailItem label="Required Polybags/Carton (Size-wise)" value={terry.required_polybags_carton_size} />
-            <DetailItem label="Towel Dimensions" value={terry.towel_dimensions} />
-            <DetailItem label="Towel Weight Per Piece" value={terry.towel_weight_per_piece} />
-            <DetailItem label="Folding Details" value={terry.folding_details} />
-            <DetailItem label="Required Pcs/Polybag" value={terry.required_pcs_per_polybag} />
             <DetailItem label="Special Carton Details" value={terry.special_carton_details} />
           </div>
         </div>

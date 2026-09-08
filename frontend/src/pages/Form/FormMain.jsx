@@ -716,8 +716,10 @@ function FormMain({ onBack }) {
           required_sets_per_carton: (formData.required_sets_per_carton) || 0,
           polyfold_condition: formData.PolyFoldCondition?.trim() || "",
           filled_product_gsm: (formData.filled_product_gsm) || 0,
-          fold_length: formData.foldLength || null,
-          fold_width: formData.foldWidth || null,
+          // Fold Length/Width now come from the Gusset Finalization section
+          // (read-only in the Bedsheet form, auto-populated from there).
+          fold_length: formData.gussetFoldLength || null,
+          fold_width: formData.gussetFoldWidth || null,
         }
       };
     }
@@ -761,10 +763,10 @@ function FormMain({ onBack }) {
       return;
     }
 
-    // NEW: Activity name and assigned user are required, same as carton submit
+    // Activity Name field removed from UI — auto-fill from Program Name
+    // so the backend's required "activity" field still gets a value.
     if (!formData.gussetActivityName?.trim()) {
-      toast.error('Activity Name is required');
-      return;
+      setFormData(prev => ({ ...prev, gussetActivityName: prev.gussetProgramName?.trim() }));
     }
     if (!selectedUserId) {
       toast.error('Please select a role and a user to send the request');
@@ -929,6 +931,12 @@ function FormMain({ onBack }) {
       setErrorMessage('Program Name and Customer Name are required');
       setTimeout(() => setSubmitStatus(null), 5000);
       return;
+    }
+
+    // Activity Name field removed from UI — auto-fill from Program Name
+    // so the backend's required "activity" field still gets a value.
+    if (!formData.activityName?.trim()) {
+      formData.activityName = formData.programName.trim();
     }
 
     // NEW: Validate that a user has been selected to receive the request

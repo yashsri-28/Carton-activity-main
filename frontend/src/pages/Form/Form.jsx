@@ -238,18 +238,6 @@ function Form({
         <div className="flex flex-wrap items-end -mx-4">
           {/* Row 1: Activity Name + Customer Name + Program Name */}
           <FormItem>
-            <InputField
-              label="Activity Name "
-              name="activityName"
-              value={formData.activityName}
-              onChange={onInputChange}
-              placeholder="Select Activity Name"
-              required
-            />
-          </FormItem>
-
-
-          <FormItem>
             {/* Header row */}
             <div className="flex items-center justify-between">
               <label className="text-sm font-medium text-gray-700">
@@ -472,12 +460,11 @@ function Form({
             />
           </FormItem>
           <FormItem>
-            <InputField
+            <RadioField
               label="Common PDQ for All Sizes"
               name="commonPDQ"
               value={formData.commonPDQ}
               onChange={onInputChange}
-              placeholder="Yes/No"
             />
           </FormItem>
           <FormItem>
@@ -498,6 +485,7 @@ function Form({
               value={formData.small_pdq_count_on_pallet_or_slipsheet}
               onChange={onInputChange}
               placeholder="Enter quantity"
+              type="number"
             />
           </FormItem>
           <FormItem>
@@ -521,31 +509,61 @@ function Form({
 
           {/* Row 7 */}
           <FormItem>
-            <InputField
+            <RadioField
               label="Separator/Protector Required"
               name="separatorRequired"
               value={formData.separatorRequired}
               onChange={onInputChange}
-              placeholder="Yes/No + Details"
             />
+            {formData.separatorRequired === "True" && (
+              <div className="mt-3">
+                <InputField
+                  label="Separator/Protector Details"
+                  name="separatorRequiredDetails"
+                  value={formData.separatorRequiredDetails}
+                  onChange={onInputChange}
+                  placeholder="Enter details"
+                />
+              </div>
+            )}
           </FormItem>
           <FormItem>
-            <InputField
+            <RadioField
               label="Belly Band Packing"
               name="bellyBandPacking"
               value={formData.bellyBandPacking}
               onChange={onInputChange}
-              placeholder="Yes/No + Arrange samples"
             />
+            {formData.bellyBandPacking === "True" && (
+              <div className="mt-3">
+                <InputField
+                  label="Belly Band — Arrange Samples"
+                  name="bellyBandPackingDetails"
+                  value={formData.bellyBandPackingDetails}
+                  onChange={onInputChange}
+                  placeholder="Enter sample arrangement details"
+                />
+              </div>
+            )}
           </FormItem>
           <div className="w-full md:w-1/2 lg:w-1/3 px-4 mb-6 self-start">
-            <InputField
+            <RadioField
               label="Ribbon Packing"
               name="ribbonPacking"
               value={formData.ribbonPacking}
               onChange={onInputChange}
-              placeholder="Yes/No + Arrange samples"
             />
+            {formData.ribbonPacking === "True" && (
+              <div className="mt-3">
+                <InputField
+                  label="Ribbon — Arrange Samples"
+                  name="ribbonPackingDetails"
+                  value={formData.ribbonPackingDetails}
+                  onChange={onInputChange}
+                  placeholder="Enter sample arrangement details"
+                />
+              </div>
+            )}
           </div>
 
           {/* Remark - Common field for all product categories */}

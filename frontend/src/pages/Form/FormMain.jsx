@@ -4,6 +4,7 @@ import Form from './Form';
 import Table from './Table';
 import api from '../../api/axiosInstance';
 import { toast } from 'react-toastify';
+import FreezingNoteTable from './FreezingNoteTable';
 
 function FormMain({ onBack }) {
   const navigate = useNavigate();
@@ -112,6 +113,69 @@ function FormMain({ onBack }) {
   // Gusset "Program Specifications" rows — auto-generated from checked
   // sizes, but user can also add/edit/remove rows manually.
   const [gussetSpecRows, setGussetSpecRows] = useState([]);
+
+  // Freezing Note rows — Bedsheet-only, Marketing-editable table shown
+  // below Program Specifications in the Standard Bedsheet section.
+  const [freezingNoteRows, setFreezingNoteRows] = useState([]);
+
+  const emptyFreezingNoteRow = () => ({
+    sr_no: '',
+    size: '',
+    product_dimension: '',
+    pcs_per_bag_or_inner_box: '',
+    bag_or_innerbox_per_carton: '',
+    pcs_per_carton: '',
+    carton_type_paper: '',
+    carton_length_cm: '',
+    carton_width_cm: '',
+    carton_height_cm: '',
+    net_weight_kgs: '',
+    gross_weight_kgs: '',
+    carton_ply_no: '',
+    carton_min_bursting_strength: '',
+    carton_min_edge_crush_test: '',
+    stiffener_dimension: '',
+    stiffener_no_of_ply: '',
+    stiffener_type_cut: '',
+    side_stiffener_dimension: '',
+    side_stiffener_no_of_ply: '',
+    side_stiffener_type_cut: '',
+    separator_dimension: '',
+    separator_no_of_ply: '',
+    bag_or_innerbox_size: '',
+    bag_type_or_box_type: '',
+    ld_polybag_length_cm: '',
+    ld_polybag_width_cm: '',
+    ld_polybag_flap_cm: '',
+    ld_polybag_thickness_micron: '',
+    ld_polybag_quality: '',
+    printing_matter_polybag: '',
+    product_position_in_carton: '',
+    product_dim_length: '',
+    product_dim_width: '',
+    product_dim_height: '',
+    bellyband_ribbon_dimension: '',
+    bellyband_ribbon_quality: '',
+    macys_tmcl_placement: '',
+    macys_carton_type: '',
+    macys_tmcl_placement_type: '',
+    pdq_accessories_others: '',
+    remarks: '',
+  });
+
+  const handleAddFreezingNoteRow = () => {
+    setFreezingNoteRows(prev => [...prev, emptyFreezingNoteRow()]);
+  };
+
+  const handleFreezingNoteCellChange = (idx, field, value) => {
+    setFreezingNoteRows(prev =>
+      prev.map((row, i) => (i === idx ? { ...row, [field]: value } : row))
+    );
+  };
+
+  const handleDeleteFreezingNoteRow = (idx) => {
+    setFreezingNoteRows(prev => prev.filter((_, i) => i !== idx));
+  };
   // User dropdown
   const [users, setUsers] = useState([]);
   const [selectedRole, setSelectedRole] = useState('');
@@ -178,6 +242,8 @@ function FormMain({ onBack }) {
       col3: programName
     })));
   }, [formData.programName]);
+
+
 
   // ==================== API CALLS ====================
   const fetchCompanies = useCallback(async () => {
@@ -331,6 +397,7 @@ function FormMain({ onBack }) {
     program: formData.programName || '',
     unit_carton: '',
     inner_pack: '',
+    polybags_carton: '',
     fold: '',
     variants: [{
       style: '',
@@ -358,22 +425,32 @@ function FormMain({ onBack }) {
   //   { label: "", key: "actions" }
   // ];
 
-  const isStandardBedsheet =
-    formData.productCategory === "Bedsheet" &&
-    (formData.formMode ?? "gusset") === "bedsheet";
+  const isBedsheetCategory = formData.productCategory === "Bedsheet";
+
+  // NEW: reflects the independent accordion toggles in BedSheetForm.jsx
+  // (gussetSectionOpen / bedsheetSectionOpen), not the old single formMode.
+  const showGussetSpecs = isBedsheetCategory && formData.gussetSectionOpen === true;
+
+  // Old "Program Specifications" table only applies to non-Bedsheet
+  // categories now (Towel, BathRobe). For Bedsheet, Freezing Note +
+  // Gusset Specifications together replace it.
+  const showCartonSpecs = !isBedsheetCategory;
+
+  const showFreezingNote = isBedsheetCategory && formData.bedsheetSectionOpen === true;
+
+  const isStandardBedsheet = isBedsheetCategory && formData.bedsheetSectionOpen === true;
 
   const programHeaders = [
     { label: "Program", key: "program" },
-    { label: "Style", key: "style", hasAddBtn: true },
+    { label: "Size", key: "style", hasAddBtn: true },
     { label: "W-In", key: "w_in" },
-    { label: "W-Cm", key: "w_cm" },
     { label: "L-In", key: "l_in" },
-    { label: "L-Cm", key: "l_cm" },
     { label: "Wt/Unit", key: "wt_unit" },
     { label: isStandardBedsheet ? "TC" : "GSM", key: "gsm" },
-    { label: "Unit/Carton", key: "unit_carton" },
-    { label: "Inner Pack Unit Quantity", key: "inner_pack" },
-    { label: "Fold", key: "fold" },
+    { label: "Units/Polybag", key: "inner_pack" },
+    { label: "Units/Carton", key: "unit_carton" },
+    { label: "Polybags/Carton", key: "polybags_carton" },
+    { label: "Folding Details", key: "fold" },
     { label: "", key: "actions" }
   ];
 
@@ -457,6 +534,7 @@ function FormMain({ onBack }) {
           program: formData.programName || '',
           unit_carton: '',
           inner_pack: '',
+          polybags_carton: '',
           fold: '',
           variants: [{
             style: '',
@@ -638,8 +716,10 @@ function FormMain({ onBack }) {
           required_sets_per_carton: (formData.required_sets_per_carton) || 0,
           polyfold_condition: formData.PolyFoldCondition?.trim() || "",
           filled_product_gsm: (formData.filled_product_gsm) || 0,
-          fold_length: formData.foldLength || null,
-          fold_width: formData.foldWidth || null,
+          // Fold Length/Width now come from the Gusset Finalization section
+          // (read-only in the Bedsheet form, auto-populated from there).
+          fold_length: formData.gussetFoldLength || null,
+          fold_width: formData.gussetFoldWidth || null,
         }
       };
     }
@@ -683,10 +763,10 @@ function FormMain({ onBack }) {
       return;
     }
 
-    // NEW: Activity name and assigned user are required, same as carton submit
+    // Activity Name field removed from UI — auto-fill from Program Name
+    // so the backend's required "activity" field still gets a value.
     if (!formData.gussetActivityName?.trim()) {
-      toast.error('Activity Name is required');
-      return;
+      setFormData(prev => ({ ...prev, gussetActivityName: prev.gussetProgramName?.trim() }));
     }
     if (!selectedUserId) {
       toast.error('Please select a role and a user to send the request');
@@ -853,6 +933,12 @@ function FormMain({ onBack }) {
       return;
     }
 
+    // Activity Name field removed from UI — auto-fill from Program Name
+    // so the backend's required "activity" field still gets a value.
+    if (!formData.activityName?.trim()) {
+      formData.activityName = formData.programName.trim();
+    }
+
     // NEW: Validate that a user has been selected to receive the request
     if (!selectedUserId) {
       setSubmitStatus('error');
@@ -930,6 +1016,7 @@ function FormMain({ onBack }) {
                 gsm: Number(variant.gsm) || 0,
                 unit_per_carton: group.unit_carton?.trim() || "",
                 inner_pack_unit_qty: group.inner_pack?.trim() || "",
+                polybags_per_carton: group.polybags_carton ? Number(group.polybags_carton) : null,
                 fold: group.fold?.trim() || ""
               }));
           }),
@@ -949,6 +1036,23 @@ function FormMain({ onBack }) {
             width_cm: Number(row.col9) || 0,
             length_in: Number(row.col10) || 0,
             length_cm: Number(row.col11) || 0
+          })),
+
+        // Freezing Note rows — only meaningful for Bedsheet; backend
+        // ignores this array for other program types anyway.
+        freezing_note_rows: freezingNoteRows
+          .filter(row => Object.values(row).some(v => v !== '' && v !== null))
+          .map(row => ({
+            ...row,
+            carton_length_cm: row.carton_length_cm ? Number(row.carton_length_cm) : null,
+            carton_width_cm: row.carton_width_cm ? Number(row.carton_width_cm) : null,
+            carton_height_cm: row.carton_height_cm ? Number(row.carton_height_cm) : null,
+            net_weight_kgs: row.net_weight_kgs ? Number(row.net_weight_kgs) : null,
+            gross_weight_kgs: row.gross_weight_kgs ? Number(row.gross_weight_kgs) : null,
+            ld_polybag_length_cm: row.ld_polybag_length_cm ? Number(row.ld_polybag_length_cm) : null,
+            ld_polybag_width_cm: row.ld_polybag_width_cm ? Number(row.ld_polybag_width_cm) : null,
+            ld_polybag_flap_cm: row.ld_polybag_flap_cm ? Number(row.ld_polybag_flap_cm) : null,
+            date_of_carton_dimension_finalization: row.date_of_carton_dimension_finalization || null,
           })),
 
         // Add product-specific details
@@ -1042,7 +1146,7 @@ function FormMain({ onBack }) {
   // ==================== RENDER ====================
 
   // ==================== RENDER ====================
-  const isGussetMode = formData.productCategory === "Bedsheet" && (formData.formMode ?? "gusset") === "gusset";
+  // const isGussetMode = formData.productCategory === "Bedsheet" && (formData.formMode ?? "gusset") === "gusset";
   return (
     <div className="h-full overflow-y-auto bg-gray-50 font-sans text-sm">
       <div className="pb-4 pr-4 pl-4 max-w-7xl mx-auto">
@@ -1082,7 +1186,7 @@ function FormMain({ onBack }) {
         {/* Tables */}
                 {/* Tables */}
         <div className="space-y-10 mt-8">
-          {!isGussetMode && (
+          {showCartonSpecs && (
             <Table
               title="Program Specifications"
               headers={programHeaders}
@@ -1097,14 +1201,26 @@ function FormMain({ onBack }) {
             />
           )}
 
-          {isGussetMode && (
+          {/* Freezing Note (Carton and Packing Details) — Bedsheet only.
+              Only shown when Standard Bedsheet is filled, regardless of
+              whether Gusset is also filled. Marketing-only. */}
+          {showFreezingNote && (
+            <FreezingNoteTable
+              rows={freezingNoteRows}
+              onAddRow={handleAddFreezingNoteRow}
+              onCellChange={handleFreezingNoteCellChange}
+              onDeleteRow={handleDeleteFreezingNoteRow}
+            />
+          )}
+
+          {showGussetSpecs && (
             <Table
-              title="Program Specifications"
+              title="Gusset Specifications"
               headers={[
                 { label: "Size", key: "size" },
                 { label: "Fold Length", key: "foldLength" },
                 { label: "Fold Width", key: "foldWidth" },
-                { label: "Gusset Name", key: "gussetName" },
+                { label: "Gusset", key: "gussetName" },
                 { label: "WT", key: "wt" },
                 { label: "GSM", key: "gsm" },
                 { label: "", key: "actions", hasAddBtn: true },

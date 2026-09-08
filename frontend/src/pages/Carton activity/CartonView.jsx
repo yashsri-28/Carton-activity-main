@@ -928,6 +928,7 @@ import { ArrowLeft, Paperclip, Eye } from 'lucide-react';
 import Table from '../Form/Table';
 import AICalculationsDisplay from './AICalculationsDisplay';
 import { toast } from 'react-toastify';
+import FreezingNoteTable from '../Form/FreezingNoteTable';
 
 function CartonView() {
   const { id } = useParams();
@@ -941,6 +942,9 @@ function CartonView() {
 
   const [details, setDetails] = useState(null);
   const [actualProgramId, setActualProgramId] = useState(null);
+  const [freezingNoteRows, setFreezingNoteRows] = useState([]);
+  const [canEditFreezingNote, setCanEditFreezingNote] = useState(false);
+  const [savingFreezingNote, setSavingFreezingNote] = useState(false);
   const [calculationMode, setCalculationMode] = useState(false);
   const [recalculating, setRecalculating] = useState(false);
   const [subprograms, setSubprograms] = useState([]);
@@ -993,6 +997,8 @@ function CartonView() {
         setDetails(data);
         setCurrentStatus(data.status);
         setActualProgramId(data.program_id);
+        setFreezingNoteRows(data.freezing_note_rows || []);
+        setCanEditFreezingNote(data.can_edit_freezing_note === true);
         setSubprograms(
           (data.subprograms || [])
             .filter(sp => {
@@ -1324,6 +1330,36 @@ function CartonView() {
     );
   };
 
+  // ==================== FREEZING NOTE HANDLERS (Marketing only) ====================
+  const handleFreezingNoteFieldChange = (idx, field, value) => {
+    setFreezingNoteRows(prev =>
+      prev.map((row, i) => (i === idx ? { ...row, [field]: value } : row))
+    );
+  };
+
+  const handleSaveFreezingNote = async () => {
+    setSavingFreezingNote(true);
+    try {
+      await api.post('/api/carton-program/edit/', {
+        activity_program_status_id: parseInt(id),
+        program_type: programType,
+        carton_program: details.carton_program,
+        bedsheet_details: details.bedsheet_details,
+        terry_details: details.terry_details,
+        bathrobe_details: details.bathrobe_details,
+        subprograms: subprograms,
+        samples: samples,
+        freezing_note_rows: freezingNoteRows,
+      });
+      toast.success('Freezing Note updated successfully!');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to update Freezing Note.');
+    } finally {
+      setSavingFreezingNote(false);
+    }
+  };
+
   const handlePurchaseAccept = async () => {
     try {
       await api.post('/api/purchase/accept-request/', { activity_program_status_id: id });
@@ -1381,13 +1417,9 @@ function CartonView() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <DetailItem label="Fabric TC" value={bedsheet.fabric_tc} />
             <DetailItem label="Folding Details" value={bedsheet.folding_details} />
-            <DetailItem label="Required Pcs/Polybag" value={bedsheet.required_pcs_per_polybag} />
-            <DetailItem label="Polybag Size" value={bedsheet.polybag_size} />
             <DetailItem label="Product Type" value={bedsheet.product_type} />
             <DetailItem label="Special Packing Requirement" value={bedsheet.special_packing_requirement} />
             <DetailItem label="Packing Type" value={bedsheet.packing_type} />
-            <DetailItem label="Product Dimension" value={bedsheet.product_dimension} />
-            {/* <DetailItem label="Fold Size" value={bedsheet.fold_size} /> */}
             <DetailItem
               label="Fold Length x Fold Width"
               value={
@@ -1400,7 +1432,6 @@ function CartonView() {
             <DetailItem label="Blister Packing Details" value={bedsheet.blister_packing_details} />
             <DetailItem label="Bag Type" value={bedsheet.bag_type} />
             <DetailItem label="Special Box Required" value={bedsheet.special_box_required} />
-            <DetailItem label="Required Sets/Carton" value={bedsheet.required_sets_per_carton} />
             <DetailItem label="PolyFold Condition" value={bedsheet.polyfold_condition} />
             <DetailItem label="Filled Product GSM" value={bedsheet.filled_product_gsm} />
             <DetailItem label="Elastic Required" value={bedsheet.elastic_required} boolean />
@@ -1418,12 +1449,6 @@ function CartonView() {
           <h3 className="text-md font-semibold text-green-900 mb-4">Terry Towel Specific Details</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <DetailItem label="Towel Sizes" value={terry.towel_sizes} />
-            <DetailItem label="Required Pcs/Carton (Size-wise)" value={terry.required_pcs_carton_size} />
-            <DetailItem label="Required Polybags/Carton (Size-wise)" value={terry.required_polybags_carton_size} />
-            <DetailItem label="Towel Dimensions" value={terry.towel_dimensions} />
-            <DetailItem label="Towel Weight Per Piece" value={terry.towel_weight_per_piece} />
-            <DetailItem label="Folding Details" value={terry.folding_details} />
-            <DetailItem label="Required Pcs/Polybag" value={terry.required_pcs_per_polybag} />
             <DetailItem label="Special Carton Details" value={terry.special_carton_details} />
           </div>
         </div>
@@ -1553,7 +1578,11 @@ function CartonView() {
                 </button>
               )}
 
-              {canStartCalculation && !calculationMode && (
+              {/* TEMP: Bedsheet carton-dimension entry flow is being
+                  redesigned (Freezing Note now owns those fields but TQM
+                  can't edit it yet) — hide the old Submit Calculation
+                  button for Bedsheet until that's resolved. */}
+              {canStartCalculation && !calculationMode && programType !== 'BEDSHEET' && (
                 <button onClick={() => setCalculationMode(true)} className="px-5 py-2 bg-[#003366] text-white rounded cursor-pointer hover:bg-[#002244] transition-colors">
                   {hasCalculationData ? 'Update Calculation' : 'Submit Calculation'}
                 </button>
@@ -1643,8 +1672,9 @@ function CartonView() {
             </div>
           </div>
 
-          {/* Program Specifications Table */}
-          {subprograms && subprograms.length > 0 && (
+          {/* Program Specifications Table — hidden for Bedsheet now
+              (replaced by Freezing Note + Gusset Specifications) */}
+          {programType !== 'BEDSHEET' && subprograms && subprograms.length > 0 && (
             <div className="bg-white shadow-sm rounded-lg border mb-8">
               <div className="p-3 border-b">
                 <h2 className="text-lg font-semibold">Program Specifications</h2>
@@ -1654,16 +1684,22 @@ function CartonView() {
                   <thead className="text-white">
                     <tr>
                       <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">Program</th>
-                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">Style</th>
+                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">Size</th>
                       <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">W-In</th>
-                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">W-Cm</th>
                       <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">L-In</th>
-                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">L-Cm</th>
                       <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">Wt/Unit</th>
                       <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">GSM</th>
-                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">Unit/Carton</th>
-                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">Inner Pack Unit Quantity</th>
-                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">Fold</th>
+                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">Units/Polybag</th>
+                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">Units/Carton</th>
+                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">Polybags/Carton</th>
+                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">Folding Details</th>
+                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">Fold W</th>
+                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">Fold L</th>
+                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">Carton W</th>
+                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">Carton L</th>
+                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">Carton H</th>
+                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">CBM</th>
+                      <th rowSpan="2" className="px-4 py-3 text-left bg-[#0f3460]">Wt/Carton</th>
 
                       {showCartonSizing && (
                         <th colSpan="5" className="px-4 py-3 text-center bg-[#04162B]">Carton Sizing</th>
@@ -1734,19 +1770,25 @@ function CartonView() {
                         )}
                         <td className="px-4 py-3">{sp.style ?? "-"}</td>
                         <td className="px-4 py-3">{sp.width_in ?? "-"}</td>
-                        <td className="px-4 py-3">{sp.width_cm ?? "-"}</td>
                         <td className="px-4 py-3">{sp.length_in ?? "-"}</td>
-                        <td className="px-4 py-3">{sp.length_cm ?? "-"}</td>
                         <td className="px-4 py-3">{sp.wt_per_unit ?? "-"}</td>
                         <td className="px-4 py-3">{sp.gsm ?? "-"}</td>
 
                         {index === 0 && (
                           <>
+                            <td rowSpan={subprograms.length} className="px-4 py-3 bg-gray-50 align-middle border-x text-center">{sp.inner_pack_unit_qty ?? "-"}</td>
                             <td rowSpan={subprograms.length} className="px-4 py-3 bg-gray-50 align-middle border-x text-center">{sp.unit_per_carton ?? "-"}</td>
-                            <td rowSpan={subprograms.length} className="px-4 py-3 bg-gray-50 align-middle border-r text-center">{sp.inner_pack_unit_qty ?? "-"}</td>
+                            <td rowSpan={subprograms.length} className="px-4 py-3 bg-gray-50 align-middle border-r text-center">{sp.polybags_per_carton ?? "-"}</td>
                             <td rowSpan={subprograms.length} className="px-4 py-3 bg-gray-50 align-middle border-r">{sp.fold ?? "-"}</td>
                           </>
                         )}
+                        <td className="px-4 py-3">{sp.folded_width ?? "-"}</td>
+                        <td className="px-4 py-3">{sp.folded_length ?? "-"}</td>
+                        <td className="px-4 py-3 text-sky-700 font-semibold">{sp.carton_width ?? "-"}</td>
+                        <td className="px-4 py-3 text-sky-700 font-semibold">{sp.carton_length ?? "-"}</td>
+                        <td className="px-4 py-3 text-sky-700 font-semibold">{sp.carton_height ?? "-"}</td>
+                        <td className="px-4 py-3 text-sky-700 font-semibold">{sp.calculated_cbm_per_carton ?? "-"}</td>
+                        <td className="px-4 py-3 text-sky-700 font-semibold">{sp.calculated_net_wt_carton ?? "-"}</td>
 
                         {showCartonSizing && (
                           <>
@@ -1978,7 +2020,34 @@ function CartonView() {
               </div>
             </div>
           )}
+          
+          {/* Freezing Note — Bedsheet only, shown for everyone, editable
+              only by Marketing (canEditFreezingNote comes from backend). */}
+          {programType === 'BEDSHEET' && freezingNoteRows.length > 0 && (
+            <div className="mb-8">
+              <FreezingNoteTable
+                rows={freezingNoteRows}
+                onCellChange={canEditFreezingNote ? handleFreezingNoteFieldChange : undefined}
+                onDeleteRow={undefined}
+                onAddRow={undefined}
+                readOnly={!canEditFreezingNote}
+              />
+              {canEditFreezingNote && (
+                <div className="flex justify-end mt-3">
+                  <button
+                    onClick={handleSaveFreezingNote}
+                    disabled={savingFreezingNote}
+                    className="px-6 py-2 bg-[#0f3460] hover:bg-[#0a2545] text-white rounded-lg text-sm font-medium disabled:opacity-50"
+                  >
+                    {savingFreezingNote ? 'Saving...' : 'Save Freezing Note'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
+          {/* AI Carton Calculations */}
+  
           {/* AI Carton Calculations */}
           {actualProgramId && (
             <AICalculationsDisplay

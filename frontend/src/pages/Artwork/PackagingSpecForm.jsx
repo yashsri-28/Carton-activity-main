@@ -1023,33 +1023,7 @@ function PackagingSpecForm() {
                 <ChevronIcon open={showApprovalAssign} />
               </button>
 
-              {/* {showApprovalAssign && (
-                <div className="bg-white p-5">
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">
-                    Approval Stages
-                  </label>
-                  <div className="space-y-2">
-                    <ApprovalStageRow label="Marketing" locked />
-                    <ApprovalStageRow label="PPC" locked />
-                    <ApprovalStageRow label="TQM" locked />
-                    <ApprovalStageRow
-                      label="Legal"
-                      checked={legalApprovalRequired}
-                      onChange={setLegalApprovalRequired}
-                    />
-                    <ApprovalStageRow
-                      label="Compliance"
-                      checked={complianceApprovalRequired}
-                      onChange={setComplianceApprovalRequired}
-                    />
-                    <ApprovalStageRow
-                      label="Lab"
-                      checked={labApprovalRequired}
-                      onChange={setLabApprovalRequired}
-                    />
-                  </div>
-                </div>
-              )} */}
+           
 
               {showApprovalAssign && (
                 <div className="bg-white p-5">

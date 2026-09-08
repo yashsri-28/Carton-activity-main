@@ -18,3 +18,61 @@ z-index: 1 !important;
 .formHeader{
 z-index: 5 !important;
 }
+
+
+
+button{
+  cursor: pointer;
+}
+
+
+
+/* ========================================
+   GLOBAL SCROLLBAR
+   Theme: #0f3460
+======================================== */
+
+/* Chrome, Edge, Safari */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f3f4f6;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #0f3460;
+  border-radius: 9999px;
+  border: 2px solid #f3f4f6;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #0a2545;
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #0f3460 #f3f4f6;
+}
+
+
+
+
+
+
+
+/* Chrome, Safari, Edge, Opera me arrows hide karne ke liye */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none !important;
+  margin: 0;
+}
+
+/* Firefox me arrows hide karne ke liye */
+input[type="number"] {
+  -moz-appearance: textfield !important;
+}

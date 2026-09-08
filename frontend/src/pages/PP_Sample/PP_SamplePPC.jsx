@@ -417,7 +417,7 @@ export default function PPSamplePPC() {
   );
 
   return (
-    <div className="pps-root p-4 md:p-6 lg:p-8 max-w-screen-2xl mx-auto space-y-6">
+    <div className="pps-root p-4 md:p-6 lg:p-8 max-w-8xl mx-auto space-y-6">
       <div className="pps-fade pps-fade-d1 flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Sample - Top/Testing Etc (PPC)</h1>

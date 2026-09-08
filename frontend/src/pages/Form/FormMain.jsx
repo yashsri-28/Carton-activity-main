@@ -275,10 +275,60 @@ function FormMain({ onBack }) {
   }, []);
 
   // ==================== HANDLERS ====================
+  // const handleInputChange = useCallback((e) => {
+  //   const { name, value } = e.target;
+  //   setFormData(prev => ({ ...prev, [name]: value }));
+  // }, []);
+
+
   const handleInputChange = useCallback((e) => {
     const { name, value } = e.target;
+
+    // 1. Text Only Fields (Nayi fields yahan add kar di hain)
+    const textOnlyFields = [
+      'customerName', 'gussetCustomerName', 'programName', 'gussetProgramName', 
+      'customerProtocol', 'newOrShifted', 'original_towel', 'specialCarton', 
+      'polybagManualAuto', 'polybag_type', 'singleOrMonsterPDQ', 'pdqLayers', 
+      'smallPDQRequirement', 'warehouse_store_handling_method', 
+      'towel_folded_and_poly_packed_before_carton', 'fabric', 'productRequirements', 
+      'packingRequirements', 'PackingType', 'BlisterRequired', 'BoxRequired', 
+      'PolyFoldCondition', 'cardboardFoldType', 'cardboardPly', 'cardboardFoldOnSide', 
+      'polybagMaterialType', 'polybagOpeningType', 'polybagOpeningOnSide', 'gussetWeave', 
+      'gussetProductGroup', 'polybagInlayOrBellyBand', 'polybagType',
+      // 👇 NAYI FIELDS YAHAN ADD KI HAIN 👇
+      'terrySpecialCartonDetails', 'separatorRequired', 'ribbonPacking', 'bellyBandPacking'
+    ];
+
+    // 2. Number Only Fields (Negative numbers allow nahi honge)
+    const numberOnlyFields = [
+      'smallPDQQuantity', 
+      'towelWeightPerPiece', 
+      'terryPcsPerPolybag',
+      'required_pcs_per_polybag',
+      'required_sets_per_carton',
+      'filled_product_gsm'
+    ];
+
+    // 🔴 STRICT NUMBER VALIDATION
+    if (numberOnlyFields.includes(name)) {
+      // Ye minus (-) sign aur kisi bhi alphabet ko input me type hi nahi hone dega
+      const numericValue = value.replace(/[^0-9]/g, '');
+      setFormData(prev => ({ ...prev, [name]: numericValue }));
+      return; 
+    }
+
+    // 🔵 STRICT TEXT VALIDATION
+    if (textOnlyFields.includes(name)) {
+      // Ye numbers aur special characters (like = ; [ ]) ko remove kar dega
+      const textValue = value.replace(/[^A-Za-z\s]/g, '');
+      setFormData(prev => ({ ...prev, [name]: textValue }));
+      return; 
+    }
+
+    // ⚪ Default Behavior
     setFormData(prev => ({ ...prev, [name]: value }));
   }, []);
+
 
   // NEW: Handles checking/unchecking a size checkbox in Gusset Finalization.
   // Checking a size adds a new row to gussetSpecRows; unchecking removes
@@ -1144,17 +1194,15 @@ function FormMain({ onBack }) {
   const usersForSelectedRole = users.filter(user => user.role === selectedRole);
 
   // ==================== RENDER ====================
-
-  // ==================== RENDER ====================
   // const isGussetMode = formData.productCategory === "Bedsheet" && (formData.formMode ?? "gusset") === "gusset";
   return (
     <div className="h-full overflow-y-auto bg-gray-50 font-sans text-sm">
-      <div className="pb-4 pr-4 pl-4 max-w-7xl mx-auto">
+      <div className="pb-4 pr-4 pl-4 max-w-8xl mx-auto">
         {/* Sticky Header */}
         <div className="sticky top-0 z-30 bg-gray-50 mb-6 border-b border-gray-200 py-4">
-          <div className="flex items-center gap-4 max-w-7xl mx-auto px-4">
+          <div className="flex items-center gap-4 max-w-8xl mx-auto px-4">
             <button
-              onClick={() => navigate('/')}
+              onClick={() => navigate('/')} 
               className="p-2 bg-white shadow cursor-pointer hover:bg-gray-100 rounded-full transition-colors group"
               disabled={loading}
             >

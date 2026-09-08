@@ -208,7 +208,7 @@ function PPSampleMarketing() {
   };
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 mx-auto max-w-screen-2xl">
+    <div className="p-4 md:p-6 lg:p-8 mx-auto max-w-8xl">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Sample - Top/Testing Etc</h1>
       </div>

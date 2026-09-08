@@ -240,7 +240,7 @@ function LabDipMarketing() {
     // This ensures the component's natural scroll behavior is restored without affecting the global layout.
     // Uses full viewport height and auto overflow to enable page-level scrolling.
     <div className="h-full overflow-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
-      <div className="p-4 md:p-6 lg:p-8 mx-auto max-w-7xl min-h-full">
+      <div className="p-4 md:p-6 lg:p-8 mx-auto max-w-8xl min-h-full">
         {/* Header with Category Dropdown */}
         <div className="flex items-center justify-between mb-6">
           <div>

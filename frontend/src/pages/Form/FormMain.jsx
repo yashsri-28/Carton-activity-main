@@ -765,9 +765,9 @@ function FormMain({ onBack }) {
 
     // Activity Name field removed from UI — auto-fill from Program Name
     // so the backend's required "activity" field still gets a value.
-    if (!formData.gussetActivityName?.trim()) {
-      setFormData(prev => ({ ...prev, gussetActivityName: prev.gussetProgramName?.trim() }));
-    }
+    // (Using a local variable, not setFormData, since state updates are
+    // async and wouldn't be ready in time for the payload built below.)
+    const effectiveActivityName = formData.gussetActivityName?.trim() || formData.gussetProgramName?.trim();
     if (!selectedUserId) {
       toast.error('Please select a role and a user to send the request');
       return;
@@ -777,7 +777,7 @@ function FormMain({ onBack }) {
 
     try {
       const payload = {
-        activity_name: formData.gussetActivityName?.trim() || '',
+        activity_name: effectiveActivityName,
         sent_to_user_id: selectedUserId,
         btn: 'Pending',
         customer_name: formData.gussetCustomerName.trim(),

@@ -6,22 +6,22 @@ import { FREEZING_NOTE_FIELDS, FREEZING_NOTE_GROUPS } from './freezingNoteFields
 // reference "Program Specifications Master Sheet" layout.
 const SECTIONS = [
   {
-    label: 'Section A',
-    subtitle: 'General Info • Packing Status • Carton Dimensions • Weights • Strength',
+    label: 'Carton working',
+    subtitle: '',
     tableOf: 'Table 1 of 3',
     groupKeys: ['general', 'packing', 'carton_dim', 'carton_weight', 'carton_ply'],
     showRowNumber: true,
   },
   {
-    label: 'Section B',
-    subtitle: 'Stiffener, Side Stiffener & Separator Details',
+    label: 'Stiffener, Side Stiffener & Separator Details',
+    subtitle: '',
     tableOf: 'Table 2 of 3',
     groupKeys: ['stiffener', 'side_stiffener', 'separator'],
     showRowNumber: true,
   },
   {
-    label: 'Section C',
-    subtitle: "PVC / LD Polybag Details, Product Position, Macy's & Additional Info",
+    label: 'Bag details',
+    subtitle: "",
     tableOf: 'Table 3 of 3',
     groupKeys: ['bag_box', 'ld_polybag', 'printing', 'other', 'macys', 'additional'],
     showRowNumber: true,

@@ -1290,6 +1290,8 @@ def create_artwork_with_spec(request):
         assigned_lab_id=data.get("assigned_lab_id") or None,
         customer_approval_required=bool(data.get("customer_approval_required", False)),
         legal_approval_required=bool(data.get("legal_approval_required", False)),
+        ppc_approval_required=bool(data.get("ppc_approval_required", True)),
+        tqm_approval_required=bool(data.get("tqm_approval_required", True)),
         compliance_approval_required=bool(data.get("compliance_approval_required", False)),
         lab_approval_required=bool(data.get("lab_approval_required", False)),
         remarks=data.get("remarks"),
@@ -1894,6 +1896,22 @@ def assign_compliance(request, artwork_id):
 
 
 
+# def _compute_pending_roles(artwork):
+#     """Returns the set of roles whose action is needed RIGHT NOW for
+#     this artwork — across upload/approval/sample/matcode/release
+#     stages. Powers both the status display AND the 'In Action' filter."""
+#     roles = set()
+
+#     if artwork.status == "DRAFT":
+#         roles.add("MARKETING")  # needs a Procurement contact assigned
+#         return roles
+#     if artwork.status == "VENDOR_UPLOAD_PENDING":
+#         roles.add("PROCUREMENT")
+#         return roles
+#     if artwork.status == "APPROVED":
+#         roles.add("PPC")  # release pending
+#         return roles
+
 def _compute_pending_roles(artwork):
     """Returns the set of roles whose action is needed RIGHT NOW for
     this artwork — across upload/approval/sample/matcode/release
@@ -1908,6 +1926,12 @@ def _compute_pending_roles(artwork):
         return roles
     if artwork.status == "APPROVED":
         roles.add("PPC")  # release pending
+        return roles
+    if artwork.status in ["REJECTED", "SAMPLE_REJECTED"]:
+        # Whoever rejected it, the ball is now in Procurement's court —
+        # no other reviewer (even one who never got to act in the same
+        # gate) should see this in their "In Action" list anymore.
+        roles.add("PROCUREMENT")
         return roles
 
     current_version = artwork.versions.filter(is_active_version=True).first()

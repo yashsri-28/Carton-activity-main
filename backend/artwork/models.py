@@ -145,6 +145,8 @@ class ArtworkRequest(models.Model):
     legal_approval_required = models.BooleanField(default=False)
     compliance_approval_required = models.BooleanField(default=False)
     lab_approval_required = models.BooleanField(default=False)
+    ppc_approval_required = models.BooleanField(default=False)
+    tqm_approval_required = models.BooleanField(default=False)
     
     # Which workflow this artwork follows — decided once at creation
     # time based on its category. "STANDARD" = the original

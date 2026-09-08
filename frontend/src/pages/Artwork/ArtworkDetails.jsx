@@ -72,7 +72,8 @@ function normalizeExcelPaste(html) {
 const STAGE_ROLE_MAP = { MARKETING: 'marketing', PPC: 'ppc', TQM: 'ttqm', LEGAL: 'legal', COMPLIANCE: 'compliance', LAB: 'lab', CUSTOMER: 'admin' };
 
 // Custom-workflow step actor_role -> frontend role strings.
-const WORKFLOW_ROLE_MAP = { MARKETING: 'marketing', PPC: 'ppc', TTQM: 'ttqm', PROCUREMENT: 'procurement', ADMIN: 'admin' };
+// const WORKFLOW_ROLE_MAP = { MARKETING: 'marketing', PPC: 'ppc', TTQM: 'ttqm', PROCUREMENT: 'procurement', ADMIN: 'admin' };
+const WORKFLOW_ROLE_MAP = { MARKETING: 'marketing', PPC: 'ppc', TTQM: 'ttqm', PROCUREMENT: 'procurement', ADMIN: 'admin', LEGAL: 'legal', COMPLIANCE: 'compliance', LAB: 'lab' };
 
 // A custom-workflow step is only actionable while the artwork's
 // overall status matches what that step-type expects — prevents
@@ -382,12 +383,19 @@ function ArtworkDetails({ role }) {
   const rejectedStage = artwork.approvals?.find((a) => a.decision === 'REJECTED');
 
   // Custom-workflow gating
+  // const customPendingStep = artwork.workflow_key !== 'STANDARD'
+  //   ? artwork.workflow_steps?.find(
+  //       (s) => s.status === 'PENDING' && artwork.status === CUSTOM_STEP_STATUS_MAP[s.step_type]
+  //     )
+  //   : null;
+  // const canActOnCustomStep = customPendingStep && WORKFLOW_ROLE_MAP[customPendingStep.actor_role] === role;
+
   const customPendingStep = artwork.workflow_key !== 'STANDARD'
-    ? artwork.workflow_steps?.find(
-        (s) => s.status === 'PENDING' && artwork.status === CUSTOM_STEP_STATUS_MAP[s.step_type]
-      )
-    : null;
-  const canActOnCustomStep = customPendingStep && WORKFLOW_ROLE_MAP[customPendingStep.actor_role] === role;
+  ? artwork.workflow_steps?.find(
+      (s) => s.status === 'PENDING' && artwork.status === CUSTOM_STEP_STATUS_MAP[s.step_type] && WORKFLOW_ROLE_MAP[s.actor_role] === role
+    )
+  : null;
+  const canActOnCustomStep = Boolean(customPendingStep);
 
   return (
     <div className="p-6 w-full h-full overflow-y-auto thin-scrollbar">
@@ -404,8 +412,21 @@ function ArtworkDetails({ role }) {
           >
             ⬇ Download Excel
           </button>
+
           <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-            {STATUS_LABELS[artwork.status] || artwork.status.replace(/_/g, ' ')}
+            {(() => {
+              // For custom-workflow categories (RIBBON/BW_STICKER), a single
+              // status enum like "MARKETING_REVIEW" doesn't capture the full
+              // picture when a GATE has multiple roles pending together (e.g.
+              // Marketing + Compliance both needed). Whenever pending_roles is
+              // known, show exactly WHO is being waited on instead of the
+              // fixed, potentially misleading status text.
+              const noReviewStatuses = ['DRAFT', 'APPROVED', 'RELEASED', 'REJECTED', 'ARCHIVED', 'OBSOLETE'];
+              if (artwork.pending_roles && artwork.pending_roles.length > 0 && !noReviewStatuses.includes(artwork.status)) {
+                return `Review Pending: ${artwork.pending_roles.join(', ')}`;
+              }
+              return STATUS_LABELS[artwork.status] || artwork.status.replace(/_/g, ' ');
+            })()}
           </span>
         </div>
       </div>
@@ -777,7 +798,8 @@ function ArtworkDetails({ role }) {
                 </button>
               )}
 
-              {role === 'marketing' && artwork.status === 'SAMPLE_RECEIVED_REVIEW' && artwork.latest_physical_sample.is_received && (
+              {/* {role === 'marketing' && artwork.status === 'SAMPLE_RECEIVED_REVIEW' && artwork.latest_physical_sample.is_received && ( */}
+              {canActOnCustomStep && customPendingStep.step_type === 'SAMPLE_APPROVAL' && artwork.latest_physical_sample.is_received && (
                 <div className="space-y-2">
                   {!showSampleRejectForm ? (
                     <div className="flex gap-2">

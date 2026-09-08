@@ -752,8 +752,10 @@ function PackagingSpecForm() {
   const [assignedVendorId, setAssignedVendorId] = useState('');
   const [procurementUsers, setProcurementUsers] = useState([]);
   const [legalApprovalRequired, setLegalApprovalRequired] = useState(false);
-  const [ppcApprovalRequired, setPpcApprovalRequired] = useState(true);
-  const [tqmApprovalRequired, setTqmApprovalRequired] = useState(true);
+  // const [ppcApprovalRequired, setPpcApprovalRequired] = useState(true);
+  // const [tqmApprovalRequired, setTqmApprovalRequired] = useState(true);
+  const [ppcApprovalRequired, setPpcApprovalRequired] = useState(false);
+  const [tqmApprovalRequired, setTqmApprovalRequired] = useState(false);
   const [complianceApprovalRequired, setComplianceApprovalRequired] = useState(false);
   const [labApprovalRequired, setLabApprovalRequired] = useState(false);
   const [showProcurementAssign, setShowProcurementAssign] = useState(false);
@@ -1054,7 +1056,7 @@ function PackagingSpecForm() {
                   <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">
                     Approval Stages
                   </label>
-                  <p className="text-xs text-gray-400 mb-2">Marketing always reviews every request automatically.</p>
+                  {/* <p className="text-xs text-gray-400 mb-2">Marketing always reviews every request automatically.</p> */}
                   <div className="space-y-2">
                     <ApprovalStageRow
                       label="PPC"

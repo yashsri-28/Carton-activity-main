@@ -623,8 +623,24 @@ def act_on_workflow_step(request, artwork_id):
                 ).values_list("actor_role", flat=True).distinct()
                 for role in next_gate_roles:
                     _notify_role(role, artwork, f"{artwork.artwork_id} is ready for your review.", exclude_user=request.user)
+    #         else:
+    #             artwork.status = "APPROVED"
+
+    # artwork.updated_by = request.user
+    # artwork.save(update_fields=["status", "updated_by", "updated_on"])
+
+    # _log_activity(
+    #     request, artwork, f"Workflow Step {decision.title()}",
+    #     f"{pending.step_label} {decision.lower()} by {request.user.username}." + (f" Reason: {comments}" if comments else ""),
+    # )
+
+    # return Response(_artwork_to_dict(artwork, request=request), status=http_status.HTTP_200_OK)
+    
             else:
                 artwork.status = "APPROVED"
+                if artwork.assigned_vendor:
+                    _notify(artwork.assigned_vendor, artwork, f"{artwork.artwork_id} has been fully approved.")
+                _notify_role("PPC", artwork, f"{artwork.artwork_id} is fully approved and ready for release.", exclude_user=request.user)
 
     artwork.updated_by = request.user
     artwork.save(update_fields=["status", "updated_by", "updated_on"])
@@ -786,12 +802,28 @@ def receive_physical_sample(request, artwork_id):
     sample.received_on = timezone.now()
     sample.save()
 
+    # artwork.status = "SAMPLE_RECEIVED_REVIEW"
+    # artwork.updated_by = request.user
+    # artwork.save(update_fields=["status", "updated_by", "updated_on"])
+
+    # _log_activity(request, artwork, "Physical Sample Received", f"{request.user.username} confirmed receipt of the physical sample for {artwork.artwork_id}.")
+
+
     artwork.status = "SAMPLE_RECEIVED_REVIEW"
     artwork.updated_by = request.user
     artwork.save(update_fields=["status", "updated_by", "updated_on"])
 
-    _log_activity(request, artwork, "Physical Sample Received", f"{request.user.username} confirmed receipt of the physical sample for {artwork.artwork_id}.")
+    # Notify every role in the Sample-Approval gate that the sample
+    # has physically arrived and is now ready for their review.
+    current_version = artwork.versions.filter(is_active_version=True).first()
+    gate_roles = artwork.workflow_steps.filter(
+        version=current_version, step_type="SAMPLE_APPROVAL", status="PENDING"
+    ).values_list("actor_role", flat=True).distinct()
+    for role_code in gate_roles:
+        _notify_role(role_code, artwork, f"Physical sample for {artwork.artwork_id} has been received — ready for your review.", exclude_user=request.user)
 
+    _log_activity(request, artwork, "Physical Sample Received", f"{request.user.username} confirmed receipt of the physical sample for {artwork.artwork_id}.")
+    
     return Response(_artwork_to_dict(artwork, request=request), status=http_status.HTTP_200_OK)
 
 
@@ -1011,11 +1043,18 @@ def decide_physical_sample(request, artwork_id):
                 ).values_list("actor_role", flat=True).distinct()
                 for role in next_gate_roles:
                     _notify_role(role, artwork, f"{artwork.artwork_id} is ready for your review.", exclude_user=request.user)
+        #     else:
+        #         artwork.status = "APPROVED"
+
+        # _log_activity(request, artwork, "Sample Approved", f"{request.user.username} ({request.user.role}) approved the physical sample for {artwork.artwork_id}.")
             else:
                 artwork.status = "APPROVED"
+                if artwork.assigned_vendor:
+                    _notify(artwork.assigned_vendor, artwork, f"{artwork.artwork_id} has been fully approved.")
+                _notify_role("PPC", artwork, f"{artwork.artwork_id} is fully approved and ready for release.", exclude_user=request.user)
 
         _log_activity(request, artwork, "Sample Approved", f"{request.user.username} ({request.user.role}) approved the physical sample for {artwork.artwork_id}.")
-
+        
     artwork.updated_by = request.user
     artwork.save(update_fields=["status", "updated_by", "updated_on"])
 

@@ -75,9 +75,23 @@ def build_ribbon_steps(artwork):
 
     # Gate 1 — Artwork Approval: Marketing always, plus any ticked stakeholder
     # steps.append({"code": "MARKETING_ARTWORK_APPROVAL", "type": "APPROVAL", "role": "MARKETING", "label": "Marketing — Artwork Approval", "sequence": seq})
+    # steps.append({"code": "MARKETING_ARTWORK_APPROVAL", "type": "APPROVAL", "role": "MARKETING", "label": "Marketing — Artwork Approval", "sequence": seq})
+    # if artwork.ppc_approval_required:
+    #     steps.append({"code": "PPC_ARTWORK_APPROVAL", "type": "APPROVAL", "role": "PPC", "label": "PPC — Artwork Approval", "sequence": seq})
+    # if artwork.legal_approval_required:
+    #     steps.append({"code": "LEGAL_ARTWORK_APPROVAL", "type": "APPROVAL", "role": "LEGAL", "label": "Legal — Artwork Approval", "sequence": seq})
+    # if artwork.compliance_approval_required:
+    #     steps.append({"code": "COMPLIANCE_ARTWORK_APPROVAL", "type": "APPROVAL", "role": "COMPLIANCE", "label": "Compliance — Artwork Approval", "sequence": seq})
+    # if artwork.lab_approval_required:
+    #     steps.append({"code": "LAB_ARTWORK_APPROVAL", "type": "APPROVAL", "role": "LAB", "label": "Lab — Artwork Approval", "sequence": seq})
+    # seq += 1
+    
+    
     steps.append({"code": "MARKETING_ARTWORK_APPROVAL", "type": "APPROVAL", "role": "MARKETING", "label": "Marketing — Artwork Approval", "sequence": seq})
     if artwork.ppc_approval_required:
         steps.append({"code": "PPC_ARTWORK_APPROVAL", "type": "APPROVAL", "role": "PPC", "label": "PPC — Artwork Approval", "sequence": seq})
+    if artwork.tqm_approval_required:
+        steps.append({"code": "TQM_ARTWORK_APPROVAL", "type": "APPROVAL", "role": "TTQM", "label": "TQM — Artwork Approval", "sequence": seq})
     if artwork.legal_approval_required:
         steps.append({"code": "LEGAL_ARTWORK_APPROVAL", "type": "APPROVAL", "role": "LEGAL", "label": "Legal — Artwork Approval", "sequence": seq})
     if artwork.compliance_approval_required:
@@ -93,15 +107,25 @@ def build_ribbon_steps(artwork):
     # Gate 3 — Sample Approval: Marketing + TQM always, plus any ticked stakeholder
     # steps.append({"code": "MARKETING_SAMPLE_APPROVAL", "type": "SAMPLE_APPROVAL", "role": "MARKETING", "label": "Marketing — Sample Approval", "sequence": seq})
     # steps.append({"code": "TQM_SAMPLE_APPROVAL", "type": "SAMPLE_APPROVAL", "role": "TTQM", "label": "TQM — Sample Approval", "sequence": seq})
+    # steps.append({"code": "MARKETING_SAMPLE_APPROVAL", "type": "SAMPLE_APPROVAL", "role": "MARKETING", "label": "Marketing — Sample Approval", "sequence": seq})
+    # if artwork.tqm_approval_required:
+    #     steps.append({"code": "TQM_SAMPLE_APPROVAL", "type": "SAMPLE_APPROVAL", "role": "TTQM", "label": "TQM — Sample Approval", "sequence": seq})
+    # if artwork.legal_approval_required:
+    #     steps.append({"code": "LEGAL_SAMPLE_APPROVAL", "type": "SAMPLE_APPROVAL", "role": "LEGAL", "label": "Legal — Sample Approval", "sequence": seq})
+    # if artwork.compliance_approval_required:
+    #     steps.append({"code": "COMPLIANCE_SAMPLE_APPROVAL", "type": "SAMPLE_APPROVAL", "role": "COMPLIANCE", "label": "Compliance — Sample Approval", "sequence": seq})
+    # if artwork.lab_approval_required:
+    #     steps.append({"code": "LAB_SAMPLE_APPROVAL", "type": "SAMPLE_APPROVAL", "role": "LAB", "label": "Lab — Sample Approval", "sequence": seq})
+    # seq += 1
+    
+        # Gate 3 — Sample Approval is FIXED per RIBBON's category config
+    # (Marketing, TQM, Lab always review the physical sample) —
+    # completely SEPARATE and INDEPENDENT from the per-request
+    # "Assign for Approval" ticks used only in Gate 1. Never tied to
+    # any *_approval_required flag.
     steps.append({"code": "MARKETING_SAMPLE_APPROVAL", "type": "SAMPLE_APPROVAL", "role": "MARKETING", "label": "Marketing — Sample Approval", "sequence": seq})
-    if artwork.tqm_approval_required:
-        steps.append({"code": "TQM_SAMPLE_APPROVAL", "type": "SAMPLE_APPROVAL", "role": "TTQM", "label": "TQM — Sample Approval", "sequence": seq})
-    if artwork.legal_approval_required:
-        steps.append({"code": "LEGAL_SAMPLE_APPROVAL", "type": "SAMPLE_APPROVAL", "role": "LEGAL", "label": "Legal — Sample Approval", "sequence": seq})
-    if artwork.compliance_approval_required:
-        steps.append({"code": "COMPLIANCE_SAMPLE_APPROVAL", "type": "SAMPLE_APPROVAL", "role": "COMPLIANCE", "label": "Compliance — Sample Approval", "sequence": seq})
-    if artwork.lab_approval_required:
-        steps.append({"code": "LAB_SAMPLE_APPROVAL", "type": "SAMPLE_APPROVAL", "role": "LAB", "label": "Lab — Sample Approval", "sequence": seq})
+    steps.append({"code": "TQM_SAMPLE_APPROVAL", "type": "SAMPLE_APPROVAL", "role": "TTQM", "label": "TQM — Sample Approval", "sequence": seq})
+    steps.append({"code": "LAB_SAMPLE_APPROVAL", "type": "SAMPLE_APPROVAL", "role": "LAB", "label": "Lab — Sample Approval", "sequence": seq})
     seq += 1
 
     # Gate 4 — Reference Code Generation
@@ -132,10 +156,23 @@ def build_bw_sticker_steps(artwork):
 
     # Gate 1 — Artwork Approval: Marketing always, plus any ticked stakeholder
     # steps.append({"code": "MARKETING_ARTWORK_APPROVAL", "type": "APPROVAL", "role": "MARKETING", "label": "Marketing — Artwork Approval", "sequence": seq})
+    # steps.append({"code": "MARKETING_ARTWORK_APPROVAL", "type": "APPROVAL", "role": "MARKETING", "label": "Marketing — Artwork Approval", "sequence": seq})
+    # if artwork.ppc_approval_required:
+    #     steps.append({"code": "PPC_ARTWORK_APPROVAL", "type": "APPROVAL", "role": "PPC", "label": "PPC — Artwork Approval", "sequence": seq})
+   
+    # if artwork.legal_approval_required:
+    #     steps.append({"code": "LEGAL_ARTWORK_APPROVAL", "type": "APPROVAL", "role": "LEGAL", "label": "Legal — Artwork Approval", "sequence": seq})
+    # if artwork.compliance_approval_required:
+    #     steps.append({"code": "COMPLIANCE_ARTWORK_APPROVAL", "type": "APPROVAL", "role": "COMPLIANCE", "label": "Compliance — Artwork Approval", "sequence": seq})
+    # if artwork.lab_approval_required:
+    #     steps.append({"code": "LAB_ARTWORK_APPROVAL", "type": "APPROVAL", "role": "LAB", "label": "Lab — Artwork Approval", "sequence": seq})
+    # seq += 1
+    
     steps.append({"code": "MARKETING_ARTWORK_APPROVAL", "type": "APPROVAL", "role": "MARKETING", "label": "Marketing — Artwork Approval", "sequence": seq})
     if artwork.ppc_approval_required:
         steps.append({"code": "PPC_ARTWORK_APPROVAL", "type": "APPROVAL", "role": "PPC", "label": "PPC — Artwork Approval", "sequence": seq})
-   
+    if artwork.tqm_approval_required:
+        steps.append({"code": "TQM_ARTWORK_APPROVAL", "type": "APPROVAL", "role": "TTQM", "label": "TQM — Artwork Approval", "sequence": seq})
     if artwork.legal_approval_required:
         steps.append({"code": "LEGAL_ARTWORK_APPROVAL", "type": "APPROVAL", "role": "LEGAL", "label": "Legal — Artwork Approval", "sequence": seq})
     if artwork.compliance_approval_required:
@@ -145,6 +182,7 @@ def build_bw_sticker_steps(artwork):
     seq += 1
 
     # Gate 2 — Reference Code Generation
-    steps.append({"code": "MATCODE_GENERATION", "type": "MATCODE", "role": "PROCUREMENT", "label": "Procurement — Matcode Generation", "sequence": seq})
-
+    # steps.append({"code": "MATCODE_GENERATION", "type": "MATCODE", "role": "PROCUREMENT", "label": "Procurement — Matcode Generation", "sequence": seq})
+         # Gate 2 — Reference Code Generation
+    steps.append({"code": "MATCODE_GENERATION", "type": "MATCODE", "role": "PROCUREMENT", "label": "Procurement — Reference Code Generation", "sequence": seq})
     return steps

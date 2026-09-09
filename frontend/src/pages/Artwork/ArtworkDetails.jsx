@@ -678,7 +678,8 @@ function ArtworkDetails({ role }) {
       ) : (
         /* ================= Custom workflow (BW_STICKER / RIBBON / future) ================= */
         <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
-          <h2 className="font-medium text-gray-800 mb-3">Workflow ({artwork.workflow_key.replace(/_/g, ' ')})</h2>
+          {/* <h2 className="font-medium text-gray-800 mb-3">Workflow ({artwork.workflow_key.replace(/_/g, ' ')})</h2> */}
+          <h2 className="font-medium text-gray-800 mb-3">Workflow ({artwork.workflow_key.replace(/_/g, ' ').replace('MATCODE', 'REFERENCE CODE')})</h2>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {(artwork.workflow_steps || []).map((s) => {
               const bgClass =

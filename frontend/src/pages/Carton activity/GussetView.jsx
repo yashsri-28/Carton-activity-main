@@ -450,26 +450,31 @@ function GussetView() {
 
           {/* Program Specifications — editable by TTQM/PPC only */}
           {subprograms && subprograms.length > 0 && (
-            <div className="bg-white shadow-sm rounded-lg border mb-8">
-              <div className="p-3 border-b">
+            // <div className="bg-white shadow-sm rounded-lg border mb-8">
+            <div className="bg-white shadow-sm border rounded-lg mb-8">
+              <div className="p-2">
                 <h2 className="text-lg font-semibold">Program Specifications</h2>
               </div>
               <div className="p-2 overflow-x-auto">
-                <table className="min-w-full border-collapse text-sm">
+                {/* <table className="min-w-full border-collapse text-sm"> */}
+                <table className="w-full text-xs text-gray-700 border-collapse shadow-md rounded-xl">
                   <thead className="text-white">
-                    <tr>
-                      <th className="px-4 py-3 text-left bg-[#0f3460]">Size</th>
-                      <th className="px-4 py-3 text-left bg-[#0f3460]">Fold Length</th>
-                      <th className="px-4 py-3 text-left bg-[#0f3460]">Fold Width</th>
-                      <th className="px-4 py-3 text-left bg-[#0f3460]">Gusset</th>
-                      <th className="px-4 py-3 text-left bg-[#0f3460]">WT</th>
-                      <th className="px-4 py-3 text-left bg-[#0f3460]">GSM</th>
+                    {/* <tr> */}
+                    <tr className="bg-[#0f3460] text-white tracking-wider h-12 sticky top-0 z-20">
+                      <th className="border-r border-[#2a4d75] last:border-r-0 px-4 py-3 text-left bg-[#0f3460] rounded-tl-xl">Size</th>
+                      <th className="border-r border-[#2a4d75] last:border-r-0 px-4 py-3 text-left bg-[#0f3460]">Fold Length</th>
+                      <th className="border-r border-[#2a4d75] last:border-r-0 px-4 py-3 text-left bg-[#0f3460]">Fold Width</th>
+                      <th className="border-r border-[#2a4d75] last:border-r-0 px-4 py-3 text-left bg-[#0f3460]">Gusset</th>
+                      <th className="border-r border-[#2a4d75] last:border-r-0 px-4 py-3 text-left bg-[#0f3460]">WT</th>
+                      <th className="border-r border-[#2a4d75] last:border-r-0 px-4 py-3 text-left bg-[#0f3460] rounded-tr-xl">GSM</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  {/* <tbody> */}
+                  <tbody className="divide-y divide-gray-200">
                     {subprograms.map((sp) => (
-                      <tr key={sp.spec_id} className="border-t">
-                        <td className="px-4 py-2">
+                      <tr key={sp.spec_id} className="border-t border-gray-100">
+                        {/* <td className="px-4 py-2"> */}
+                        <td className="p-3 border-r border-gray-100 align-middle">
                           {(role === 'ttqm' || role === 'ppc') ? (
                             <input
                               type="text"
@@ -477,9 +482,17 @@ function GussetView() {
                               onChange={(e) => handleSpecFieldChange(sp.spec_id, 'size', e.target.value)}
                               className="border px-2 py-1 rounded w-28 focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
-                          ) : (sp.size ?? "-")}
+                          ) : (
+                            
+                            // sp.size ?? "-"
+                             <div className="w-full h-[26px] px-2 flex items-center text-xs text-[#0f3460] bg-gray-100 border border-gray-200 rounded">
+                              {sp.size ?? '-'}
+                            </div>
+
+                          )}
                         </td>
-                        <td className="px-4 py-2">
+                        {/* <td className="px-4 py-2"> */}
+                        <td className="p-3 border-r border-gray-100 align-middle">
                           {(role === 'ttqm' || role === 'ppc') ? (
                             <input
                               type="number"
@@ -487,9 +500,18 @@ function GussetView() {
                               onChange={(e) => handleSpecFieldChange(sp.spec_id, 'fold_length', e.target.value)}
                               className="border px-2 py-1 rounded w-24 focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
-                          ) : (sp.fold_length ?? "-")}
+                          ) : (
+                            
+                            // sp.fold_length ?? "-"
+                             <div className="w-full h-[26px] px-2 flex items-center text-xs text-[#0f3460] bg-gray-100 border border-gray-200 rounded">
+                              {sp.fold_length ?? "-"}
+                            </div>
+
+
+                          )}
                         </td>
-                        <td className="px-4 py-2">
+                        {/* <td className="px-4 py-2"> */}
+                        <td className="p-3 border-r border-gray-100 align-middle">
                           {(role === 'ttqm' || role === 'ppc') ? (
                             <input
                               type="number"
@@ -497,9 +519,17 @@ function GussetView() {
                               onChange={(e) => handleSpecFieldChange(sp.spec_id, 'fold_width', e.target.value)}
                               className="border px-2 py-1 rounded w-24 focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
-                          ) : (sp.fold_width ?? "-")}
+                          ) : (
+                            
+                            // sp.fold_width ?? "-"
+                              <div className="w-full h-[26px] px-2 flex items-center text-xs text-[#0f3460] bg-gray-100 border border-gray-200 rounded">
+                              {sp.fold_width ?? "-"}
+                            </div>
+                            
+                            )}
                         </td>
-                        <td className="px-4 py-2">
+                        {/* <td className="px-4 py-2"> */}
+                        <td className="p-3 border-r border-gray-100 align-middle">
                           {(role === 'ttqm' || role === 'ppc') ? (
                             <input
                               type="text"
@@ -507,9 +537,17 @@ function GussetView() {
                               onChange={(e) => handleSpecFieldChange(sp.spec_id, 'gusset_name', e.target.value)}
                               className="border px-2 py-1 rounded w-32 focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
-                          ) : (sp.gusset_name ?? "-")}
+                          ) : (
+                            
+                            // sp.gusset_name ?? "-"
+                               <div className="w-full h-[26px] px-2 flex items-center text-xs text-[#0f3460] bg-gray-100 border border-gray-200 rounded">
+                              {sp.gusset_name ?? "-"}
+                            </div>
+
+                          )}
                         </td>
-                        <td className="px-4 py-2">
+                        {/* <td className="px-4 py-2"> */}
+                        <td className="p-3 border-r border-gray-100 align-middle">
                           {(role === 'ttqm' || role === 'ppc') ? (
                             <input
                               type="number"
@@ -517,9 +555,17 @@ function GussetView() {
                               onChange={(e) => handleSpecFieldChange(sp.spec_id, 'wt', e.target.value)}
                               className="border px-2 py-1 rounded w-24 focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
-                          ) : (sp.wt ?? "-")}
+                          ) : (
+                            
+                            // sp.wt ?? "-"
+                              <div className="w-full h-[26px] px-2 flex items-center text-xs text-[#0f3460] bg-gray-100 border border-gray-200 rounded">
+                              {sp.wt ?? "-"}
+                            </div>
+
+                          )}
                         </td>
-                        <td className="px-4 py-2">
+                        {/* <td className="px-4 py-2"> */}
+                        <td className="p-3 border-r border-gray-100 align-middle">
                           {(role === 'ttqm' || role === 'ppc') ? (
                             <input
                               type="number"
@@ -527,7 +573,14 @@ function GussetView() {
                               onChange={(e) => handleSpecFieldChange(sp.spec_id, 'gsm', e.target.value)}
                               className="border px-2 py-1 rounded w-24 focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
-                          ) : (sp.gsm ?? "-")}
+                          ) : (
+                            
+                            // sp.gsm ?? "- "
+                              <div className="w-full h-[26px] px-2 flex items-center text-xs text-[#0f3460] bg-gray-100 border border-gray-200 rounded">
+                              {sp.gsm ?? "- "}
+                            </div>
+
+                          )}
                         </td>
                       </tr>
                     ))}

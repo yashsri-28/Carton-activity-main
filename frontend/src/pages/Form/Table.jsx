@@ -480,9 +480,9 @@ function Table({
   headers,
   data,
   type = 'flat',
-  onAddRow,
+  onAddRow, 
   onAddTable,
-  onCopyTable,
+  onCopyTable, 
   onDeleteTable,
   onDeleteRow,
   onUpdateCell,
@@ -622,7 +622,7 @@ function Table({
   };
 
   const renderHeaderCell = (header, index) => (
-    <th key={index} className="p-3 text-left font-medium border-r border-[#2a4d75] last:border-r-0 whitespace-nowrap align-middle">
+    <th key={index} className="p-3 text-left first:rounded-tl-xl last:rounded-tr-xl font-medium border-r border-[#2a4d75] last:border-r-0 whitespace-nowrap align-middle">
       <div className="flex items-center gap-2">
         {header.label}
         {header.hasAddBtn && !readOnly && (
@@ -695,11 +695,11 @@ function Table({
     <div className="w-full">
       {title && <h3 className="text-gray-800 font-bold mb-3">{title}</h3>}
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
+      <div className="bg-white shadow-sm border border-gray-200">
+        <div className="overflow-auto max-h-[500px]">
           <table className="w-full text-xs text-gray-700 border-collapse">
-            <thead>
-              <tr className="bg-[#0f3460] text-white tracking-wider h-12">
+            <thead className=''>
+              <tr className="bg-[#0f3460] text-white tracking-wider h-12 !sticky !top-0 z-20">
                 {headers.map(renderHeaderCell)}
               </tr>
             </thead>

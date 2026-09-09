@@ -281,53 +281,150 @@ function FormMain({ onBack }) {
   // }, []);
 
 
+  // const handleInputChange = useCallback((e) => {
+  //   const { name, value } = e.target;
+
+  //   // 1. Text Only Fields (Nayi fields yahan add kar di hain)
+  //   const textOnlyFields = [
+  //     'customerName', 'gussetCustomerName', 'programName', 'gussetProgramName', 
+  //     'customerProtocol', 'newOrShifted', 'original_towel', 'specialCarton', 
+  //     'polybagManualAuto', 'polybag_type', 'singleOrMonsterPDQ', 'pdqLayers', 
+  //     'smallPDQRequirement', 'warehouse_store_handling_method', 
+  //     'towel_folded_and_poly_packed_before_carton', 'fabric', 'productRequirements', 
+  //     'packingRequirements', 'PackingType', 'BlisterRequired', 'BoxRequired', 
+  //     'PolyFoldCondition', 'cardboardFoldType', 'cardboardPly', 'cardboardFoldOnSide', 
+  //     'polybagMaterialType', 'polybagOpeningType', 'polybagOpeningOnSide', 'gussetWeave', 
+  //     'gussetProductGroup', 'polybagInlayOrBellyBand', 'polybagType',
+  //     // 👇 NAYI FIELDS YAHAN ADD KI HAIN 👇
+  //     'terrySpecialCartonDetails', 'separatorRequired', 'ribbonPacking', 'bellyBandPacking', 
+  //   ];
+
+  //   // 2. Number Only Fields (Negative numbers allow nahi honge)
+  //   const numberOnlyFields = [
+  //     'smallPDQQuantity', 
+  //     'towelWeightPerPiece', 
+  //     'terryPcsPerPolybag',
+  //     'required_pcs_per_polybag',
+  //     'required_sets_per_carton',
+  //     'filled_product_gsm'
+  //   ];
+
+  //   // 🔴 STRICT NUMBER VALIDATION
+  //   if (numberOnlyFields.includes(name)) {
+  //     // Ye minus (-) sign aur kisi bhi alphabet ko input me type hi nahi hone dega
+  //     const numericValue = value.replace(/[^0-9]/g, '');
+  //     setFormData(prev => ({ ...prev, [name]: numericValue }));
+  //     return; 
+  //   }
+
+  //   // 🔵 STRICT TEXT VALIDATION
+  //   if (textOnlyFields.includes(name)) {
+  //     // Ye numbers aur special characters (like = ; [ ]) ko remove kar dega
+  //     const textValue = value.replace(/[^A-Za-z\s]/g, '');
+  //     setFormData(prev => ({ ...prev, [name]: textValue }));
+  //     return; 
+  //   }
+
+  //   // ⚪ Default Behavior
+  //   setFormData(prev => ({ ...prev, [name]: value }));
+  // }, []);
+
+
   const handleInputChange = useCallback((e) => {
-    const { name, value } = e.target;
+  const { name, value } = e.target;
 
-    // 1. Text Only Fields (Nayi fields yahan add kar di hain)
-    const textOnlyFields = [
-      'customerName', 'gussetCustomerName', 'programName', 'gussetProgramName', 
-      'customerProtocol', 'newOrShifted', 'original_towel', 'specialCarton', 
-      'polybagManualAuto', 'polybag_type', 'singleOrMonsterPDQ', 'pdqLayers', 
-      'smallPDQRequirement', 'warehouse_store_handling_method', 
-      'towel_folded_and_poly_packed_before_carton', 'fabric', 'productRequirements', 
-      'packingRequirements', 'PackingType', 'BlisterRequired', 'BoxRequired', 
-      'PolyFoldCondition', 'cardboardFoldType', 'cardboardPly', 'cardboardFoldOnSide', 
-      'polybagMaterialType', 'polybagOpeningType', 'polybagOpeningOnSide', 'gussetWeave', 
-      'gussetProductGroup', 'polybagInlayOrBellyBand', 'polybagType',
-      // 👇 NAYI FIELDS YAHAN ADD KI HAIN 👇
-      'terrySpecialCartonDetails', 'separatorRequired', 'ribbonPacking', 'bellyBandPacking'
-    ];
+  // =========================
+  // TEXT / ALPHABETS ONLY
+  // =========================
+  const textOnlyFields = [
+    'customerName',
+    'gussetCustomerName',
+    'programName',
+    'gussetProgramName',
+    'customerProtocol',
+    'newOrShifted',
+    'original_towel',
+    'polybagManualAuto',
+    'polybag_type',
+    'singleOrMonsterPDQ',
+    'pdqLayers',
+    'smallPDQRequirement',
+    'smallPDQQuantity',
 
-    // 2. Number Only Fields (Negative numbers allow nahi honge)
-    const numberOnlyFields = [
-      'smallPDQQuantity', 
-      'towelWeightPerPiece', 
-      'terryPcsPerPolybag',
-      'required_pcs_per_polybag',
-      'required_sets_per_carton',
-      'filled_product_gsm'
-    ];
+    'warehouse_store_handling_method',
+    'towel_folded_and_poly_packed_before_carton',
 
-    // 🔴 STRICT NUMBER VALIDATION
-    if (numberOnlyFields.includes(name)) {
-      // Ye minus (-) sign aur kisi bhi alphabet ko input me type hi nahi hone dega
-      const numericValue = value.replace(/[^0-9]/g, '');
-      setFormData(prev => ({ ...prev, [name]: numericValue }));
-      return; 
-    }
+    // Bedsheet
+    'fabric',
+    'productRequirements',
+    'packingRequirements',
+    'PackingType',
+    'BlisterRequired',
+    'BoxRequired',
+    'PolyFoldCondition',
 
-    // 🔵 STRICT TEXT VALIDATION
-    if (textOnlyFields.includes(name)) {
-      // Ye numbers aur special characters (like = ; [ ]) ko remove kar dega
-      const textValue = value.replace(/[^A-Za-z\s]/g, '');
-      setFormData(prev => ({ ...prev, [name]: textValue }));
-      return; 
-    }
+    // Gusset
+    'cardboardFoldType',
+    'cardboardPly',
+    'cardboardFoldOnSide',
+    'polybagMaterialType',
+    'polybagOpeningType',
+    'polybagOpeningOnSide',
+    'gussetWeave',
+    'gussetProductGroup',
+    'polybagInlayOrBellyBand',
+    'polybagType',
 
-    // ⚪ Default Behavior
-    setFormData(prev => ({ ...prev, [name]: value }));
-  }, []);
+    // Terry
+    'terrySpecialCartonDetails',
+
+    // Separator / Belly Band / Ribbon details
+    'separatorRequiredDetails',
+    'bellyBandPackingDetails',
+    'ribbonPackingDetails',
+  ];
+
+  // =========================
+  // NUMBER ONLY
+  // =========================
+  const numberOnlyFields = [
+    'towelWeightPerPiece',
+    'terryPcsPerPolybag',
+    'required_pcs_per_polybag',
+    'required_sets_per_carton',
+    'filled_product_gsm'
+  ];
+
+  // NUMBER VALIDATION
+  if (numberOnlyFields.includes(name)) {
+    const numericValue = value.replace(/[^0-9]/g, '');
+
+    setFormData(prev => ({
+      ...prev,
+      [name]: numericValue
+    }));
+
+    return;
+  }
+
+  // TEXT / ALPHABET VALIDATION
+  if (textOnlyFields.includes(name)) {
+    const textValue = value.replace(/[^A-Za-z\s]/g, '');
+
+    setFormData(prev => ({
+      ...prev,
+      [name]: textValue
+    }));
+
+    return;
+  }
+
+  // DEFAULT
+  setFormData(prev => ({
+    ...prev,
+    [name]: value
+  }));
+}, []);
 
 
   // NEW: Handles checking/unchecking a size checkbox in Gusset Finalization.

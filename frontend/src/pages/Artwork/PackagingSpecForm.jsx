@@ -752,6 +752,10 @@ function PackagingSpecForm() {
   const [assignedVendorId, setAssignedVendorId] = useState('');
   const [procurementUsers, setProcurementUsers] = useState([]);
   const [legalApprovalRequired, setLegalApprovalRequired] = useState(false);
+  // const [ppcApprovalRequired, setPpcApprovalRequired] = useState(true);
+  // const [tqmApprovalRequired, setTqmApprovalRequired] = useState(true);
+  const [ppcApprovalRequired, setPpcApprovalRequired] = useState(false);
+  const [tqmApprovalRequired, setTqmApprovalRequired] = useState(false);
   const [complianceApprovalRequired, setComplianceApprovalRequired] = useState(false);
   const [labApprovalRequired, setLabApprovalRequired] = useState(false);
   const [showProcurementAssign, setShowProcurementAssign] = useState(false);
@@ -802,14 +806,25 @@ function PackagingSpecForm() {
 
     setSubmitting(true);
     try {
+      // const payload = {
+      //   category,
+      //   spec_data: specValues,
+      //   assigned_vendor_id: assignedVendorId || null,
+      //   legal_approval_required: legalApprovalRequired,
+      //   compliance_approval_required: complianceApprovalRequired,
+      //   lab_approval_required: labApprovalRequired,
+      // };
+
       const payload = {
-        category,
-        spec_data: specValues,
-        assigned_vendor_id: assignedVendorId || null,
-        legal_approval_required: legalApprovalRequired,
-        compliance_approval_required: complianceApprovalRequired,
-        lab_approval_required: labApprovalRequired,
-      };
+          category,
+          spec_data: specValues,
+          assigned_vendor_id: assignedVendorId || null,
+          ppc_approval_required: ppcApprovalRequired,
+          tqm_approval_required: tqmApprovalRequired,
+          legal_approval_required: legalApprovalRequired,
+          compliance_approval_required: complianceApprovalRequired,
+          lab_approval_required: labApprovalRequired,
+        };
       const res = await createArtworkWithSpec(payload);
 
       // If the user left a remark or attached a reference file, post it
@@ -1008,15 +1023,25 @@ function PackagingSpecForm() {
                 <ChevronIcon open={showApprovalAssign} />
               </button>
 
+           
+
               {showApprovalAssign && (
                 <div className="bg-white p-5">
                   <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">
                     Approval Stages
                   </label>
+                  {/* <p className="text-xs text-gray-400 mb-2">Marketing always reviews every request automatically.</p> */}
                   <div className="space-y-2">
-                    <ApprovalStageRow label="Marketing" locked />
-                    <ApprovalStageRow label="PPC" locked />
-                    <ApprovalStageRow label="TQM" locked />
+                    <ApprovalStageRow
+                      label="PPC"
+                      checked={ppcApprovalRequired}
+                      onChange={setPpcApprovalRequired}
+                    />
+                    <ApprovalStageRow
+                      label="TQM"
+                      checked={tqmApprovalRequired}
+                      onChange={setTqmApprovalRequired}
+                    />
                     <ApprovalStageRow
                       label="Legal"
                       checked={legalApprovalRequired}

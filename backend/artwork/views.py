@@ -14,7 +14,8 @@ from .models import (
     PackagingSpecification, ArtworkNotification, WorkflowStep,
     PhysicalSample, MatcodeSequence,
 )
-from .workflow_config import get_workflow_key, get_workflow_steps
+# from .workflow_config import get_workflow_key, get_workflow_steps
+from .workflow_config import get_workflow_key, get_workflow_steps, get_workflow_steps_for_artwork
 from activity_logs.models import ActivityLog
 
 
@@ -92,6 +93,7 @@ def _artwork_to_dict(artwork, request=None, include_versions=True, include_appro
         "status": artwork.status,
         "remarks": artwork.remarks,
         "workflow_key": artwork.workflow_key,
+        "pending_roles": sorted(_compute_pending_roles(artwork)),
         "created_by": artwork.created_by.username if artwork.created_by else None,
         "created_on": artwork.created_on,
         "updated_on": artwork.updated_on,
@@ -331,12 +333,33 @@ def upload_artwork_version(request, artwork_id):
         for i, stage in enumerate(stages, start=1):
             ArtworkApproval.objects.create(artwork=artwork, version=version, stage=stage, sequence=i)
         artwork.status = "MARKETING_REVIEW"
+    # else:
+    #     # Custom category workflow — build a FRESH WorkflowStep chain
+    #     # for this new version. Old versions' steps are NEVER deleted,
+    #     # so a full reject/re-upload history stays traceable forever.
+    #     step_defs = get_workflow_steps(artwork.workflow_key)
+    #     for i, step_def in enumerate(step_defs, start=1):
+    #         WorkflowStep.objects.create(
+    #             artwork=artwork,
+    #             version=version,
+    #             workflow_key=artwork.workflow_key,
+    #             step_code=step_def["code"],
+    #             step_type=step_def["type"],
+    #             step_label=step_def["label"],
+    #             actor_role=step_def["role"],
+    #             sequence=i,
+    #         )
+    #     artwork.status = "MARKETING_REVIEW"
+    
     else:
         # Custom category workflow — build a FRESH WorkflowStep chain
         # for this new version. Old versions' steps are NEVER deleted,
         # so a full reject/re-upload history stays traceable forever.
-        step_defs = get_workflow_steps(artwork.workflow_key)
-        for i, step_def in enumerate(step_defs, start=1):
+        # Steps come from a per-artwork builder (not a fixed config
+        # list) because RIBBON's gates depend on which stakeholders
+        # were ticked at request-creation time.
+        step_defs = get_workflow_steps_for_artwork(artwork)
+        for step_def in step_defs:
             WorkflowStep.objects.create(
                 artwork=artwork,
                 version=version,
@@ -345,7 +368,7 @@ def upload_artwork_version(request, artwork_id):
                 step_type=step_def["type"],
                 step_label=step_def["label"],
                 actor_role=step_def["role"],
-                sequence=i,
+                sequence=step_def["sequence"],
             )
         artwork.status = "MARKETING_REVIEW"
 
@@ -454,6 +477,77 @@ def act_on_artwork_approval(request, artwork_id):
 # whose workflow_key != "STANDARD" (currently BW_STICKER, RIBBON).
 # ------------------------------------------------------------------
 
+# @api_view(["POST"])
+# @permission_classes([IsAuthenticated])
+# @transaction.atomic
+# def act_on_workflow_step(request, artwork_id):
+#     artwork = get_object_or_404(ArtworkRequest.objects.select_for_update(), artwork_id=artwork_id)
+
+#     if artwork.workflow_key == "STANDARD":
+#         return Response({"error": "This artwork uses the standard approval flow — use act-approval/ instead."}, status=http_status.HTTP_400_BAD_REQUEST)
+
+#     if artwork.status != "MARKETING_REVIEW":
+#         return Response(
+#             {"error": f"Artwork is '{artwork.status}' — no approval action can be taken right now."},
+#             status=http_status.HTTP_400_BAD_REQUEST,
+#         )
+
+#     decision = request.data.get("decision")
+#     comments = request.data.get("comments", "")
+
+#     if decision not in ["APPROVED", "REJECTED"]:
+#         return Response({"error": "decision must be APPROVED or REJECTED."}, status=http_status.HTTP_400_BAD_REQUEST)
+
+#     current_version = artwork.versions.filter(is_active_version=True).first()
+#     pending = artwork.workflow_steps.filter(status="PENDING", step_type="APPROVAL", version=current_version).order_by("sequence").first()
+#     if not pending:
+#         return Response({"error": "No pending approval step for this artwork."}, status=http_status.HTTP_400_BAD_REQUEST)
+
+#     if request.user.role != pending.actor_role and not request.user.is_superuser:
+#         return Response(
+#             {"error": f"Only role '{pending.actor_role}' can act on this step."},
+#             status=http_status.HTTP_403_FORBIDDEN,
+#         )
+
+#     pending.status = "DONE" if decision == "APPROVED" else "REJECTED"
+#     pending.comments = comments
+#     pending.acted_by = request.user
+#     pending.acted_on = timezone.now()
+#     pending.save()
+
+#     if decision == "REJECTED":
+#         artwork.status = "REJECTED"
+#         if artwork.assigned_vendor:
+#             _notify(
+#                 artwork.assigned_vendor, artwork,
+#                 f"Return Artwork — {artwork.artwork_id} was rejected. Please revise and re-upload a new artwork version."
+#                 + (f" Reason: {comments}" if comments else ""),
+#             )
+#     else:
+#         next_step = artwork.workflow_steps.filter(status="PENDING", version=current_version).order_by("sequence").first()
+#         if next_step:
+#             if next_step.step_type == "MATCODE":
+#                 artwork.status = "MATCODE_PENDING"
+#             elif next_step.step_type == "PHYSICAL_SAMPLE":
+#                 artwork.status = "PHYSICAL_SAMPLE_PENDING"
+#             else:
+#                 artwork.status = "MARKETING_REVIEW"
+#             _notify_role(next_step.actor_role, artwork, f"{artwork.artwork_id} is ready for your '{next_step.step_label}' step.", exclude_user=request.user)
+#         else:
+#             artwork.status = "APPROVED"
+
+#     artwork.updated_by = request.user
+#     artwork.save(update_fields=["status", "updated_by", "updated_on"])
+
+#     _log_activity(
+#         request, artwork, f"Workflow Step {decision.title()}",
+#         f"{pending.step_label} {decision.lower()} by {request.user.username}." + (f" Reason: {comments}" if comments else ""),
+#     )
+
+#     return Response(_artwork_to_dict(artwork, request=request), status=http_status.HTTP_200_OK)
+
+
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 @transaction.atomic
@@ -476,15 +570,17 @@ def act_on_workflow_step(request, artwork_id):
         return Response({"error": "decision must be APPROVED or REJECTED."}, status=http_status.HTTP_400_BAD_REQUEST)
 
     current_version = artwork.versions.filter(is_active_version=True).first()
-    pending = artwork.workflow_steps.filter(status="PENDING", step_type="APPROVAL", version=current_version).order_by("sequence").first()
-    if not pending:
-        return Response({"error": "No pending approval step for this artwork."}, status=http_status.HTTP_400_BAD_REQUEST)
 
-    if request.user.role != pending.actor_role and not request.user.is_superuser:
-        return Response(
-            {"error": f"Only role '{pending.actor_role}' can act on this step."},
-            status=http_status.HTTP_403_FORBIDDEN,
-        )
+    # Each reviewer acts on THEIR OWN pending row — multiple roles
+    # (e.g. Marketing AND Lab) can be pending in parallel at the same
+    # "gate", so we look up the row matching THIS user's role, not
+    # just the first pending row overall.
+    pending = artwork.workflow_steps.filter(
+        status="PENDING", step_type="APPROVAL", version=current_version, actor_role=request.user.role
+    ).order_by("sequence").first()
+
+    if not pending and not request.user.is_superuser:
+        return Response({"error": "You have no pending approval step for this artwork."}, status=http_status.HTTP_400_BAD_REQUEST)
 
     pending.status = "DONE" if decision == "APPROVED" else "REJECTED"
     pending.comments = comments
@@ -497,21 +593,38 @@ def act_on_workflow_step(request, artwork_id):
         if artwork.assigned_vendor:
             _notify(
                 artwork.assigned_vendor, artwork,
-                f"Return Artwork — {artwork.artwork_id} was rejected. Please revise and re-upload a new artwork version."
+                f"Return Artwork — {artwork.artwork_id} was rejected by {request.user.role}. Please revise and re-upload a new artwork version."
                 + (f" Reason: {comments}" if comments else ""),
             )
     else:
-        next_step = artwork.workflow_steps.filter(status="PENDING", version=current_version).order_by("sequence").first()
-        if next_step:
-            if next_step.step_type == "MATCODE":
-                artwork.status = "MATCODE_PENDING"
-            elif next_step.step_type == "PHYSICAL_SAMPLE":
-                artwork.status = "PHYSICAL_SAMPLE_PENDING"
-            else:
-                artwork.status = "MARKETING_REVIEW"
-            _notify_role(next_step.actor_role, artwork, f"{artwork.artwork_id} is ready for your '{next_step.step_label}' step.", exclude_user=request.user)
+        # Has EVERY OTHER reviewer at this same gate also finished?
+        gate_sequence = pending.sequence
+        still_pending_in_gate = artwork.workflow_steps.filter(
+            version=current_version, sequence=gate_sequence, status="PENDING"
+        ).exclude(id=pending.id).exists()
+
+        if still_pending_in_gate:
+            # Gate not fully cleared yet — status stays as-is, waiting
+            # on the remaining approver(s) in this same gate.
+            pass
         else:
-            artwork.status = "APPROVED"
+            next_step = artwork.workflow_steps.filter(
+                status="PENDING", version=current_version, sequence__gt=gate_sequence
+            ).order_by("sequence").first()
+            if next_step:
+                if next_step.step_type == "MATCODE":
+                    artwork.status = "MATCODE_PENDING"
+                elif next_step.step_type == "PHYSICAL_SAMPLE":
+                    artwork.status = "PHYSICAL_SAMPLE_PENDING"
+                else:
+                    artwork.status = "MARKETING_REVIEW"
+                next_gate_roles = artwork.workflow_steps.filter(
+                    version=current_version, sequence=next_step.sequence, status="PENDING"
+                ).values_list("actor_role", flat=True).distinct()
+                for role in next_gate_roles:
+                    _notify_role(role, artwork, f"{artwork.artwork_id} is ready for your review.", exclude_user=request.user)
+            else:
+                artwork.status = "APPROVED"
 
     artwork.updated_by = request.user
     artwork.save(update_fields=["status", "updated_by", "updated_on"])
@@ -522,6 +635,7 @@ def act_on_workflow_step(request, artwork_id):
     )
 
     return Response(_artwork_to_dict(artwork, request=request), status=http_status.HTTP_200_OK)
+
 
 
 @api_view(["POST"])
@@ -621,13 +735,28 @@ def send_physical_sample(request, artwork_id):
     pending.acted_on = timezone.now()
     pending.save()
 
+    # artwork.status = "SAMPLE_SENT"
+    # artwork.updated_by = request.user
+    # artwork.save(update_fields=["status", "updated_by", "updated_on"])
+
+    # if artwork.created_by:
+    #     _notify(artwork.created_by, artwork, f"Physical sample sent for {artwork.artwork_id}. Est. arrival: {sample.est_arrival_date or 'not specified'}.")
+
+
     artwork.status = "SAMPLE_SENT"
     artwork.updated_by = request.user
     artwork.save(update_fields=["status", "updated_by", "updated_on"])
 
-    if artwork.created_by:
-        _notify(artwork.created_by, artwork, f"Physical sample sent for {artwork.artwork_id}. Est. arrival: {sample.est_arrival_date or 'not specified'}.")
-
+    # Notify EVERY role that will need to act on this sample once it's
+    # received — not just the artwork's creator (Marketing).
+    current_version = artwork.versions.filter(is_active_version=True).first()
+    sample_gate_roles = artwork.workflow_steps.filter(
+        version=current_version, step_type="SAMPLE_APPROVAL"
+    ).values_list("actor_role", flat=True).distinct()
+    for role_code in sample_gate_roles:
+        _notify_role(role_code, artwork, f"Physical sample sent for {artwork.artwork_id}. Est. arrival: {sample.est_arrival_date or 'not specified'}.", exclude_user=request.user)
+        
+        
     _log_activity(request, artwork, "Physical Sample Sent", f"{request.user.username} sent a physical sample for {artwork.artwork_id}.")
 
     return Response(_artwork_to_dict(artwork, request=request), status=http_status.HTTP_201_CREATED)
@@ -666,6 +795,115 @@ def receive_physical_sample(request, artwork_id):
     return Response(_artwork_to_dict(artwork, request=request), status=http_status.HTTP_200_OK)
 
 
+# @api_view(["POST"])
+# @permission_classes([IsAuthenticated])
+# @transaction.atomic
+# def decide_physical_sample(request, artwork_id):
+#     artwork = get_object_or_404(ArtworkRequest.objects.select_for_update(), artwork_id=artwork_id)
+
+#     if artwork.status != "SAMPLE_RECEIVED_REVIEW":
+#         return Response(
+#             {"error": f"Artwork is '{artwork.status}' — no received sample is currently awaiting a decision."},
+#             status=http_status.HTTP_400_BAD_REQUEST,
+#         )
+
+#     sample = artwork.physical_samples.filter(is_received=True, decision="PENDING").order_by("-sent_on").first()
+#     if not sample:
+#         return Response({"error": "No received sample awaiting a decision."}, status=http_status.HTTP_400_BAD_REQUEST)
+
+#     step = artwork.workflow_steps.filter(status="PENDING", step_type="SAMPLE_APPROVAL").order_by("sequence").first()
+#     if not step:
+#         return Response({"error": "No pending sample-approval step for this artwork."}, status=http_status.HTTP_400_BAD_REQUEST)
+
+#     if request.user.role != step.actor_role and not request.user.is_superuser:
+#         return Response({"error": f"Only role '{step.actor_role}' can decide on this sample."}, status=http_status.HTTP_403_FORBIDDEN)
+
+#     decision = request.data.get("decision")
+#     comments = request.data.get("comments", "")
+#     # Only relevant when decision == REJECTED:
+#     #   "SAMPLE"  -> just this physical sample was wrong; Procurement
+#     #                sends a NEW sample, artwork/version untouched.
+#     #   "ARTWORK" -> the whole artwork/design is wrong; the artwork is
+#     #                fully rejected and Procurement must upload a NEW
+#     #                VERSION, restarting the workflow from scratch.
+#     reject_level = request.data.get("reject_level", "SAMPLE")
+
+#     if decision not in ["APPROVED", "REJECTED"]:
+#         return Response({"error": "decision must be APPROVED or REJECTED."}, status=http_status.HTTP_400_BAD_REQUEST)
+
+#     if decision == "REJECTED" and reject_level not in ["SAMPLE", "ARTWORK"]:
+#         return Response({"error": "reject_level must be SAMPLE or ARTWORK."}, status=http_status.HTTP_400_BAD_REQUEST)
+
+#     sample.decision = decision
+#     sample.decision_comments = comments
+#     sample.decided_by = request.user
+#     sample.decided_on = timezone.now()
+#     if decision == "REJECTED":
+#         sample.reject_level = reject_level
+#     sample.save()
+
+#     current_version = artwork.versions.filter(is_active_version=True).first()
+
+#     if decision == "REJECTED" and reject_level == "SAMPLE":
+#         physical_sample_step = artwork.workflow_steps.filter(step_type="PHYSICAL_SAMPLE", version=current_version).order_by("sequence").first()
+#         if physical_sample_step:
+#             physical_sample_step.status = "PENDING"
+#             physical_sample_step.acted_by = None
+#             physical_sample_step.acted_on = None
+#             physical_sample_step.save()
+#         artwork.status = "PHYSICAL_SAMPLE_PENDING"
+#         if artwork.assigned_vendor:
+#             _notify(
+#                 artwork.assigned_vendor, artwork,
+#                 f"Return Physical Sample — {artwork.artwork_id}'s sample was rejected. Please send a new physical sample."
+#                 + (f" Reason: {comments}" if comments else ""),
+#             )
+#         _log_activity(
+#             request, artwork, "Sample Rejected (Sample Level)",
+#             f"{request.user.username} rejected the physical sample for {artwork.artwork_id} at SAMPLE level."
+#             + (f" Reason: {comments}" if comments else ""),
+#         )
+
+#     elif decision == "REJECTED" and reject_level == "ARTWORK":
+#         artwork.status = "REJECTED"
+#         if artwork.assigned_vendor:
+#             _notify(
+#                 artwork.assigned_vendor, artwork,
+#                 f"Return Artwork — {artwork.artwork_id} was rejected during sample review. Please revise and upload a new artwork version."
+#                 + (f" Reason: {comments}" if comments else ""),
+#             )
+#         _log_activity(
+#             request, artwork, "Sample Rejected (Artwork Level)",
+#             f"{request.user.username} rejected {artwork.artwork_id} at ARTWORK level during sample review."
+#             + (f" Reason: {comments}" if comments else ""),
+#         )
+
+#     else:
+#         step.status = "DONE"
+#         step.acted_by = request.user
+#         step.acted_on = timezone.now()
+#         step.comments = comments
+#         step.save()
+
+#         next_step = artwork.workflow_steps.filter(status="PENDING", version=current_version).order_by("sequence").first()
+#         if next_step:
+#             if next_step.step_type == "MATCODE":
+#                 artwork.status = "MATCODE_PENDING"
+#             else:
+#                 artwork.status = "MARKETING_REVIEW"
+#             _notify_role(next_step.actor_role, artwork, f"{artwork.artwork_id} is ready for your '{next_step.step_label}' step.", exclude_user=request.user)
+#         else:
+#             artwork.status = "APPROVED"
+
+#         _log_activity(request, artwork, "Sample Approved", f"{request.user.username} approved the physical sample for {artwork.artwork_id}.")
+
+#     artwork.updated_by = request.user
+#     artwork.save(update_fields=["status", "updated_by", "updated_on"])
+
+#     return Response(_artwork_to_dict(artwork, request=request), status=http_status.HTTP_200_OK)
+
+
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 @transaction.atomic
@@ -682,97 +920,106 @@ def decide_physical_sample(request, artwork_id):
     if not sample:
         return Response({"error": "No received sample awaiting a decision."}, status=http_status.HTTP_400_BAD_REQUEST)
 
-    step = artwork.workflow_steps.filter(status="PENDING", step_type="SAMPLE_APPROVAL").order_by("sequence").first()
-    if not step:
-        return Response({"error": "No pending sample-approval step for this artwork."}, status=http_status.HTTP_400_BAD_REQUEST)
+    current_version = artwork.versions.filter(is_active_version=True).first()
 
-    if request.user.role != step.actor_role and not request.user.is_superuser:
-        return Response({"error": f"Only role '{step.actor_role}' can decide on this sample."}, status=http_status.HTTP_403_FORBIDDEN)
+    # Each reviewer (Marketing / TQM / any ticked stakeholder) acts on
+    # THEIR OWN pending row for this sample-approval gate.
+    step = artwork.workflow_steps.filter(
+        status="PENDING", step_type="SAMPLE_APPROVAL", version=current_version, actor_role=request.user.role
+    ).order_by("sequence").first()
+
+    if not step:
+        return Response({"error": "You have no pending sample-approval step for this artwork."}, status=http_status.HTTP_400_BAD_REQUEST)
 
     decision = request.data.get("decision")
     comments = request.data.get("comments", "")
-    # Only relevant when decision == REJECTED:
-    #   "SAMPLE"  -> just this physical sample was wrong; Procurement
-    #                sends a NEW sample, artwork/version untouched.
-    #   "ARTWORK" -> the whole artwork/design is wrong; the artwork is
-    #                fully rejected and Procurement must upload a NEW
-    #                VERSION, restarting the workflow from scratch.
     reject_level = request.data.get("reject_level", "SAMPLE")
 
     if decision not in ["APPROVED", "REJECTED"]:
         return Response({"error": "decision must be APPROVED or REJECTED."}, status=http_status.HTTP_400_BAD_REQUEST)
-
     if decision == "REJECTED" and reject_level not in ["SAMPLE", "ARTWORK"]:
         return Response({"error": "reject_level must be SAMPLE or ARTWORK."}, status=http_status.HTTP_400_BAD_REQUEST)
 
-    sample.decision = decision
-    sample.decision_comments = comments
-    sample.decided_by = request.user
-    sample.decided_on = timezone.now()
+    step.status = "DONE" if decision == "APPROVED" else "REJECTED"
+    step.comments = comments
+    step.acted_by = request.user
+    step.acted_on = timezone.now()
+    step.save()
+
     if decision == "REJECTED":
+        sample.decision = "REJECTED"
         sample.reject_level = reject_level
-    sample.save()
+        sample.decision_comments = comments
+        sample.decided_by = request.user
+        sample.decided_on = timezone.now()
+        sample.save()
 
-    current_version = artwork.versions.filter(is_active_version=True).first()
-
-    if decision == "REJECTED" and reject_level == "SAMPLE":
-        physical_sample_step = artwork.workflow_steps.filter(step_type="PHYSICAL_SAMPLE", version=current_version).order_by("sequence").first()
-        if physical_sample_step:
-            physical_sample_step.status = "PENDING"
-            physical_sample_step.acted_by = None
-            physical_sample_step.acted_on = None
-            physical_sample_step.save()
-        artwork.status = "PHYSICAL_SAMPLE_PENDING"
-        if artwork.assigned_vendor:
-            _notify(
-                artwork.assigned_vendor, artwork,
-                f"Return Physical Sample — {artwork.artwork_id}'s sample was rejected. Please send a new physical sample."
-                + (f" Reason: {comments}" if comments else ""),
+        if reject_level == "SAMPLE":
+            physical_sample_step = artwork.workflow_steps.filter(step_type="PHYSICAL_SAMPLE", version=current_version).order_by("sequence").first()
+            if physical_sample_step:
+                physical_sample_step.status = "PENDING"
+                physical_sample_step.acted_by = None
+                physical_sample_step.acted_on = None
+                physical_sample_step.save()
+            # Reset the WHOLE sample-approval gate for the next sample
+            artwork.workflow_steps.filter(step_type="SAMPLE_APPROVAL", version=current_version).update(
+                status="PENDING", acted_by=None, acted_on=None, comments=""
             )
-        _log_activity(
-            request, artwork, "Sample Rejected (Sample Level)",
-            f"{request.user.username} rejected the physical sample for {artwork.artwork_id} at SAMPLE level."
-            + (f" Reason: {comments}" if comments else ""),
-        )
+            artwork.status = "PHYSICAL_SAMPLE_PENDING"
+            if artwork.assigned_vendor:
+                _notify(
+                    artwork.assigned_vendor, artwork,
+                    f"Return Physical Sample — {artwork.artwork_id}'s sample was rejected by {request.user.role}. Please send a new physical sample."
+                    + (f" Reason: {comments}" if comments else ""),
+                )
+        else:
+            artwork.status = "REJECTED"
+            if artwork.assigned_vendor:
+                _notify(
+                    artwork.assigned_vendor, artwork,
+                    f"Return Artwork — {artwork.artwork_id} was rejected by {request.user.role} during sample review. Please revise and upload a new artwork version."
+                    + (f" Reason: {comments}" if comments else ""),
+                )
 
-    elif decision == "REJECTED" and reject_level == "ARTWORK":
-        artwork.status = "REJECTED"
-        if artwork.assigned_vendor:
-            _notify(
-                artwork.assigned_vendor, artwork,
-                f"Return Artwork — {artwork.artwork_id} was rejected during sample review. Please revise and upload a new artwork version."
-                + (f" Reason: {comments}" if comments else ""),
-            )
         _log_activity(
-            request, artwork, "Sample Rejected (Artwork Level)",
-            f"{request.user.username} rejected {artwork.artwork_id} at ARTWORK level during sample review."
+            request, artwork, "Sample Rejected",
+            f"{request.user.username} ({request.user.role}) rejected the physical sample for {artwork.artwork_id} at {reject_level} level."
             + (f" Reason: {comments}" if comments else ""),
         )
 
     else:
-        step.status = "DONE"
-        step.acted_by = request.user
-        step.acted_on = timezone.now()
-        step.comments = comments
-        step.save()
+        gate_sequence = step.sequence
+        still_pending_in_gate = artwork.workflow_steps.filter(
+            version=current_version, sequence=gate_sequence, status="PENDING"
+        ).exclude(id=step.id).exists()
 
-        next_step = artwork.workflow_steps.filter(status="PENDING", version=current_version).order_by("sequence").first()
-        if next_step:
-            if next_step.step_type == "MATCODE":
-                artwork.status = "MATCODE_PENDING"
-            else:
-                artwork.status = "MARKETING_REVIEW"
-            _notify_role(next_step.actor_role, artwork, f"{artwork.artwork_id} is ready for your '{next_step.step_label}' step.", exclude_user=request.user)
+        if still_pending_in_gate:
+            pass
         else:
-            artwork.status = "APPROVED"
+            sample.decision = "APPROVED"
+            sample.decided_by = request.user
+            sample.decided_on = timezone.now()
+            sample.save()
 
-        _log_activity(request, artwork, "Sample Approved", f"{request.user.username} approved the physical sample for {artwork.artwork_id}.")
+            next_step = artwork.workflow_steps.filter(
+                status="PENDING", version=current_version, sequence__gt=gate_sequence
+            ).order_by("sequence").first()
+            if next_step:
+                artwork.status = "MATCODE_PENDING" if next_step.step_type == "MATCODE" else "MARKETING_REVIEW"
+                next_gate_roles = artwork.workflow_steps.filter(
+                    version=current_version, sequence=next_step.sequence, status="PENDING"
+                ).values_list("actor_role", flat=True).distinct()
+                for role in next_gate_roles:
+                    _notify_role(role, artwork, f"{artwork.artwork_id} is ready for your review.", exclude_user=request.user)
+            else:
+                artwork.status = "APPROVED"
+
+        _log_activity(request, artwork, "Sample Approved", f"{request.user.username} ({request.user.role}) approved the physical sample for {artwork.artwork_id}.")
 
     artwork.updated_by = request.user
     artwork.save(update_fields=["status", "updated_by", "updated_on"])
 
     return Response(_artwork_to_dict(artwork, request=request), status=http_status.HTTP_200_OK)
-
 
 # ------------------------------------------------------------------
 # FR030 — Release (final release, linked to Material/PO)
@@ -817,13 +1064,21 @@ def list_artwork_requests(request):
     # if getattr(request.user, "role", None) == "PROCUREMENT":
     #     qs = qs.filter(assigned_vendor=request.user)
     
+    # user_role = getattr(request.user, "role", None)
+    # if user_role == "PROCUREMENT":
+    #     qs = qs.filter(assigned_vendor=request.user)
+    # elif user_role == "LEGAL":
+    #     qs = qs.filter(assigned_legal=request.user)
+    # elif user_role == "COMPLIANCE":
+    #     qs = qs.filter(assigned_compliance=request.user)
+    
     user_role = getattr(request.user, "role", None)
     if user_role == "PROCUREMENT":
         qs = qs.filter(assigned_vendor=request.user)
-    elif user_role == "LEGAL":
-        qs = qs.filter(assigned_legal=request.user)
-    elif user_role == "COMPLIANCE":
-        qs = qs.filter(assigned_compliance=request.user)
+    # Legal/Compliance/Lab are ROLE-WIDE participants now (any user in
+    # that role can act, chosen via checkbox at request time — not
+    # tied to one specific assigned person) — so, like Marketing/PPC/
+    # TQM, they see everything, no visibility filter needed.
 
     params = request.query_params
     if params.get("artwork_id"):
@@ -865,12 +1120,16 @@ def get_artwork_details(request, artwork_id):
     # if getattr(request.user, "role", None) == "PROCUREMENT" and artwork.assigned_vendor_id != request.user.id:
     #     return Response({"error": "Not authorized to view this artwork."}, status=http_status.HTTP_403_FORBIDDEN)
     
+    # user_role = getattr(request.user, "role", None)
+    # if user_role == "PROCUREMENT" and artwork.assigned_vendor_id != request.user.id:
+    #     return Response({"error": "Not authorized to view this artwork."}, status=http_status.HTTP_403_FORBIDDEN)
+    # if user_role == "LEGAL" and artwork.assigned_legal_id != request.user.id:
+    #     return Response({"error": "Not authorized to view this artwork."}, status=http_status.HTTP_403_FORBIDDEN)
+    # if user_role == "COMPLIANCE" and artwork.assigned_compliance_id != request.user.id:
+    #     return Response({"error": "Not authorized to view this artwork."}, status=http_status.HTTP_403_FORBIDDEN)
+    
     user_role = getattr(request.user, "role", None)
     if user_role == "PROCUREMENT" and artwork.assigned_vendor_id != request.user.id:
-        return Response({"error": "Not authorized to view this artwork."}, status=http_status.HTTP_403_FORBIDDEN)
-    if user_role == "LEGAL" and artwork.assigned_legal_id != request.user.id:
-        return Response({"error": "Not authorized to view this artwork."}, status=http_status.HTTP_403_FORBIDDEN)
-    if user_role == "COMPLIANCE" and artwork.assigned_compliance_id != request.user.id:
         return Response({"error": "Not authorized to view this artwork."}, status=http_status.HTTP_403_FORBIDDEN)
 
     return Response(_artwork_to_dict(artwork, request=request), status=http_status.HTTP_200_OK)
@@ -1046,6 +1305,10 @@ def create_artwork_with_spec(request):
         assigned_lab_id=data.get("assigned_lab_id") or None,
         customer_approval_required=bool(data.get("customer_approval_required", False)),
         legal_approval_required=bool(data.get("legal_approval_required", False)),
+        # ppc_approval_required=bool(data.get("ppc_approval_required", True)),
+        # tqm_approval_required=bool(data.get("tqm_approval_required", True)),
+        ppc_approval_required=bool(data.get("ppc_approval_required", False)),
+        tqm_approval_required=bool(data.get("tqm_approval_required", False)),
         compliance_approval_required=bool(data.get("compliance_approval_required", False)),
         lab_approval_required=bool(data.get("lab_approval_required", False)),
         remarks=data.get("remarks"),
@@ -1646,3 +1909,63 @@ def assign_compliance(request, artwork_id):
     _notify(compliance_user, artwork, f"You have been assigned artwork {artwork.artwork_id} for compliance review.")
 
     return Response(_artwork_to_dict(artwork, request=request), status=http_status.HTTP_200_OK)
+
+
+
+
+# def _compute_pending_roles(artwork):
+#     """Returns the set of roles whose action is needed RIGHT NOW for
+#     this artwork — across upload/approval/sample/matcode/release
+#     stages. Powers both the status display AND the 'In Action' filter."""
+#     roles = set()
+
+#     if artwork.status == "DRAFT":
+#         roles.add("MARKETING")  # needs a Procurement contact assigned
+#         return roles
+#     if artwork.status == "VENDOR_UPLOAD_PENDING":
+#         roles.add("PROCUREMENT")
+#         return roles
+#     if artwork.status == "APPROVED":
+#         roles.add("PPC")  # release pending
+#         return roles
+
+def _compute_pending_roles(artwork):
+    """Returns the set of roles whose action is needed RIGHT NOW for
+    this artwork — across upload/approval/sample/matcode/release
+    stages. Powers both the status display AND the 'In Action' filter."""
+    roles = set()
+
+    if artwork.status == "DRAFT":
+        roles.add("MARKETING")  # needs a Procurement contact assigned
+        return roles
+    if artwork.status == "VENDOR_UPLOAD_PENDING":
+        roles.add("PROCUREMENT")
+        return roles
+    if artwork.status == "APPROVED":
+        roles.add("PPC")  # release pending
+        return roles
+    if artwork.status in ["REJECTED", "SAMPLE_REJECTED"]:
+        # Whoever rejected it, the ball is now in Procurement's court —
+        # no other reviewer (even one who never got to act in the same
+        # gate) should see this in their "In Action" list anymore.
+        roles.add("PROCUREMENT")
+        return roles
+
+    current_version = artwork.versions.filter(is_active_version=True).first()
+    if not current_version:
+        return roles
+
+    if artwork.workflow_key == "STANDARD":
+        first_pending = artwork.approvals.filter(version=current_version, decision="PENDING").order_by("sequence").first()
+        if first_pending:
+            role = ArtworkApproval.STAGE_ROLE_MAP.get(first_pending.stage)
+            if role:
+                roles.add(role)
+    else:
+        pending_qs = artwork.workflow_steps.filter(version=current_version, status="PENDING")
+        first = pending_qs.order_by("sequence").first()
+        if first:
+            for s in pending_qs.filter(sequence=first.sequence):
+                roles.add(s.actor_role)
+
+    return roles

@@ -23,7 +23,49 @@ const STATUS_COLORS = {
   OBSOLETE: 'bg-gray-200 text-gray-600',
 };
 
+// const TERMINAL_STATUSES = ['APPROVED', 'RELEASED', 'REJECTED'];
+
+
 const TERMINAL_STATUSES = ['APPROVED', 'RELEASED', 'REJECTED'];
+
+// Backend role code -> a readable "X REVIEW" label, for showing the
+// status from the LOGGED-IN USER's own point of view in the list.
+const ROLE_REVIEW_LABEL = {
+  MARKETING: 'MARKETING REVIEW',
+  PPC: 'PPC REVIEW',
+  TTQM: 'TQM REVIEW',
+  LEGAL: 'LEGAL REVIEW',
+  COMPLIANCE: 'COMPLIANCE REVIEW',
+  LAB: 'LAB REVIEW',
+  PROCUREMENT: 'PROCUREMENT ACTION PENDING',
+};
+
+// Personalized status text — if IT'S THIS USER'S TURN to act on this
+// artwork, show it from their own point of view (e.g. Compliance
+// sees "COMPLIANCE REVIEW"), regardless of what other roles are also
+// pending at the same gate. Falls back to the normal status label.
+function getPersonalizedStatus(artwork, myBackendRole) {
+  const noReviewStatuses = ['DRAFT', 'APPROVED', 'RELEASED', 'REJECTED', 'ARCHIVED', 'OBSOLETE'];
+  if (
+    myBackendRole &&
+    artwork.pending_roles &&
+    artwork.pending_roles.includes(myBackendRole) &&
+    !noReviewStatuses.includes(artwork.status)
+  ) {
+    return ROLE_REVIEW_LABEL[myBackendRole] || `${myBackendRole} REVIEW`;
+  }
+  return STATUS_LABELS[artwork.status] || artwork.status.replace(/_/g, ' ');
+}
+
+
+
+// Maps the frontend's lowercase role string to the backend's
+// uppercase role code, so we can check "is MY role in this
+// artwork's pending_roles list".
+const FRONTEND_TO_BACKEND_ROLE = {
+  marketing: 'MARKETING', ppc: 'PPC', ttqm: 'TTQM', procurement: 'PROCUREMENT',
+  legal: 'LEGAL', compliance: 'COMPLIANCE', lab: 'LAB', admin: 'ADMIN',
+};
 
 function daysBetween(d1, d2) {
   const ms = new Date(d2) - new Date(d1);
@@ -43,7 +85,8 @@ function ArtworkList({ role }) {
   const [artworks, setArtworks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({ artwork_id: '', sku_code: '', brand_name: '', status: '' });
-  const [viewMode, setViewMode] = useState('in_development'); // 'in_development' | 'completed'
+  // const [viewMode, setViewMode] = useState('in_development'); // 'in_development' | 'completed'
+  const [viewMode, setViewMode] = useState('in_action');
   const navigate = useNavigate();
 
   const fetchArtworks = async () => {
@@ -65,9 +108,16 @@ function ArtworkList({ role }) {
   const canCreate = role === 'marketing';
   // In-Development = everything still moving through the pipeline.
   // Completed = only RELEASED artworks (final, production-approved).
-  const displayedArtworks = artworks.filter((a) =>
-    viewMode === 'completed' ? a.status === 'RELEASED' : a.status !== 'RELEASED'
-  );
+  // const displayedArtworks = artworks.filter((a) =>
+  //   viewMode === 'completed' ? a.status === 'RELEASED' : a.status !== 'RELEASED'
+  // );
+
+  const myBackendRole = FRONTEND_TO_BACKEND_ROLE[role];
+  const displayedArtworks = artworks.filter((a) => {
+    if (viewMode === 'completed') return a.status === 'RELEASED';
+    if (viewMode === 'in_action') return a.status !== 'RELEASED' && (a.pending_roles || []).includes(myBackendRole);
+    return a.status !== 'RELEASED'; // in_development — everything still moving
+  });
 
   return (
     <div className="p-6 h-full overflow-y-auto thin-scrollbar">
@@ -93,6 +143,16 @@ function ArtworkList({ role }) {
 
       {/* In-Development / Completed sub-tabs */}
       <div className="flex gap-1 mb-4 border-b border-gray-200">
+        <button
+            onClick={() => { setViewMode('in_action'); setFilters((f) => ({ ...f, status: '' })); }}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              viewMode === 'in_action'
+                ? 'border-[#003366] text-[#003366]'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            In Action
+          </button>
         <button
           // onClick={() => setViewMode('in_development')}
           onClick={() => { setViewMode('in_development'); setFilters((f) => ({ ...f, status: '' })); }}
@@ -195,9 +255,15 @@ function ArtworkList({ role }) {
                 <td className="px-4 py-3">{a.title}</td>
                 <td className="px-4 py-3">{a.sku_code}</td>
                 <td className="px-4 py-3">{a.brand_name || '-'}</td>
-                <td className="px-4 py-3">
+                {/* <td className="px-4 py-3">
                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[a.status] || 'bg-gray-100'}`}>
                     {STATUS_LABELS[a.status] || a.status.replace(/_/g, ' ')}
+                  </span>
+                </td> */}
+
+                <td className="px-4 py-3">
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[a.status] || 'bg-gray-100'}`}>
+                    {getPersonalizedStatus(a, myBackendRole)}
                   </span>
                 </td>
                 <td className="px-4 py-3 text-gray-600">{getAgeing(a)}</td>

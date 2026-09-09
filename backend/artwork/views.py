@@ -735,13 +735,28 @@ def send_physical_sample(request, artwork_id):
     pending.acted_on = timezone.now()
     pending.save()
 
+    # artwork.status = "SAMPLE_SENT"
+    # artwork.updated_by = request.user
+    # artwork.save(update_fields=["status", "updated_by", "updated_on"])
+
+    # if artwork.created_by:
+    #     _notify(artwork.created_by, artwork, f"Physical sample sent for {artwork.artwork_id}. Est. arrival: {sample.est_arrival_date or 'not specified'}.")
+
+
     artwork.status = "SAMPLE_SENT"
     artwork.updated_by = request.user
     artwork.save(update_fields=["status", "updated_by", "updated_on"])
 
-    if artwork.created_by:
-        _notify(artwork.created_by, artwork, f"Physical sample sent for {artwork.artwork_id}. Est. arrival: {sample.est_arrival_date or 'not specified'}.")
-
+    # Notify EVERY role that will need to act on this sample once it's
+    # received — not just the artwork's creator (Marketing).
+    current_version = artwork.versions.filter(is_active_version=True).first()
+    sample_gate_roles = artwork.workflow_steps.filter(
+        version=current_version, step_type="SAMPLE_APPROVAL"
+    ).values_list("actor_role", flat=True).distinct()
+    for role_code in sample_gate_roles:
+        _notify_role(role_code, artwork, f"Physical sample sent for {artwork.artwork_id}. Est. arrival: {sample.est_arrival_date or 'not specified'}.", exclude_user=request.user)
+        
+        
     _log_activity(request, artwork, "Physical Sample Sent", f"{request.user.username} sent a physical sample for {artwork.artwork_id}.")
 
     return Response(_artwork_to_dict(artwork, request=request), status=http_status.HTTP_201_CREATED)

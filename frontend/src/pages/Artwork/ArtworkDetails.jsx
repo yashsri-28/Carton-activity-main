@@ -92,6 +92,14 @@ const STATUS_LABELS = {
   MATCODE_PENDING: 'REFERENCE CODE PENDING',
 };
 
+// Backend role CODES vs their human-readable display names —
+// TTQM is the internal code for TQM, so it needs translating
+// wherever pending_roles is shown directly to the user.
+const ROLE_DISPLAY_NAME = {
+  MARKETING: 'MARKETING', PPC: 'PPC', TTQM: 'TQM', LEGAL: 'LEGAL',
+  COMPLIANCE: 'COMPLIANCE', LAB: 'LAB', PROCUREMENT: 'PROCUREMENT', ADMIN: 'ADMIN',
+};
+
 function ArtworkDetails({ role }) {
   const { artworkId } = useParams();
   const navigate = useNavigate();
@@ -423,7 +431,8 @@ function ArtworkDetails({ role }) {
               // fixed, potentially misleading status text.
               const noReviewStatuses = ['DRAFT', 'APPROVED', 'RELEASED', 'REJECTED', 'ARCHIVED', 'OBSOLETE'];
               if (artwork.pending_roles && artwork.pending_roles.length > 0 && !noReviewStatuses.includes(artwork.status)) {
-                return `Review Pending: ${artwork.pending_roles.join(', ')}`;
+                // return `Review Pending: ${artwork.pending_roles.join(', ')}`;
+                return `Review Pending: ${artwork.pending_roles.map((r) => ROLE_DISPLAY_NAME[r] || r).join(', ')}`;
               }
               return STATUS_LABELS[artwork.status] || artwork.status.replace(/_/g, ' ');
             })()}

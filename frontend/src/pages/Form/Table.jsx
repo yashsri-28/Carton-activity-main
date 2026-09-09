@@ -695,7 +695,7 @@ function Table({
     <div className="w-full">
       {title && <h3 className="text-gray-800 font-bold mb-3">{title}</h3>}
 
-      <div className="bg-white shadow-sm border border-gray-200">
+      <div className="bg-white shadow-sm border border-gray-200 rounded-xl">
         <div className="overflow-auto max-h-[500px]">
           <table className="w-full text-xs text-gray-700 border-collapse">
             <thead className=''>

@@ -1525,7 +1525,7 @@ function CartonView() {
 
   return (
     <>
-      <div className="h-full flex flex-col max-w-7xl mx-auto">
+      <div className="h-full flex flex-col max-w-8xl mx-auto">
         {/* Header */}
         <div className="sticky top-0 z-20 bg-gray-50 p-4 md:p-6 lg:p-8 border-b">
           <div className="flex flex-col sm:flex-row justify-between items-start">

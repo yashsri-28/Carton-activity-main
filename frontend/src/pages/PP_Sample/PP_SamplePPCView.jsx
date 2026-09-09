@@ -457,7 +457,7 @@ export default function PPSamplePPCView() {
     }
 
     return (
-        <div className="p-4 md:p-6 lg:p-8 max-w-screen-2xl mx-auto relative min-h-screen">
+        <div className="p-4 md:p-6 lg:p-8 max-w-8xl mx-auto relative min-h-screen">
 
             <div
                 className="overflow-y-auto overscroll-contain pb-16"

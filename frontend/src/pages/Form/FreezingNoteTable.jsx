@@ -71,12 +71,12 @@ function SectionTable({ section, rows, onCellChange, onDeleteRow, readOnly }) {
         <span className="text-xs text-gray-400 whitespace-nowrap">{section.tableOf}</span>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="min-w-full border-collapse text-sm">
-          <thead>
+      <div className="overflow-auto max-h-[500px] rounded-xl">
+        <table className="min-w-full border-separate border-spacing-0  text-sm">
+          <thead className='sticky top-0'>
             <tr>
               {section.showRowNumber && (
-                <th rowSpan={2} className="px-2 py-2 bg-[#0f3460] text-white text-xs w-10 border-r border-[#1a4a7a]">#</th>
+                <th rowSpan={2} className="px-2 py-2 bg-[#0f3460] !rounded-tl-xl text-white text-xs w-10 border-r border-[#1a4a7a]">#</th>
               )}
               {groups.map((g, gi) => (
                 <th
@@ -87,7 +87,7 @@ function SectionTable({ section, rows, onCellChange, onDeleteRow, readOnly }) {
                   {g.label}
                 </th>
               ))}
-              {!readOnly && <th rowSpan={2} className="bg-[#0f3460] w-10"></th>}
+              {!readOnly && <th rowSpan={2} className="bg-[#0f3460] w-10 !rounded-tr-xl"></th>}
             </tr>
             <tr>
               {fields.map((f) => (

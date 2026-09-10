@@ -12,7 +12,9 @@ from .views import (submit_carton_program, get_activity_program_status_list,
                     submit_gusset_final,
                     upload_gusset_program_attachment, upload_gusset_sample_attachment,
                     update_gusset_specs,
-                    superadmin_list_all_programs, superadmin_delete_program, superadmin_delete_logs
+                    superadmin_list_all_programs, superadmin_delete_program, superadmin_delete_logs,
+                    recalculate_freezing_note_preview,
+                    submit_freezing_note_tqm
                     )
 
 urlpatterns = [
@@ -299,5 +301,17 @@ urlpatterns = [
         "superadmin/delete-logs/",
         superadmin_delete_logs,
         name="superadmin_delete_logs"
+    ),
+
+    path(
+        "freezing-note/recalculate/",
+        recalculate_freezing_note_preview,
+        name="recalculate_freezing_note_preview"
+    ),
+
+    path(
+        "freezing-note/submit/",
+        submit_freezing_note_tqm,
+        name="submit_freezing_note_tqm"
     ),
 ]

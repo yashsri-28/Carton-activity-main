@@ -1027,6 +1027,11 @@ class BedsheetFreezingNoteRow(models.Model):
     carton_width_cm = models.FloatField(null=True, blank=True)
     carton_height_cm = models.FloatField(null=True, blank=True)
 
+    # NEW: Carton Length/Width/Height are filled by TQM (after PPC accepts),
+    # not by Marketing — same "Recalculate" pattern as CartonProgramSubProgram.
+    is_recalculated = models.BooleanField(default=False)
+    last_recalculated_on = models.DateTimeField(null=True, blank=True)
+
     # ---------------- CARTON WEIGHT DETAILS ----------------
     net_weight_kgs = models.FloatField(null=True, blank=True)
     gross_weight_kgs = models.FloatField(null=True, blank=True)

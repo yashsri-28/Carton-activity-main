@@ -945,6 +945,8 @@ function CartonView() {
   const [freezingNoteRows, setFreezingNoteRows] = useState([]);
   const [canEditFreezingNote, setCanEditFreezingNote] = useState(false);
   const [savingFreezingNote, setSavingFreezingNote] = useState(false);
+  const [freezingNoteCalcMode, setFreezingNoteCalcMode] = useState(false);
+  const [recalculatingFreezingNote, setRecalculatingFreezingNote] = useState(false);
   const [calculationMode, setCalculationMode] = useState(false);
   const [recalculating, setRecalculating] = useState(false);
   const [subprograms, setSubprograms] = useState([]);
@@ -1359,7 +1361,104 @@ function CartonView() {
       setSavingFreezingNote(false);
     }
   };
+  // ==================== FREEZING NOTE — TQM RECALCULATE FLOW ====================
+  // Carton Length/Width/Height are TQM-only fields, filled after PPC
+  // accepts (not by Marketing at submit time). Same "Recalculate" pattern
+  // as the Towel subprogram flow.
+  const CARTON_DIM_FIELDS = ['carton_length_cm', 'carton_width_cm', 'carton_height_cm'];
 
+  const handleFreezingNoteDimChange = (idx, field, value) => {
+    setFreezingNoteRows(prev =>
+      prev.map((row, i) => {
+        if (i !== idx) return row;
+        const updated = { ...row, [field]: value };
+        if (CARTON_DIM_FIELDS.includes(field)) {
+          updated.is_recalculated = false;
+        }
+        return updated;
+      })
+    );
+  };
+
+  const handleRecalculateFreezingNote = async () => {
+    setRecalculatingFreezingNote(true);
+    try {
+      const payload = {
+        freezing_note_rows: freezingNoteRows.map(row => ({
+          freezing_note_id: row.freezing_note_id,
+          carton_length_cm: row.carton_length_cm !== '' ? parseFloat(row.carton_length_cm) : null,
+          carton_width_cm: row.carton_width_cm !== '' ? parseFloat(row.carton_width_cm) : null,
+          carton_height_cm: row.carton_height_cm !== '' ? parseFloat(row.carton_height_cm) : null,
+        }))
+      };
+
+      const response = await api.post('/api/freezing-note/recalculate/', payload);
+      const results = response.data.results || [];
+
+      setFreezingNoteRows(prev => prev.map(row => {
+        const match = results.find(r => r.freezing_note_id === row.freezing_note_id);
+        if (!match) return row;
+        return {
+          ...row,
+          carton_length_cm: match.carton_length_cm,
+          carton_width_cm: match.carton_width_cm,
+          carton_height_cm: match.carton_height_cm,
+          is_recalculated: true,
+        };
+      }));
+
+      toast.success('Carton dimensions recalculated successfully');
+    } catch (err) {
+      console.error('Freezing note recalculate failed:', err);
+      const msg = err.response?.data?.error || 'Failed to recalculate';
+      toast.error(msg);
+    } finally {
+      setRecalculatingFreezingNote(false);
+    }
+  };
+  const handleSubmitFreezingNoteTentative = async () => {
+    if (!allFreezingNoteRecalculated) {
+      toast.warning('Please click Recalculate before submitting');
+      return;
+    }
+    try {
+      await api.post('/api/freezing-note/submit/', {
+        activity_program_status_id: parseInt(id),
+        btn: 'tentative_submit',
+      });
+      setCurrentStatus('Tentative Working Submitted');
+      setFreezingNoteCalcMode(false);
+      toast.success('Tentative Freezing Note submitted successfully');
+      setTimeout(() => navigate('/'), 1500);
+    } catch (err) {
+      console.error(err);
+      const msg = err.response?.data?.error || 'Failed to submit tentative';
+      toast.error(msg);
+    }
+  };
+
+  const handleSubmitFreezingNoteFinal = async () => {
+    if (!allFreezingNoteRecalculated) {
+      toast.warning('Please click Recalculate before submitting');
+      return;
+    }
+    try {
+      await api.post('/api/freezing-note/submit/', {
+        activity_program_status_id: parseInt(id),
+        btn: 'final_submit',
+      });
+      setCurrentStatus('Final Working Submitted');
+      setFreezingNoteCalcMode(false);
+      toast.success('Final Freezing Note submitted successfully');
+      setTimeout(() => navigate('/'), 1500);
+    } catch (err) {
+      console.error(err);
+      const msg = err.response?.data?.error || 'Failed to submit final';
+      toast.error(msg);
+    }
+  };
+  const allFreezingNoteRecalculated =
+    freezingNoteRows.length > 0 && freezingNoteRows.every(row => row.is_recalculated === true);
   const handlePurchaseAccept = async () => {
     try {
       await api.post('/api/purchase/accept-request/', { activity_program_status_id: id });
@@ -2021,17 +2120,33 @@ function CartonView() {
             </div>
           )}
           
-          {/* Freezing Note — Bedsheet only, shown for everyone, editable
-              only by Marketing (canEditFreezingNote comes from backend). */}
+          {/* Freezing Note — Bedsheet only.
+              - Marketing: can edit everything EXCEPT carton dimensions (canEditFreezingNote).
+              - TQM: can ONLY edit carton dimensions, via Recalculate flow, after clicking
+                "Enter Carton Dimensions" (freezingNoteCalcMode).
+              - PPC / everyone else: fully read-only. */}
           {programType === 'BEDSHEET' && freezingNoteRows.length > 0 && (
             <div className="mb-8">
               <FreezingNoteTable
                 rows={freezingNoteRows}
-                onCellChange={canEditFreezingNote ? handleFreezingNoteFieldChange : undefined}
+                onCellChange={
+                  canEditFreezingNote
+                    ? handleFreezingNoteFieldChange
+                    : (isTTQM && freezingNoteCalcMode)
+                      ? handleFreezingNoteDimChange
+                      : undefined
+                }
                 onDeleteRow={undefined}
                 onAddRow={undefined}
-                readOnly={!canEditFreezingNote}
+                readOnly={!canEditFreezingNote && !(isTTQM && freezingNoteCalcMode)}
+                hideTqmOnlyFields={false}
+                editableFieldKeys={
+                  (isTTQM && freezingNoteCalcMode) ? CARTON_DIM_FIELDS : null
+                }
+                forceReadOnlyKeys={canEditFreezingNote ? CARTON_DIM_FIELDS : null}
               />
+
+              {/* Marketing save button */}
               {canEditFreezingNote && (
                 <div className="flex justify-end mt-3">
                   <button
@@ -2040,6 +2155,52 @@ function CartonView() {
                     className="px-6 py-2 bg-[#0f3460] hover:bg-[#0a2545] text-white rounded-lg text-sm font-medium disabled:opacity-50"
                   >
                     {savingFreezingNote ? 'Saving...' : 'Save Freezing Note'}
+                  </button>
+                </div>
+              )}
+
+              {/* TQM: enter carton-dimension mode (only when status is In Progress /
+                  Tentative Working Submitted, mirroring canStartCalculation) */}
+              {isTTQM && !freezingNoteCalcMode && canStartCalculation && (
+                <div className="flex justify-end mt-3">
+                  <button
+                    onClick={() => setFreezingNoteCalcMode(true)}
+                    className="px-6 py-2 bg-[#003366] hover:bg-[#002244] text-white rounded-lg text-sm font-medium"
+                  >
+                    Enter Carton Dimensions
+                  </button>
+                </div>
+              )}
+
+              {/* TQM: Recalculate + Submit Tentative/Final, once in calc mode */}
+              {isTTQM && freezingNoteCalcMode && (
+                <div className="flex justify-end gap-3 mt-3">
+                  <button
+                    onClick={handleRecalculateFreezingNote}
+                    disabled={recalculatingFreezingNote}
+                    className={`px-6 py-2 rounded-lg text-sm font-medium text-white transition-colors ${
+                      recalculatingFreezingNote ? 'bg-gray-400 cursor-not-allowed' : 'bg-orange-600 hover:bg-orange-700 cursor-pointer'
+                    }`}
+                  >
+                    {recalculatingFreezingNote ? 'Recalculating...' : 'Recalculate'}
+                  </button>
+                  <button
+                    onClick={handleSubmitFreezingNoteTentative}
+                    disabled={!allFreezingNoteRecalculated}
+                    className={`px-6 py-2 rounded-lg text-sm font-medium text-white transition-colors ${
+                      allFreezingNoteRecalculated ? 'bg-[#0f3460] hover:bg-[#0a2545] cursor-pointer' : 'bg-gray-300 cursor-not-allowed'
+                    }`}
+                  >
+                    Submit Tentative
+                  </button>
+                  <button
+                    onClick={handleSubmitFreezingNoteFinal}
+                    disabled={!allFreezingNoteRecalculated}
+                    className={`px-6 py-2 rounded-lg text-sm font-medium text-white transition-colors ${
+                      allFreezingNoteRecalculated ? 'bg-[#0f3460] hover:bg-[#0a2545] cursor-pointer' : 'bg-gray-300 cursor-not-allowed'
+                    }`}
+                  >
+                    Submit Final
                   </button>
                 </div>
               )}

@@ -35,11 +35,14 @@ export const FREEZING_NOTE_FIELDS = [
   { key: 'pcs_per_carton', label: 'Pcs/Carton', type: 'text', width: 'w-24', group: 'packing' },
 
   { key: 'carton_type_paper', label: 'Carton Type (Outer/Inner) Paper', type: 'text', width: 'w-36', group: 'carton_dim' },
-  { key: 'carton_length_cm', label: 'Length/Depth (CM)', type: 'number', width: 'w-24', group: 'carton_dim' },
-  { key: 'carton_width_cm', label: 'Width (CM)', type: 'number', width: 'w-24', group: 'carton_dim' },
-  { key: 'carton_height_cm', label: 'Height (CM)', type: 'number', width: 'w-24', group: 'carton_dim' },
-  { key: 'cbm', label: 'CBM (Auto)', type: 'readonly', width: 'w-24', group: 'carton_dim' },
-  { key: 'max_outside_carton_dimension', label: 'Max Outside Carton Dim. (L+W+H)', type: 'readonly', width: 'w-28', group: 'carton_dim' },
+  // Carton Length/Width/Height/CBM/Max Outside Dim are TQM-only fields —
+  // filled after PPC accepts, via the "Recalculate" action, not by
+  // Marketing at submit time. See tqmOnly flag below.
+  { key: 'carton_length_cm', label: 'Length/Depth (CM)', type: 'number', width: 'w-24', group: 'carton_dim', tqmOnly: true },
+  { key: 'carton_width_cm', label: 'Width (CM)', type: 'number', width: 'w-24', group: 'carton_dim', tqmOnly: true },
+  { key: 'carton_height_cm', label: 'Height (CM)', type: 'number', width: 'w-24', group: 'carton_dim', tqmOnly: true },
+  { key: 'cbm', label: 'CBM (Auto)', type: 'readonly', width: 'w-24', group: 'carton_dim', tqmOnly: true },
+  { key: 'max_outside_carton_dimension', label: 'Max Outside Carton Dim. (L+W+H)', type: 'readonly', width: 'w-28', group: 'carton_dim', tqmOnly: true },
 
   { key: 'net_weight_kgs', label: 'Net Weight (KGS)', type: 'number', width: 'w-24', group: 'carton_weight' },
   { key: 'gross_weight_kgs', label: 'Gross Weight (KGS)', type: 'number', width: 'w-24', group: 'carton_weight' },

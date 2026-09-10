@@ -1355,6 +1355,7 @@ function FormMain({ onBack }) {
               onAddRow={handleAddFreezingNoteRow}
               onCellChange={handleFreezingNoteCellChange}
               onDeleteRow={handleDeleteFreezingNoteRow}
+              hideTqmOnlyFields={true}
             />
           )}
 

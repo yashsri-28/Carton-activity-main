@@ -1887,6 +1887,7 @@ def get_carton_program_details(request):
                 "carton_height_cm": fn.carton_height_cm,
                 "cbm": fn.cbm,
                 "max_outside_carton_dimension": fn.max_outside_carton_dimension,
+                "is_recalculated": fn.is_recalculated,
                 "net_weight_kgs": fn.net_weight_kgs,
                 "gross_weight_kgs": fn.gross_weight_kgs,
                 "carton_ply_no": fn.carton_ply_no,
@@ -4940,3 +4941,198 @@ def superadmin_delete_logs(request):
         })
 
     return Response(data)
+
+
+
+
+freezing_note_recalc_schema = openapi.Schema(
+    type=openapi.TYPE_OBJECT,
+    required=["freezing_note_rows"],
+    properties={
+        "freezing_note_rows": openapi.Schema(
+            type=openapi.TYPE_ARRAY,
+            items=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                required=["freezing_note_id"],
+                properties={
+                    "freezing_note_id": openapi.Schema(type=openapi.TYPE_INTEGER),
+                    "carton_length_cm": openapi.Schema(type=openapi.TYPE_NUMBER),
+                    "carton_width_cm": openapi.Schema(type=openapi.TYPE_NUMBER),
+                    "carton_height_cm": openapi.Schema(type=openapi.TYPE_NUMBER),
+                }
+            )
+        )
+    }
+)
+
+
+@swagger_auto_schema(
+    method="post",
+    operation_summary="TQM Recalculate — Freezing Note Carton Dimensions",
+    operation_description="""
+    TQM-only action (called after PPC has accepted the Bedsheet program).
+
+    Saves the Carton Length/Width/Height that TQM just typed for each
+    Freezing Note row, computes CBM and Max Outside Carton Dimension from
+    those values, and marks is_recalculated=True — which unlocks the
+    normal Submit Tentative / Submit Final flow for this program.
+
+    If dimensions are edited again after this, is_recalculated resets to
+    False (handled on the frontend, same pattern as the Towel workflow) -
+    Recalculate must be called again before the next submit.
+    """,
+    request_body=freezing_note_recalc_schema,
+)
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@transaction.atomic
+def recalculate_freezing_note_preview(request):
+
+    if getattr(request.user, "role", None) != "TTQM":
+        return Response({"error": "Only TQM can recalculate carton dimensions"}, status=403)
+
+    items = request.data.get("freezing_note_rows", [])
+
+    if not items:
+        return Response({"error": "freezing_note_rows is required"}, status=400)
+
+    results = []
+    now = timezone.now()
+
+    for item in items:
+        fn_id = item.get("freezing_note_id")
+
+        try:
+            fn = BedsheetFreezingNoteRow.objects.get(id=fn_id)
+        except BedsheetFreezingNoteRow.DoesNotExist:
+            continue
+
+        # -------- Positive-number validation --------
+        for field_key, label in [
+            ("carton_length_cm", "Length/Depth (CM)"),
+            ("carton_width_cm", "Width (CM)"),
+            ("carton_height_cm", "Height (CM)"),
+        ]:
+            value = item.get(field_key)
+            if value is not None and value != "":
+                try:
+                    if float(value) <= 0:
+                        return Response(
+                            {"error": f"{label} must be a positive number (row {fn_id})"},
+                            status=400
+                        )
+                except (TypeError, ValueError):
+                    return Response(
+                        {"error": f"{label} must be a valid number (row {fn_id})"},
+                        status=400
+                    )
+
+        if item.get("carton_length_cm") is not None:
+            fn.carton_length_cm = item.get("carton_length_cm")
+        if item.get("carton_width_cm") is not None:
+            fn.carton_width_cm = item.get("carton_width_cm")
+        if item.get("carton_height_cm") is not None:
+            fn.carton_height_cm = item.get("carton_height_cm")
+
+        fn.is_recalculated = True
+        fn.last_recalculated_on = now
+        fn.save()
+
+        results.append({
+            "freezing_note_id": fn.id,
+            "carton_length_cm": fn.carton_length_cm,
+            "carton_width_cm": fn.carton_width_cm,
+            "carton_height_cm": fn.carton_height_cm,
+            "cbm": fn.cbm,
+            "max_outside_carton_dimension": fn.max_outside_carton_dimension,
+            "is_recalculated": True,
+        })
+
+        create_log(
+            module_name="BedsheetFreezingNoteRow",
+            record_id=fn.id,
+            action="Recalculated",
+            message="TQM recalculated carton dimensions",
+            user=request.user
+        )
+
+    return Response({"results": results}, status=200)
+
+
+
+freezing_note_submit_schema = openapi.Schema(
+    type=openapi.TYPE_OBJECT,
+    required=["activity_program_status_id", "btn"],
+    properties={
+        "activity_program_status_id": openapi.Schema(type=openapi.TYPE_INTEGER),
+        "btn": openapi.Schema(type=openapi.TYPE_STRING, enum=["tentative_submit", "final_submit"]),
+    }
+)
+
+
+@swagger_auto_schema(
+    method="post",
+    operation_summary="TQM Submit Tentative/Final — Bedsheet Freezing Note",
+    operation_description="""
+    Moves the ActivityProgramStatus to 'Tentative Working Submitted' or
+    'Final Working Submitted', same as the Towel bulk_update_tqm_subprogram
+    flow — but for Bedsheet programs, gated on every Freezing Note row's
+    carton dimensions having been Recalculated first (is_recalculated=True).
+    """,
+    request_body=freezing_note_submit_schema,
+)
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@transaction.atomic
+def submit_freezing_note_tqm(request):
+
+    if getattr(request.user, "role", None) != "TTQM":
+        return Response({"error": "Only TQM can submit"}, status=403)
+
+    aps_id = request.data.get("activity_program_status_id")
+    btn = request.data.get("btn")
+
+    if not aps_id or btn not in ("tentative_submit", "final_submit"):
+        return Response({"error": "activity_program_status_id and a valid btn are required"}, status=400)
+
+    try:
+        aps = ActivityProgramStatus.objects.select_related("program").get(
+            id=aps_id,
+            sent_to=request.user
+        )
+    except ActivityProgramStatus.DoesNotExist:
+        return Response({"error": "Invalid record"}, status=404)
+
+    if not aps.program_id or aps.program.program_type != "BEDSHEET":
+        return Response({"error": "This activity is not a Bedsheet program"}, status=400)
+
+    rows = BedsheetFreezingNoteRow.objects.filter(carton_program=aps.program)
+
+    if not rows.exists():
+        return Response({"error": "No Freezing Note rows found for this program"}, status=400)
+
+    if rows.filter(is_recalculated=False).exists():
+        return Response(
+            {"error": "Please Recalculate carton dimensions for all rows before submitting"},
+            status=400
+        )
+
+    aps.status = "Final Working Submitted" if btn == "final_submit" else "Tentative Working Submitted"
+    aps.rejection_reason = None
+    aps.save()
+
+    create_log(
+        module_name="Carton Program",
+        record_id=aps.program_id,
+        action="TQM Submitted",
+        message=f"Freezing Note {aps.status}",
+        user=request.user
+    )
+
+    notification = NotificationService()
+    try:
+        notification.send_purchase_notification(aps.program)
+    except Exception as e:
+        print("Email failed:", str(e))
+
+    return Response({"message": f"Freezing Note {aps.status}"}, status=200)

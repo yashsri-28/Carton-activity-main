@@ -44,8 +44,23 @@ function computeMaxDim(row) {
   return '-';
 }
 
-function SectionTable({ section, rows, onCellChange, onDeleteRow, readOnly }) {
-  const fields = FREEZING_NOTE_FIELDS.filter((f) => section.groupKeys.includes(f.group));
+function SectionTable({ section, rows, onCellChange, onDeleteRow, readOnly, hideTqmOnlyFields, editableFieldKeys, forceReadOnlyKeys }) {
+  const fields = FREEZING_NOTE_FIELDS.filter((f) =>
+    section.groupKeys.includes(f.group) && !(hideTqmOnlyFields && f.tqmOnly)
+  );
+
+  // If editableFieldKeys is provided (e.g. TQM mode), ONLY those keys are
+  // editable — everything else renders as plain text even if it normally
+  // would be. forceReadOnlyKeys is the opposite: these specific keys are
+  // NEVER editable regardless of role (e.g. Marketing can see but not
+  // edit TQM-filled carton dimensions).
+  const isFieldEditable = (f) => {
+    if (readOnly) return false;
+    if (f.type === 'readonly') return false;
+    if (forceReadOnlyKeys && forceReadOnlyKeys.includes(f.key)) return false;
+    if (editableFieldKeys) return editableFieldKeys.includes(f.key);
+    return true;
+  };
 
   const groups = [];
   fields.forEach((f) => {
@@ -122,7 +137,7 @@ function SectionTable({ section, rows, onCellChange, onDeleteRow, readOnly }) {
                       <span className="inline-block px-2 py-1 rounded bg-sky-50 text-sky-700 font-bold text-xs whitespace-nowrap">
                         {f.key === 'cbm' ? computeCbm(row) : computeMaxDim(row)}
                       </span>
-                    ) : readOnly ? (
+                    ) : !isFieldEditable(f) ? (
                       <span className="text-xs text-gray-700">{row[f.key] || '-'}</span>
                     ) : f.type === 'textarea' ? (
                       <textarea
@@ -169,12 +184,12 @@ function SectionTable({ section, rows, onCellChange, onDeleteRow, readOnly }) {
  * Pass `readOnly` for TQM/PPC view mode — inputs become plain text and the
  * Add/Delete controls are hidden.
  */
-function FreezingNoteTable({ rows, onAddRow, onCellChange, onDeleteRow, readOnly = false }) {
+function FreezingNoteTable({ rows, onAddRow, onCellChange, onDeleteRow, readOnly = false, hideTqmOnlyFields = false, editableFieldKeys = null, forceReadOnlyKeys = null }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-lg font-semibold">Freezing Note — Carton and Packing Details</h2>
-        {!readOnly && (
+        {!readOnly && onAddRow && (
           <button
             type="button"
             onClick={onAddRow}
@@ -193,6 +208,9 @@ function FreezingNoteTable({ rows, onAddRow, onCellChange, onDeleteRow, readOnly
           onCellChange={onCellChange}
           onDeleteRow={onDeleteRow}
           readOnly={readOnly}
+          hideTqmOnlyFields={hideTqmOnlyFields}
+          editableFieldKeys={editableFieldKeys}
+          forceReadOnlyKeys={forceReadOnlyKeys}
         />
       ))}
     </div>

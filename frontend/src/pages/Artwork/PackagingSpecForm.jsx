@@ -876,7 +876,8 @@ function PackagingSpecForm() {
   // WOVEN/PRINTED). Other categories (e.g. OTHER: Hanger, Dori,
   // Zipper, Velcro...) have sections that are independent components
   // with NO such selector — those must always show, never be hidden.
-  const typeFieldEntry = categoryFields.find((f) => /^type\b/i.test(f.label));
+  // const typeFieldEntry = categoryFields.find((f) => /^type\b/i.test(f.label));
+  const typeFieldEntry = categoryFields.find((f) => !f.section && /^type\b/i.test(f.label));
   const hasTypeSelectorField = Boolean(typeFieldEntry);
   const selectedType = typeFieldEntry ? specValues[typeFieldEntry.label] : null;
 

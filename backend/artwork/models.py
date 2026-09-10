@@ -336,6 +336,20 @@ class ArtworkApproval(models.Model):
         related_name="artwork_approvals_acted",
     )
     acted_on = models.DateTimeField(null=True, blank=True)
+    
+    
+    # Only meaningful for SAMPLE_APPROVAL steps — each reviewer must
+    # confirm THEY physically received the sample before they can
+    # approve/reject it. Unlike the old shared/global flag, this is
+    # per-person: TQM confirming doesn't count for Lab or Marketing.
+    received_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="workflow_steps_received",
+    )
+    received_on = models.DateTimeField(null=True, blank=True)
 
     created_on = models.DateTimeField(auto_now_add=True)
 
@@ -543,6 +557,15 @@ class WorkflowStep(models.Model):
         related_name="workflow_steps_acted",
     )
     acted_on = models.DateTimeField(null=True, blank=True)
+    
+    received_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="workflow_step_receipts",
+    )
+    received_on = models.DateTimeField(null=True, blank=True)
 
     created_on = models.DateTimeField(auto_now_add=True)
 

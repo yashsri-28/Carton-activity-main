@@ -115,3 +115,7 @@ export const assignCompliance = (artworkId, userId) =>
 
 export const getLabList = () =>
   api.get('/api/artwork/lab-team/');
+
+
+export const markSampleReceivedByMe = (artworkId) =>
+  api.post(`/api/artwork/${artworkId}/physical-sample/mark-received-mine/`);

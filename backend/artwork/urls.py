@@ -20,6 +20,7 @@ urlpatterns = [
     path("<str:artwork_id>/generate-matcode/", views.generate_matcode, name="generate_matcode"),
     path("<str:artwork_id>/physical-sample/send/", views.send_physical_sample, name="send_physical_sample"),
     path("<str:artwork_id>/physical-sample/receive/", views.receive_physical_sample, name="receive_physical_sample"),
+    path("<str:artwork_id>/physical-sample/mark-received-mine/", views.mark_sample_received_by_me, name="mark_sample_received_by_me"),
     path("<str:artwork_id>/physical-sample/decide/", views.decide_physical_sample, name="decide_physical_sample"),
     path("<str:artwork_id>/release/", views.release_artwork, name="release_artwork"),
     path("<str:artwork_id>/archive/", views.archive_artwork, name="archive_artwork"),

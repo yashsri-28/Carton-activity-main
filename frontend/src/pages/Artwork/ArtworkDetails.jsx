@@ -17,6 +17,7 @@ import {
   generateMatcode,
   sendPhysicalSample,
   receivePhysicalSample,
+  markSampleReceivedByMe,
   decidePhysicalSample,
 } from '../../api/artworkApi';
 import Attachment from '../Form/Attachment';
@@ -79,12 +80,21 @@ const WORKFLOW_ROLE_MAP = { MARKETING: 'marketing', PPC: 'ppc', TTQM: 'ttqm', PR
 // overall status matches what that step-type expects — prevents
 // acting on a step that's technically still "PENDING" in the DB but
 // whose turn hasn't actually come yet (e.g. right after a rejection).
+// const CUSTOM_STEP_STATUS_MAP = {
+//   APPROVAL: 'MARKETING_REVIEW',
+//   PHYSICAL_SAMPLE: 'PHYSICAL_SAMPLE_PENDING',
+//   SAMPLE_APPROVAL: 'SAMPLE_RECEIVED_REVIEW',
+//   MATCODE: 'MATCODE_PENDING',
+// };
+
+
 const CUSTOM_STEP_STATUS_MAP = {
   APPROVAL: 'MARKETING_REVIEW',
   PHYSICAL_SAMPLE: 'PHYSICAL_SAMPLE_PENDING',
-  SAMPLE_APPROVAL: 'SAMPLE_RECEIVED_REVIEW',
+  SAMPLE_APPROVAL: null, // handled specially below — valid across SAMPLE_SENT and SAMPLE_RECEIVED_REVIEW both
   MATCODE: 'MATCODE_PENDING',
 };
+
 
 const STATUS_LABELS = {
   VENDOR_UPLOAD_PENDING: 'PROCUREMENT UPLOAD PENDING',
@@ -341,6 +351,19 @@ function ArtworkDetails({ role }) {
     }
   };
 
+  const handleMarkMyReceipt = async () => {
+  setWorkflowBusy(true);
+  try {
+    await markSampleReceivedByMe(artworkId);
+    toast.success('Receipt confirmed.');
+    fetchDetails();
+  } catch (err) {
+    toast.error(err.response?.data?.error || 'Failed to confirm receipt.');
+  } finally {
+    setWorkflowBusy(false);
+  }
+};
+
   const handleReceiveSample = async () => {
     setWorkflowBusy(true);
     try {
@@ -398,12 +421,24 @@ function ArtworkDetails({ role }) {
   //   : null;
   // const canActOnCustomStep = customPendingStep && WORKFLOW_ROLE_MAP[customPendingStep.actor_role] === role;
 
+  // const customPendingStep = artwork.workflow_key !== 'STANDARD'
+  // ? artwork.workflow_steps?.find(
+  //     (s) => s.status === 'PENDING' && artwork.status === CUSTOM_STEP_STATUS_MAP[s.step_type] && WORKFLOW_ROLE_MAP[s.actor_role] === role
+  //   )
+  // : null;
+  // const canActOnCustomStep = Boolean(customPendingStep);
+
   const customPendingStep = artwork.workflow_key !== 'STANDARD'
-  ? artwork.workflow_steps?.find(
-      (s) => s.status === 'PENDING' && artwork.status === CUSTOM_STEP_STATUS_MAP[s.step_type] && WORKFLOW_ROLE_MAP[s.actor_role] === role
-    )
+  ? artwork.workflow_steps?.find((s) => {
+      if (s.status !== 'PENDING' || WORKFLOW_ROLE_MAP[s.actor_role] !== role) return false;
+      if (s.step_type === 'SAMPLE_APPROVAL') {
+        return ['SAMPLE_SENT', 'SAMPLE_RECEIVED_REVIEW'].includes(artwork.status);
+      }
+      return artwork.status === CUSTOM_STEP_STATUS_MAP[s.step_type];
+    })
   : null;
   const canActOnCustomStep = Boolean(customPendingStep);
+  const myReceiptConfirmed = customPendingStep && customPendingStep.step_type === 'SAMPLE_APPROVAL' && Boolean(customPendingStep.received_by);
 
   return (
     <div className="p-6 w-full h-full overflow-y-auto thin-scrollbar">
@@ -768,7 +803,7 @@ function ArtworkDetails({ role }) {
           )}
 
           {/* Marketing — sample details, Receive button, and Approve/Reject */}
-          {artwork.latest_physical_sample && ['SAMPLE_SENT', 'SAMPLE_RECEIVED_REVIEW'].includes(artwork.status) && (
+          {/* {artwork.latest_physical_sample && ['SAMPLE_SENT', 'SAMPLE_RECEIVED_REVIEW'].includes(artwork.status) && (
             <div className="mt-4 border border-gray-200 rounded-md p-4 bg-gray-50">
               <p className="text-xs font-semibold text-gray-500 uppercase mb-3">Physical Sample Details</p>
 
@@ -801,14 +836,14 @@ function ArtworkDetails({ role }) {
                 </p>
               </div>
 
-              {role === 'marketing' && artwork.status === 'SAMPLE_SENT' && !artwork.latest_physical_sample.is_received && (
+
+              {['marketing', 'ttqm', 'lab', 'legal', 'compliance'].includes(role) && artwork.status === 'SAMPLE_SENT' && !artwork.latest_physical_sample.is_received && (
                 <button onClick={handleReceiveSample} disabled={workflowBusy}
                   className="bg-emerald-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-emerald-700 disabled:opacity-50">
                   {workflowBusy ? 'Marking...' : 'Mark Sample as Received'}
                 </button>
               )}
 
-              {/* {role === 'marketing' && artwork.status === 'SAMPLE_RECEIVED_REVIEW' && artwork.latest_physical_sample.is_received && ( */}
               {canActOnCustomStep && customPendingStep.step_type === 'SAMPLE_APPROVAL' && artwork.latest_physical_sample.is_received && (
                 <div className="space-y-2">
                   {!showSampleRejectForm ? (
@@ -857,6 +892,106 @@ function ArtworkDetails({ role }) {
                     </div>
                   )}
                 </div>
+              )}
+            </div>
+          )} */}
+
+
+          {/* Physical Sample Details — visible to everyone in the sample gate */}
+          {artwork.latest_physical_sample && ['SAMPLE_SENT', 'SAMPLE_RECEIVED_REVIEW'].includes(artwork.status) && (
+            <div className="mt-4 border border-gray-200 rounded-md p-4 bg-gray-50">
+              <p className="text-xs font-semibold text-gray-500 uppercase mb-3">Physical Sample Details</p>
+
+              <div className="space-y-2 mb-3">
+                <p className="text-sm">
+                  <span className="font-semibold text-gray-600">Sent By: </span>
+                  <span className="text-gray-800">{artwork.latest_physical_sample.sent_by || '-'}</span>
+                </p>
+                <p className="text-sm">
+                  <span className="font-semibold text-gray-600">Date Sent: </span>
+                  <span className="text-gray-800">{artwork.latest_physical_sample.date_sent || '-'}</span>
+                </p>
+                <p className="text-sm">
+                  <span className="font-semibold text-gray-600">Est. Arrival: </span>
+                  <span className="text-gray-800">{artwork.latest_physical_sample.est_arrival_date || '-'}</span>
+                </p>
+                <p className="text-sm">
+                  <span className="font-semibold text-gray-600">Attachment: </span>
+                  {artwork.latest_physical_sample.attachment_url ? (
+                    <a href={artwork.latest_physical_sample.attachment_url} target="_blank" rel="noreferrer" className="text-[#003366] hover:underline">
+                      📎 View attachment
+                    </a>
+                  ) : (
+                    <span className="text-gray-400">No file attached.</span>
+                  )}
+                </p>
+                <p className="text-sm">
+                  <span className="font-semibold text-gray-600">Comment: </span>
+                  <span className="text-gray-800">{artwork.latest_physical_sample.comments || '-'}</span>
+                </p>
+              </div>
+
+              {/* Each reviewer sees ONLY their own step — either "Mark as
+                  Received" (if THEY haven't confirmed yet) or Approve/Reject
+                  (once THEY have confirmed). One person's confirmation never
+                  affects anyone else's. */}
+              {canActOnCustomStep && customPendingStep.step_type === 'SAMPLE_APPROVAL' && (
+                <>
+                  {!myReceiptConfirmed ? (
+                    <button onClick={handleMarkMyReceipt} disabled={workflowBusy}
+                      className="bg-emerald-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-emerald-700 disabled:opacity-50">
+                      {workflowBusy ? 'Confirming...' : 'Mark Sample as Received'}
+                    </button>
+                  ) : (
+                    <div className="space-y-2">
+                      {!showSampleRejectForm ? (
+                        <div className="flex gap-2">
+                          <button onClick={() => handleSampleDecision('APPROVED')} disabled={workflowBusy}
+                            className="bg-green-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-green-700 disabled:opacity-50">
+                            Approve Sample
+                          </button>
+                          <button onClick={() => setShowSampleRejectForm(true)} disabled={workflowBusy}
+                            className="bg-red-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-red-700 disabled:opacity-50">
+                            Reject Sample
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-2 border border-red-200 rounded-md p-3 bg-red-50">
+                          <p className="text-xs font-semibold text-red-700">Rejecting this sample — choose a level:</p>
+                          <select
+                            value={sampleRejectLevel}
+                            onChange={(e) => setSampleRejectLevel(e.target.value)}
+                            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                          >
+                            <option value="">-- Select level --</option>
+                            <option value="SAMPLE">Sample Level — send a new sample only</option>
+                            <option value="ARTWORK">Artwork Level — reject entire artwork, new upload required</option>
+                          </select>
+                          <textarea
+                            placeholder="Reason for rejection (recommended)"
+                            value={sampleDecisionComments}
+                            onChange={(e) => setSampleDecisionComments(e.target.value)}
+                            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                            rows={3}
+                          />
+                          <div className="flex gap-2">
+                            <button onClick={() => handleSampleDecision('REJECTED')} disabled={workflowBusy}
+                              className="bg-red-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-red-700 disabled:opacity-50">
+                              Confirm Reject
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setShowSampleRejectForm(false); setSampleRejectLevel(''); setSampleDecisionComments(''); }}
+                              className="bg-gray-100 text-gray-700 px-3 py-1.5 rounded-md text-sm hover:bg-gray-200"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}

@@ -145,6 +145,23 @@ def _artwork_to_dict(artwork, request=None, include_versions=True, include_appro
 
         # ---- Custom-workflow data (RIBBON, BW_STICKER, future categories) ----
         if artwork.workflow_key != "STANDARD":
+            
+            
+            # data["workflow_steps"] = [
+            #     {
+            #         "step_code": s.step_code,
+            #         "step_type": s.step_type,
+            #         "step_label": s.step_label,
+            #         "actor_role": s.actor_role,
+            #         "sequence": s.sequence,
+            #         "status": s.status,
+            #         "comments": s.comments,
+            #         "acted_by": s.acted_by.username if s.acted_by else None,
+            #         "acted_on": s.acted_on,
+            #     }
+            #     for s in artwork.workflow_steps.filter(version=current_version).order_by("sequence")
+            # ] if current_version else []
+            
             data["workflow_steps"] = [
                 {
                     "step_code": s.step_code,
@@ -156,9 +173,11 @@ def _artwork_to_dict(artwork, request=None, include_versions=True, include_appro
                     "comments": s.comments,
                     "acted_by": s.acted_by.username if s.acted_by else None,
                     "acted_on": s.acted_on,
+                    "received_by": s.received_by.username if s.received_by else None,
+                    "received_on": s.received_on,
                 }
                 for s in artwork.workflow_steps.filter(version=current_version).order_by("sequence")
-            ] if current_version else []
+        ] if current_version else []
 
             data["workflow_step_history"] = [
                 {
@@ -794,8 +813,10 @@ def receive_physical_sample(request, artwork_id):
     if not sample:
         return Response({"error": "No sample awaiting receipt for this artwork."}, status=http_status.HTTP_400_BAD_REQUEST)
 
-    if request.user.role not in ["MARKETING", "ADMIN"]:
-        return Response({"error": "Only Marketing can mark a sample as received."}, status=http_status.HTTP_403_FORBIDDEN)
+    # if request.user.role not in ["MARKETING", "ADMIN"]:
+    #     return Response({"error": "Only Marketing can mark a sample as received."}, status=http_status.HTTP_403_FORBIDDEN)
+    if request.user.role not in ["MARKETING", "TTQM", "LAB", "LEGAL", "COMPLIANCE", "ADMIN"]:
+        return Response({"error": "Only Marketing, TQM, Lab, Legal or Compliance can mark a sample as received."}, status=http_status.HTTP_403_FORBIDDEN)
 
     sample.is_received = True
     sample.received_by = request.user
@@ -963,6 +984,10 @@ def decide_physical_sample(request, artwork_id):
     if not step:
         return Response({"error": "You have no pending sample-approval step for this artwork."}, status=http_status.HTTP_400_BAD_REQUEST)
 
+    if not step.received_by:
+        return Response({"error": "Please confirm receipt of the physical sample first."}, status=http_status.HTTP_400_BAD_REQUEST)
+    
+    
     decision = request.data.get("decision")
     comments = request.data.get("comments", "")
     reject_level = request.data.get("reject_level", "SAMPLE")
@@ -2008,3 +2033,51 @@ def _compute_pending_roles(artwork):
                 roles.add(s.actor_role)
 
     return roles
+
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@transaction.atomic
+def mark_sample_received_by_me(request, artwork_id):
+    """Each reviewer in the Sample-Approval gate confirms receipt
+    INDIVIDUALLY — one person clicking this does NOT count for anyone
+    else. Only once THIS user has confirmed can THEY approve/reject."""
+    artwork = get_object_or_404(ArtworkRequest.objects.select_for_update(), artwork_id=artwork_id)
+
+    # if artwork.status != "SAMPLE_SENT":
+    #     return Response({"error": f"Artwork is '{artwork.status}' — no sample is currently awaiting receipt."}, status=http_status.HTTP_400_BAD_REQUEST)
+ 
+    if artwork.status not in ["SAMPLE_SENT", "SAMPLE_RECEIVED_REVIEW"]:
+        return Response({"error": f"Artwork is '{artwork.status}' — no sample is currently awaiting receipt."}, status=http_status.HTTP_400_BAD_REQUEST)
+    current_version = artwork.versions.filter(is_active_version=True).first()
+    my_step = artwork.workflow_steps.filter(
+        status="PENDING", step_type="SAMPLE_APPROVAL", version=current_version, actor_role=request.user.role
+    ).order_by("sequence").first()
+
+    if not my_step:
+        return Response({"error": "You have no pending sample-approval step for this artwork."}, status=http_status.HTTP_400_BAD_REQUEST)
+
+    if my_step.received_by:
+        return Response({"error": "You have already confirmed receipt."}, status=http_status.HTTP_400_BAD_REQUEST)
+
+    my_step.received_by = request.user
+    my_step.received_on = timezone.now()
+    my_step.save()
+
+    # Keep the shared PhysicalSample.is_received flag as a general
+    # "has anyone confirmed yet" record, for history/display purposes.
+    sample = artwork.physical_samples.filter(is_received=False).order_by("-sent_on").first()
+    if sample:
+        sample.is_received = True
+        sample.received_by = request.user
+        sample.received_on = timezone.now()
+        sample.save()
+
+    if artwork.status == "SAMPLE_SENT":
+        artwork.status = "SAMPLE_RECEIVED_REVIEW"
+        artwork.save(update_fields=["status"])
+
+    _log_activity(request, artwork, "Sample Receipt Confirmed", f"{request.user.username} ({request.user.role}) confirmed receipt of the physical sample for {artwork.artwork_id}.")
+
+    return Response(_artwork_to_dict(artwork, request=request), status=http_status.HTTP_200_OK)

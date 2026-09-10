@@ -42,7 +42,7 @@ export const FREEZING_NOTE_FIELDS = [
   { key: 'carton_width_cm', label: 'Width (CM)', type: 'number', width: 'w-24', group: 'carton_dim', tqmOnly: true },
   { key: 'carton_height_cm', label: 'Height (CM)', type: 'number', width: 'w-24', group: 'carton_dim', tqmOnly: true },
   { key: 'cbm', label: 'CBM (Auto)', type: 'readonly', width: 'w-24', group: 'carton_dim', tqmOnly: true },
-  { key: 'max_outside_carton_dimension', label: 'Max Outside Carton Dim. (L+W+H)', type: 'readonly', width: 'w-28', group: 'carton_dim', tqmOnly: true },
+  { key: 'max_outside_carton_dimension', label: 'Max Outside Carton Dim. (L*W*H)', type: 'readonly', width: 'w-28', group: 'carton_dim', tqmOnly: true },
 
   { key: 'net_weight_kgs', label: 'Net Weight (KGS)', type: 'number', width: 'w-24', group: 'carton_weight' },
   { key: 'gross_weight_kgs', label: 'Gross Weight (KGS)', type: 'number', width: 'w-24', group: 'carton_weight' },

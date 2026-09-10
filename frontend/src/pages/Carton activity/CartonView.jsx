@@ -943,6 +943,7 @@ function CartonView() {
   const [details, setDetails] = useState(null);
   const [actualProgramId, setActualProgramId] = useState(null);
   const [freezingNoteRows, setFreezingNoteRows] = useState([]);
+  const [linkedGusset, setLinkedGusset] = useState(null);
   const [canEditFreezingNote, setCanEditFreezingNote] = useState(false);
   const [savingFreezingNote, setSavingFreezingNote] = useState(false);
   const [freezingNoteCalcMode, setFreezingNoteCalcMode] = useState(false);
@@ -1001,6 +1002,7 @@ function CartonView() {
         setActualProgramId(data.program_id);
         setFreezingNoteRows(data.freezing_note_rows || []);
         setCanEditFreezingNote(data.can_edit_freezing_note === true);
+        setLinkedGusset(data.linked_gusset || null);
         setSubprograms(
           (data.subprograms || [])
             .filter(sp => {
@@ -1335,7 +1337,14 @@ function CartonView() {
   // ==================== FREEZING NOTE HANDLERS (Marketing only) ====================
   const handleFreezingNoteFieldChange = (idx, field, value) => {
     setFreezingNoteRows(prev =>
-      prev.map((row, i) => (i === idx ? { ...row, [field]: value } : row))
+      prev.map((row, i) => {
+        if (i !== idx) return row;
+        const updated = { ...row, [field]: value };
+        if (['carton_length_cm', 'carton_width_cm', 'carton_height_cm'].includes(field)) {
+          updated.is_recalculated = false;
+        }
+        return updated;
+      })
     );
   };
 
@@ -1703,6 +1712,106 @@ function CartonView() {
 
         {/* Main Content */}
         <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
+
+          {/* Linked Gusset Section — shown for combined (Gusset+Bedsheet)
+              submissions, or when Standard Bedsheet was added later on
+              top of an existing Gusset program. Read-only summary here;
+              full Gusset editing/accept-reject still happens on its own
+              GussetView page if needed separately. */}
+          {linkedGusset && (
+            <div className="bg-purple-50 shadow-sm rounded-lg border border-purple-100 mb-8">
+              <div className="p-5 border-b border-purple-100">
+                <h2 className="text-lg font-semibold text-purple-900">Gusset Finalization (Linked)</h2>
+              </div>
+              <div className="p-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <DetailItem label="Customer Name" value={linkedGusset.customer_name} />
+                  <DetailItem label="Program Name" value={linkedGusset.program_name} />
+                  <DetailItem label="TC" value={linkedGusset.tc} />
+                  <DetailItem label="Weave" value={linkedGusset.weave} />
+                  <DetailItem label="Product Group" value={linkedGusset.product_group} />
+                  <DetailItem
+                    label="Size"
+                    value={linkedGusset.size === "Other" ? linkedGusset.other_size : linkedGusset.size}
+                  />
+                  <DetailItem
+                    label="Fold Length x Fold Width"
+                    value={
+                      linkedGusset.fold_length && linkedGusset.fold_width
+                        ? `${linkedGusset.fold_length} x ${linkedGusset.fold_width}`
+                        : (linkedGusset.fold_length || linkedGusset.fold_width || null)
+                    }
+                  />
+                  {/* <DetailItem label="Gusset Bank" value={linkedGusset.gusset_bank} /> */}
+                  <DetailItem label="Reference Program" value={linkedGusset.reference_program} />
+                  <DetailItem label="Comments" value={linkedGusset.comments} />
+                </div>
+
+                <div className="mt-6 pt-4 border-t border-purple-200">
+                  <h3 className="text-sm font-semibold text-purple-800 mb-3">Cardboard Stiffener</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <DetailItem label="Cardboard Required" value={linkedGusset.cardboard_required} boolean />
+                    {linkedGusset.cardboard_required && (
+                      <>
+                        <DetailItem label="Fold Type" value={linkedGusset.fold_type} />
+                        <DetailItem label="Ply" value={linkedGusset.ply} />
+                        <DetailItem label="Fold on Side" value={linkedGusset.fold_on_side} />
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-6 pt-4 border-t border-purple-200">
+                  <h3 className="text-sm font-semibold text-purple-800 mb-3">Polybag</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+                    <DetailItem label="Polybag Required" value={linkedGusset.polybag_required} boolean />
+                    {linkedGusset.polybag_required && (
+                      <>
+                        <DetailItem label="Material Type" value={linkedGusset.material_type} />
+                        <DetailItem label="Opening Type" value={linkedGusset.opening_type} />
+                        <DetailItem label="Opening on Side" value={linkedGusset.opening_on_side} />
+                        <DetailItem label="Inlay / Belly Band" value={linkedGusset.inlay_or_belly_band} />
+                        <DetailItem label="Polybag Type" value={linkedGusset.polybag_type} />
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {linkedGusset.program_specifications?.length > 0 && (
+                  <div className="mt-6 pt-4 border-t border-purple-200">
+                    <h3 className="text-sm font-semibold text-purple-800 mb-3">Gusset Program Specifications</h3>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full border-collapse text-sm">
+                        <thead>
+                          <tr className="bg-purple-700 text-white">
+                            <th className="px-3 py-2 text-left">Size</th>
+                            <th className="px-3 py-2 text-left">Fold Length</th>
+                            <th className="px-3 py-2 text-left">Fold Width</th>
+                            <th className="px-3 py-2 text-left">Gusset Name</th>
+                            <th className="px-3 py-2 text-left">WT</th>
+                            <th className="px-3 py-2 text-left">GSM</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {linkedGusset.program_specifications.map((sp, i) => (
+                            <tr key={i} className="border-t border-purple-100">
+                              <td className="px-3 py-2">{sp.size ?? '-'}</td>
+                              <td className="px-3 py-2">{sp.fold_length ?? '-'}</td>
+                              <td className="px-3 py-2">{sp.fold_width ?? '-'}</td>
+                              <td className="px-3 py-2">{sp.gusset_name ?? '-'}</td>
+                              <td className="px-3 py-2">{sp.wt ?? '-'}</td>
+                              <td className="px-3 py-2">{sp.gsm ?? '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Program Information */}
           <div className="bg-white shadow-sm rounded-lg border mb-8">
             <div className="p-5 border-b">
@@ -2129,24 +2238,15 @@ function CartonView() {
             <div className="mb-8">
               <FreezingNoteTable
                 rows={freezingNoteRows}
-                onCellChange={
-                  canEditFreezingNote
-                    ? handleFreezingNoteFieldChange
-                    : (isTTQM && freezingNoteCalcMode)
-                      ? handleFreezingNoteDimChange
-                      : undefined
-                }
+                onCellChange={canEditFreezingNote ? handleFreezingNoteFieldChange : undefined}
                 onDeleteRow={undefined}
                 onAddRow={undefined}
-                readOnly={!canEditFreezingNote && !(isTTQM && freezingNoteCalcMode)}
+                readOnly={!canEditFreezingNote}
                 hideTqmOnlyFields={false}
-                editableFieldKeys={
-                  (isTTQM && freezingNoteCalcMode) ? CARTON_DIM_FIELDS : null
-                }
-                forceReadOnlyKeys={canEditFreezingNote ? CARTON_DIM_FIELDS : null}
               />
 
-              {/* Marketing save button */}
+              {/* Save — Marketing always; TQM too, now that backend grants
+                  can_edit_freezing_note to both roles. */}
               {canEditFreezingNote && (
                 <div className="flex justify-end mt-3">
                   <button
@@ -2159,21 +2259,11 @@ function CartonView() {
                 </div>
               )}
 
-              {/* TQM: enter carton-dimension mode (only when status is In Progress /
-                  Tentative Working Submitted, mirroring canStartCalculation) */}
-              {isTTQM && !freezingNoteCalcMode && canStartCalculation && (
-                <div className="flex justify-end mt-3">
-                  <button
-                    onClick={() => setFreezingNoteCalcMode(true)}
-                    className="px-6 py-2 bg-[#003366] hover:bg-[#002244] text-white rounded-lg text-sm font-medium"
-                  >
-                    Enter Carton Dimensions
-                  </button>
-                </div>
-              )}
-
-              {/* TQM: Recalculate + Submit Tentative/Final, once in calc mode */}
-              {isTTQM && freezingNoteCalcMode && (
+              {/* TQM: Recalculate + Submit Tentative/Final — table above is
+                  already fully editable for TQM (via canEditFreezingNote),
+                  these buttons handle the is_recalculated gate and move
+                  the program status forward. */}
+              {isTTQM && canStartCalculation && (
                 <div className="flex justify-end gap-3 mt-3">
                   <button
                     onClick={handleRecalculateFreezingNote}

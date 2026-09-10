@@ -14,7 +14,8 @@ from .views import (submit_carton_program, get_activity_program_status_list,
                     update_gusset_specs,
                     superadmin_list_all_programs, superadmin_delete_program, superadmin_delete_logs,
                     recalculate_freezing_note_preview,
-                    submit_freezing_note_tqm
+                    submit_freezing_note_tqm,
+                    submit_combined_gusset_bedsheet
                     )
 
 urlpatterns = [
@@ -313,5 +314,11 @@ urlpatterns = [
         "freezing-note/submit/",
         submit_freezing_note_tqm,
         name="submit_freezing_note_tqm"
+    ),
+
+    path(
+        "combined-program/submit/",
+        submit_combined_gusset_bedsheet,
+        name="submit_combined_gusset_bedsheet"
     ),
 ]

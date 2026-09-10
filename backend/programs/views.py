@@ -429,11 +429,14 @@ def submit_carton_program(request):
     samples = data.get("samples", [])
 
     # 1️⃣ MAIN CARTON PROGRAM
+    linked_gusset_program_id = data.get("linked_gusset_program_id")
+
     carton_program = CartonProgram.objects.create(
         program_type=program_type,
         program_name=program_name,
         created_by=request.user,
         remark=carton_program_data.get("remark"),
+        linked_gusset_program_id=linked_gusset_program_id,
         customer_name=carton_program_data.get("customer_name"),
         customer_protocol=carton_program_data.get("customer_protocol"),
         confirm_new_or_shifted_from_vapi=carton_program_data.get("confirm_new_or_shifted_from_vapi"),
@@ -904,7 +907,9 @@ def get_activity_program_status_list(request):
             "id": obj.id,
             "activity": obj.activity,
 
-            "program_id": obj.gusset_program_id or obj.program_id,
+            # For "both" rows, use the CartonProgram id (View -> CartonView,
+            # which we're extending to also show the linked Gusset section).
+            "program_id": obj.program_id if obj.program_id else obj.gusset_program_id,
             "program_name": obj.program_name,
             "customer_name": obj.customer_name,
             "program_type_group": obj.program_type_group,
@@ -1867,6 +1872,66 @@ def get_carton_program_details(request):
         })
 
     # --------------------------------------------------
+    # LINKED GUSSET PROGRAM (if this is a combined submission, or
+    # Standard Bedsheet was added later on top of an existing Gusset)
+    # --------------------------------------------------
+
+    linked_gusset = None
+    if program.linked_gusset_program_id:
+        g = program.linked_gusset_program
+        g_specs = []
+        for s in g.program_specifications.all():
+            g_specs.append({
+                "size": s.size,
+                "fold_length": s.fold_length,
+                "fold_width": s.fold_width,
+                "gusset_name": s.gusset_name,
+                "wt": s.wt,
+                "gsm": s.gsm,
+            })
+        g_samples = []
+        for sm in g.samples.all():
+            g_samples.append({
+                "program_name": sm.program_name,
+                "size": sm.size,
+                "sample": sm.sample,
+                "quality": sm.quality,
+                "gsm": sm.gsm,
+                "shade": sm.shade,
+                "lbs_per_dz": sm.lbs_per_dz,
+                "width_in": sm.width_in,
+                "length_in": sm.length_in,
+            })
+
+        linked_gusset = {
+            "gusset_program_id": g.id,
+            "customer_name": g.customer_name,
+            "program_name": g.program_name,
+            "tc": g.tc,
+            "weave": g.weave,
+            "product_group": g.product_group,
+            "size": g.size,
+            "other_size": g.other_size,
+            "fold_length": g.fold_length,
+            "fold_width": g.fold_width,
+            "gusset_bank": g.gusset_bank,
+            "cardboard_required": g.cardboard_required,
+            "fold_type": g.fold_type,
+            "ply": g.ply,
+            "fold_on_side": g.fold_on_side,
+            "polybag_required": g.polybag_required,
+            "material_type": g.material_type,
+            "opening_type": g.opening_type,
+            "opening_on_side": g.opening_on_side,
+            "inlay_or_belly_band": g.inlay_or_belly_band,
+            "polybag_type": g.polybag_type,
+            "reference_program": g.reference_program,
+            "comments": g.comments,
+            "program_specifications": g_specs,
+            "samples": g_samples,
+        }
+
+    # --------------------------------------------------
     # FREEZING NOTE ROWS (Bedsheet only)
     # --------------------------------------------------
 
@@ -1972,7 +2037,8 @@ def get_carton_program_details(request):
         "samples": sample_list,
         "attachments": attachments,
         "freezing_note_rows": freezing_note_rows,
-        "can_edit_freezing_note": request.user.role == "MARKETING",
+        "can_edit_freezing_note": request.user.role == "TTQM",
+        "linked_gusset": linked_gusset,
     }
 
     return Response(response_data)
@@ -2357,6 +2423,7 @@ def my_assigned_activities(request):
             "program_type": r.program.program_type if r.program_id else "GUSSET",
             "program_type_group": r.program_type_group,
             "status": r.status,
+            "is_combined": bool(r.program_id and r.gusset_program_id),
             "created_on": r.created_on.strftime("%d-%m-%Y %H:%M:%S")
             if r.created_on else None,
         })
@@ -4832,7 +4899,7 @@ def superadmin_list_all_programs(request):
         data.append({
             "activity_program_status_id": obj.id,
             "activity": obj.activity,
-            "program_id": obj.gusset_program_id or obj.program_id,
+            "program_id": obj.program_id if obj.program_id else obj.gusset_program_id,
             "program_name": obj.program_name,
             "customer_name": obj.customer_name,
             "program_type_group": obj.program_type_group,
@@ -5136,3 +5203,286 @@ def submit_freezing_note_tqm(request):
         print("Email failed:", str(e))
 
     return Response({"message": f"Freezing Note {aps.status}"}, status=200)
+
+
+
+
+
+# ------------------------------------------------------------------
+# API: Submit Combined Gusset + Standard Bedsheet
+# Description:
+#   Used when Marketing fills BOTH Gusset Finalization AND Standard
+#   Bedsheet at once. Creates a GussetProgram + a CartonProgram (linked
+#   via linked_gusset_program), but only ONE ActivityProgramStatus row
+#   (with both `program` and `gusset_program` set) — so PPC/TQM see a
+#   single combined entry in their lists, not two separate ones.
+# ------------------------------------------------------------------
+
+@swagger_auto_schema(
+    method="post",
+    operation_summary="Submit Combined Gusset + Standard Bedsheet",
+)
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@transaction.atomic
+def submit_combined_gusset_bedsheet(request):
+
+    data = request.data
+
+    activity_name = data.get("activity_name")
+    sent_to_user_id = data.get("sent_to_user_id")
+    btn = data.get("btn", "")
+
+    gusset_data = data.get("gusset", {})
+    bedsheet_data = data.get("bedsheet", {})
+
+    if not activity_name:
+        return Response({"error": "activity_name is required"}, status=400)
+
+    # ---------------- 1. Create GussetProgram ----------------
+    gusset_customer_name = gusset_data.get("customer_name")
+    gusset_program_name = gusset_data.get("program_name")
+
+    if not gusset_customer_name or not gusset_program_name:
+        return Response({"error": "Gusset customer_name and program_name are required"}, status=400)
+
+    gusset_size = gusset_data.get("size")
+    gusset_other_size = gusset_data.get("other_size") if gusset_size == "Other" else None
+
+    gusset = GussetProgram.objects.create(
+        customer_name=gusset_customer_name,
+        program_name=gusset_program_name,
+        tc=gusset_data.get("tc"),
+        weave=gusset_data.get("weave"),
+        product_group=gusset_data.get("product_group"),
+        size=gusset_size,
+        other_size=gusset_other_size,
+        down=gusset_data.get("down"),
+        value_addition_flat_sheet=gusset_data.get("value_addition_flat_sheet"),
+        value_addition_duvet_cover=gusset_data.get("value_addition_duvet_cover"),
+        value_addition_fitted_sheet=gusset_data.get("value_addition_fitted_sheet"),
+        value_addition_pillowcase=gusset_data.get("value_addition_pillowcase"),
+        fold_size_inches=gusset_data.get("fold_size_inches"),
+        fold_length=gusset_data.get("fold_length"),
+        fold_width=gusset_data.get("fold_width"),
+        gusset_bank=gusset_data.get("gusset_bank"),
+        cardboard_required=to_bool(gusset_data.get("cardboard_required")),
+        fold_type=gusset_data.get("fold_type"),
+        ply=gusset_data.get("ply"),
+        fold_on_side=gusset_data.get("fold_on_side"),
+        reference_program=gusset_data.get("reference_program"),
+        comments=gusset_data.get("comments"),
+        polybag_required=to_bool(gusset_data.get("polybag_required")),
+        material_type=gusset_data.get("material_type"),
+        opening_type=gusset_data.get("opening_type"),
+        opening_on_side=gusset_data.get("opening_on_side"),
+        inlay_or_belly_band=gusset_data.get("inlay_or_belly_band"),
+        polybag_type=gusset_data.get("polybag_type"),
+        created_by=request.user
+    )
+
+    for sp in gusset_data.get("program_specifications", []):
+        GussetProgramSpecification.objects.create(
+            gusset_program=gusset,
+            size=sp.get("size"),
+            fold_length=sp.get("fold_length"),
+            fold_width=sp.get("fold_width"),
+            gusset_name=sp.get("gusset_name"),
+            wt=sp.get("wt"),
+            gsm=sp.get("gsm"),
+        )
+
+    gusset_sample_ids = []
+    for sm in gusset_data.get("samples", []):
+        sample_obj = GussetSampleProgram.objects.create(
+            gusset_program=gusset,
+            program_name=sm.get("program_name"),
+            size=sm.get("size"),
+            sample=sm.get("sample"),
+            quality=sm.get("quality"),
+            lbs_per_dz=sm.get("lbs_per_dz"),
+            gsm=sm.get("gsm"),
+            shade=sm.get("shade"),
+            width_in=sm.get("width_in"),
+            length_in=sm.get("length_in"),
+            width_cm=sm.get("width_cm"),
+            length_cm=sm.get("length_cm"),
+        )
+        gusset_sample_ids.append(sample_obj.id)
+
+    # ---------------- 2. Create CartonProgram (Bedsheet) ----------------
+    bedsheet_customer_name = bedsheet_data.get("carton_program", {}).get("customer_name")
+    bedsheet_program_name = bedsheet_data.get("program_name")
+
+    if not bedsheet_customer_name or not bedsheet_program_name:
+        return Response({"error": "Bedsheet customer_name and program_name are required"}, status=400)
+
+    cp_data = bedsheet_data.get("carton_program", {})
+
+    carton_program = CartonProgram.objects.create(
+        program_type="BEDSHEET",
+        program_name=bedsheet_program_name,
+        created_by=request.user,
+        linked_gusset_program=gusset,
+        remark=cp_data.get("remark"),
+        customer_name=cp_data.get("customer_name"),
+        customer_protocol=cp_data.get("customer_protocol"),
+        confirm_new_or_shifted_from_vapi=cp_data.get("confirm_new_or_shifted_from_vapi"),
+        original_towel=cp_data.get("original_towel"),
+        polybag_manual_or_automatic=cp_data.get("polybag_manual_or_automatic"),
+        polybag_type=cp_data.get("polybag_type"),
+        pallet_or_slipsheet_requirement=cp_data.get("pallet_or_slipsheet_requirement", False),
+        special_carton_required=cp_data.get("special_carton_required", False),
+        pdq_required=cp_data.get("pdq_required", False),
+        cdu_required=cp_data.get("cdu_required", False),
+        sample_arranged_for_special_carton=cp_data.get("sample_carton_arranged", False),
+        sample_arranged_for_special_carton_pdq=cp_data.get("pdq_arranged", False),
+        sample_arranged_for_special_carton_cdu=cp_data.get("cdu_arranged", False),
+        shipped_as_single_pdq_or_monster_pdq=cp_data.get("shipped_as_single_pdq_or_monster_pdq"),
+        pdq_layers_stacking_details=cp_data.get("pdq_layers_stacking_details"),
+        common_pdq_same_dimension_for_all_sizes=cp_data.get("common_pdq_same_dimension_for_all_sizes"),
+        small_pdq_on_pallet_or_slipsheet=cp_data.get("small_pdq_on_pallet_or_slipsheet"),
+        small_pdq_count_on_pallet_or_slipsheet=cp_data.get("small_pdq_count_on_pallet_or_slipsheet"),
+        warehouse_store_handling_method=cp_data.get("warehouse_store_handling_method"),
+        towel_folded_and_poly_packed_before_carton=cp_data.get("towel_folded_and_poly_packed_before_carton"),
+        separator_protector_stiffener_required=cp_data.get("separator_protector_stiffener_required"),
+        ribbon_packing_required=cp_data.get("ribbon_packing_required"),
+        belly_band_packing_required=cp_data.get("belly_band_packing_required"),
+    )
+
+    BedsheetProgramDetails.objects.create(
+        carton_program=carton_program,
+        **clean_kwargs(BedsheetProgramDetails, bedsheet_data.get("bedsheet_details", {}))
+    )
+
+    for sp in bedsheet_data.get("subprograms", []):
+        try:
+            calc = CartonCalculator()
+            result = calc.compute(sp)
+        except ValueError as e:
+            return Response({"error": f"{e} (Bedsheet subprogram)"}, status=400)
+
+        CartonProgramSubProgram.objects.create(
+            carton_program=carton_program,
+            program_name=sp.get("program_name"),
+            style=sp.get("style"),
+            width_in=sp.get("width_in"),
+            length_in=sp.get("length_in"),
+            gsm=sp.get("gsm"),
+            wt_per_unit=result["weight"],
+            unit_per_carton=sp.get("unit_per_carton"),
+            inner_pack_unit_qty=sp.get("inner_pack_unit_qty"),
+            polybags_per_carton=sp.get("polybags_per_carton"),
+            fold=sp.get("fold"),
+            pcs_per_set=sp.get("pcs_per_set"),
+            remark=sp.get("remark"),
+            folded_length=result["folded_length"],
+            folded_width=result["folded_width"],
+            carton_length=result["carton"]["length"],
+            carton_width=result["carton"]["width"],
+            carton_height=result["carton"]["height"],
+        )
+
+    bedsheet_sample_ids = []
+    for sm in bedsheet_data.get("samples", []):
+        sample_obj = SampleProgram.objects.create(
+            carton_program=carton_program,
+            program_name=sm.get("program_name"),
+            sample_code=sm.get("sample_code"),
+            size=sm.get("size"),
+            sample=sm.get("sample"),
+            quality=sm.get("quality"),
+            lbs_per_dz=sm.get("lbs_per_dz"),
+            gsm=sm.get("gsm"),
+            shade=sm.get("shade"),
+            width_in=sm.get("width_in"),
+            length_in=sm.get("length_in"),
+            width_cm=sm.get("width_cm"),
+            length_cm=sm.get("length_cm"),
+        )
+        bedsheet_sample_ids.append(sample_obj.id)
+
+    for fn in bedsheet_data.get("freezing_note_rows", []):
+        BedsheetFreezingNoteRow.objects.create(
+            carton_program=carton_program,
+            sr_no=fn.get("sr_no"),
+            size=fn.get("size"),
+            product_dimension=fn.get("product_dimension"),
+            pcs_per_bag_or_inner_box=fn.get("pcs_per_bag_or_inner_box"),
+            bag_or_innerbox_per_carton=fn.get("bag_or_innerbox_per_carton"),
+            pcs_per_carton=fn.get("pcs_per_carton"),
+            carton_type_paper=fn.get("carton_type_paper"),
+            net_weight_kgs=fn.get("net_weight_kgs"),
+            gross_weight_kgs=fn.get("gross_weight_kgs"),
+            carton_ply_no=fn.get("carton_ply_no"),
+            carton_min_bursting_strength=fn.get("carton_min_bursting_strength"),
+            carton_min_edge_crush_test=fn.get("carton_min_edge_crush_test"),
+            stiffener_dimension=fn.get("stiffener_dimension"),
+            stiffener_no_of_ply=fn.get("stiffener_no_of_ply"),
+            stiffener_type_cut=fn.get("stiffener_type_cut"),
+            side_stiffener_dimension=fn.get("side_stiffener_dimension"),
+            side_stiffener_no_of_ply=fn.get("side_stiffener_no_of_ply"),
+            side_stiffener_type_cut=fn.get("side_stiffener_type_cut"),
+            separator_dimension=fn.get("separator_dimension"),
+            separator_no_of_ply=fn.get("separator_no_of_ply"),
+            bag_or_innerbox_size=fn.get("bag_or_innerbox_size"),
+            bag_type_or_box_type=fn.get("bag_type_or_box_type"),
+            ld_polybag_length_cm=fn.get("ld_polybag_length_cm"),
+            ld_polybag_width_cm=fn.get("ld_polybag_width_cm"),
+            ld_polybag_flap_cm=fn.get("ld_polybag_flap_cm"),
+            ld_polybag_thickness_micron=fn.get("ld_polybag_thickness_micron"),
+            ld_polybag_quality=fn.get("ld_polybag_quality"),
+            printing_matter_polybag=fn.get("printing_matter_polybag"),
+            product_position_in_carton=fn.get("product_position_in_carton"),
+            product_dim_length=fn.get("product_dim_length"),
+            product_dim_width=fn.get("product_dim_width"),
+            product_dim_height=fn.get("product_dim_height"),
+            bellyband_ribbon_dimension=fn.get("bellyband_ribbon_dimension"),
+            bellyband_ribbon_quality=fn.get("bellyband_ribbon_quality"),
+            macys_tmcl_placement=fn.get("macys_tmcl_placement"),
+            macys_carton_type=fn.get("macys_carton_type"),
+            macys_tmcl_placement_type=fn.get("macys_tmcl_placement_type"),
+            pdq_accessories_others=fn.get("pdq_accessories_others"),
+            remarks=fn.get("remarks"),
+        )
+
+    # ---------------- 3. ONE ActivityProgramStatus (both linked) ----------------
+    status_value = "Draft" if btn.lower() == "save as draft" else "Pending"
+
+    aps = ActivityProgramStatus.objects.create(
+        activity=activity_name,
+        program=carton_program,
+        gusset_program=gusset,
+        status=status_value,
+        sent_to_id=sent_to_user_id,
+        created_by=request.user
+    )
+
+    create_log(
+        module_name="Combined Program",
+        record_id=aps.id,
+        action="Created",
+        message=f"Combined Gusset+Bedsheet program '{bedsheet_program_name}' created",
+        user=request.user
+    )
+
+    User = get_user_model()
+    notification = NotificationService()
+    if status_value != "Draft" and sent_to_user_id:
+        try:
+            User.objects.get(id=sent_to_user_id)
+            notification.send_tqm_notification(carton_program)
+        except Exception:
+            logger.exception("Failed to send notification for combined program %s", aps.id)
+
+    return Response(
+        {
+            "message": "Combined Gusset + Bedsheet Program Created",
+            "activity_program_status_id": aps.id,
+            "gusset_program_id": gusset.id,
+            "carton_program_id": carton_program.id,
+            "gusset_sample_ids": gusset_sample_ids,
+            "bedsheet_sample_ids": bedsheet_sample_ids,
+        },
+        status=201
+    )

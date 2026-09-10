@@ -118,6 +118,8 @@ function CartonMain({ onCreateRequest }) {
   };
 
   const handleView = (row) => {
+    // "both" (combined Gusset+Bedsheet) always opens CartonView, which
+    // shows the linked Gusset section at the top.
     if (row.program_type_group === 'gusset') {
       navigate(`/gusset/view/${row.id}`);
     } else {
@@ -220,15 +222,24 @@ const formatDateTime = (dateTime) => {
         {
       key: 'program_type_group',
       header: 'Type',
-      render: (row) => (
-        <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
-          row.program_type_group === 'gusset'
-            ? 'bg-purple-100 text-purple-700'
-            : 'bg-blue-100 text-blue-700'
-        }`}>
-          {row.program_type_group === 'gusset' ? 'Gusset' : 'Carton'}
-        </span>
-      ),
+      render: (row) => {
+        const styles = {
+          gusset: 'bg-purple-100 text-purple-700',
+          both: 'bg-amber-100 text-amber-800',
+          carton: 'bg-blue-100 text-blue-700',
+        };
+        const labels = {
+          gusset: 'Gusset',
+          both: 'Gusset + Bedsheet',
+          carton: 'Carton',
+        };
+        const group = row.program_type_group || 'carton';
+        return (
+          <span className={`text-xs font-semibold px-2 py-1 rounded-full ${styles[group]}`}>
+            {labels[group]}
+          </span>
+        );
+      },
     },
     {
   key: 'created_date',

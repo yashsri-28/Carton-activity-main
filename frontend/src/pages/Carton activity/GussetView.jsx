@@ -278,6 +278,25 @@ function GussetView() {
                 {submittingFinal ? 'Submitting...' : 'Submit Final'}
               </button>
             )}
+
+
+
+            {isMarketing && normalizedStatus && normalizedStatus !== 'pending' && normalizedStatus !== 'rejected' && (
+              <button
+                onClick={() =>
+                  navigate('/form', {
+                    state: {
+                      linkedGussetProgramId: details?.program_id,
+                      prefillCustomerName: details?.customer_name,
+                      prefillProgramName: details?.program_name,
+                    },
+                  })
+                }
+                className="px-5 py-2 bg-green-50 text-green-700 rounded-lg cursor-pointer border border-green-600 font-semibold hover:bg-green-100 transition-colors"
+              >
+                + Add Standard Bedsheet
+              </button>
+            )}
           </div>
         </div>
 
@@ -325,8 +344,8 @@ function GussetView() {
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Gusset Bank</p>
-                  <p className="font-medium">{details.gusset_bank || '-'}</p>
+                  {/* <p className="text-sm text-gray-500">Gusset Bank</p>
+                  <p className="font-medium">{details.gusset_bank || '-'}</p> */}
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Reference Program</p>
@@ -475,7 +494,7 @@ function GussetView() {
                       <tr key={sp.spec_id} className="border-t border-gray-100">
                         {/* <td className="px-4 py-2"> */}
                         <td className="p-3 border-r border-gray-100 align-middle">
-                          {(role === 'ttqm' || role === 'ppc') ? (
+                          {(role === 'ttqm') ? (
                             <input
                               type="text"
                               value={sp.size ?? ''}
@@ -493,7 +512,7 @@ function GussetView() {
                         </td>
                         {/* <td className="px-4 py-2"> */}
                         <td className="p-3 border-r border-gray-100 align-middle">
-                          {(role === 'ttqm' || role === 'ppc') ? (
+                          {(role === 'ttqm') ? (
                             <input
                               type="number"
                               value={sp.fold_length ?? ''}
@@ -512,7 +531,7 @@ function GussetView() {
                         </td>
                         {/* <td className="px-4 py-2"> */}
                         <td className="p-3 border-r border-gray-100 align-middle">
-                          {(role === 'ttqm' || role === 'ppc') ? (
+                          {(role === 'ttqm') ? (
                             <input
                               type="number"
                               value={sp.fold_width ?? ''}
@@ -530,7 +549,7 @@ function GussetView() {
                         </td>
                         {/* <td className="px-4 py-2"> */}
                         <td className="p-3 border-r border-gray-100 align-middle">
-                          {(role === 'ttqm' || role === 'ppc') ? (
+                          {(role === 'ttqm') ? (
                             <input
                               type="text"
                               value={sp.gusset_name ?? ''}
@@ -548,7 +567,7 @@ function GussetView() {
                         </td>
                         {/* <td className="px-4 py-2"> */}
                         <td className="p-3 border-r border-gray-100 align-middle">
-                          {(role === 'ttqm' || role === 'ppc') ? (
+                          {(role === 'ttqm') ? (
                             <input
                               type="number"
                               value={sp.wt ?? ''}
@@ -566,7 +585,7 @@ function GussetView() {
                         </td>
                         {/* <td className="px-4 py-2"> */}
                         <td className="p-3 border-r border-gray-100 align-middle">
-                          {(role === 'ttqm' || role === 'ppc') ? (
+                          {(role === 'ttqm') ? (
                             <input
                               type="number"
                               value={sp.gsm ?? ''}
@@ -587,7 +606,7 @@ function GussetView() {
                   </tbody>
                 </table>
 
-                {(role === 'ttqm' || role === 'ppc') && (
+                {(role === 'ttqm' ) && (
                   <div className="flex justify-end p-3">
                     <button
                       onClick={handleSaveSpecs}

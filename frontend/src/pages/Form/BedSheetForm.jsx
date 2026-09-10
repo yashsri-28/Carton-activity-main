@@ -964,13 +964,13 @@ function BedSheetForm({
                                 <InputField label="Reference Program :" name="referenceProgram" value={formData.referenceProgram} onChange={onInputChange} />
                                 <InputField label="Comments :" name="comments" value={formData.comments} onChange={onInputChange} />
 
-                                <InputField
+                                {/* <InputField
                                     label="Gusset Bank"
                                     name="gussetBank"
                                     value={formData.gussetBank}
                                     onChange={onInputChange}
                                     placeholder="Enter gusset bank details"
-                                />
+                                /> */}
                             </div>
                         </div>
                     )}

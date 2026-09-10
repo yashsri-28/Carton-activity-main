@@ -88,7 +88,17 @@ class CartonProgram(models.Model):
     blank=True
     )
 
-    
+    # NEW: Links this Bedsheet program to a Gusset program — either
+    # because both were submitted together in one combined flow, or
+    # because Marketing added Standard Bedsheet later on top of an
+    # already TQM-approved Gusset submission.
+    linked_gusset_program = models.ForeignKey(
+        "GussetProgram",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="linked_carton_programs"
+    )
 
     class Meta:
         db_table = "carton_program"
@@ -721,6 +731,8 @@ class ActivityProgramStatus(models.Model):
 
     @property
     def program_type_group(self):
+        if self.program_id and self.gusset_program_id:
+            return "both"
         return "gusset" if self.gusset_program_id else "carton"
 
 

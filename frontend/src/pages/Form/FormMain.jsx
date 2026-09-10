@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Form from './Form';
 import Table from './Table';
 import api from '../../api/axiosInstance';
@@ -8,15 +8,23 @@ import FreezingNoteTable from './FreezingNoteTable';
 
 function FormMain({ onBack }) {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // If we arrived here via "Add Standard Bedsheet" from GussetView, this
+  // carries the Gusset program to link this new submission back to, plus
+  // some prefill data.
+  const linkedGussetProgramId = location.state?.linkedGussetProgramId || null;
+  const prefillCustomerName = location.state?.prefillCustomerName || '';
+  const prefillProgramName = location.state?.prefillProgramName || '';
 
   // ==================== STATE ====================
   const [formData, setFormData] = useState({
-    productCategory: "",
+    productCategory: linkedGussetProgramId ? "Bedsheet" : "",
     companyName: '',
     remark: '',
-    customerName: '',
+    customerName: prefillCustomerName,
     customerType: 'old', // Add this for old/new toggle
-    programName: '',
+    programName: prefillProgramName,
     customerProtocol: '',
     newOrShifted: '',
     original_towel: '',
@@ -92,7 +100,7 @@ function FormMain({ onBack }) {
     gussetFoldWidth: '',
     gussetBank: '',
     gussetSectionOpen: false,
-    bedsheetSectionOpen: false,
+    bedsheetSectionOpen: !!linkedGussetProgramId,
     gussetSizes: [],        // NEW: array of selected sizes, e.g. ["Twin", "King"]
     gussetOtherSizeText: '', // NEW: free text when "Other" is checked
   });
@@ -1062,11 +1070,212 @@ function FormMain({ onBack }) {
       return;
     }
 
+    // Both filled together (and not arriving via the "Add Standard
+    // Bedsheet" linked flow) -> ONE combined submission, single
+    // ActivityProgramStatus, single entry in PPC/TQM's list.
+    if (gusset && bedsheet && !linkedGussetProgramId) {
+      await handleCombinedSubmit(status);
+      return;
+    }
+
+    // Otherwise: either only one is filled, or this is the "Add Standard
+    // Bedsheet" flow linking to an already-existing Gusset — keep the
+    // existing separate-submission behavior.
     if (gusset) {
       await handleGussetSubmit();
     }
     if (bedsheet) {
       await handleSubmit(status);
+    }
+  };
+
+
+
+    const handleCombinedSubmit = async (status = 'Pending') => {
+    // Reuse the same validation as the individual flows
+    if (!formData.gussetProgramName?.trim() || !formData.gussetCustomerName?.trim()) {
+      toast.error('Gusset: Program Name and Customer Name are required');
+      return;
+    }
+    if (!formData.programName?.trim() || !formData.customerName?.trim()) {
+      toast.error('Bedsheet: Program Name and Customer Name are required');
+      return;
+    }
+    if (!selectedUserId) {
+      toast.error('Please select a role and a user to send the request');
+      return;
+    }
+
+    const effectiveActivityName =
+      formData.gussetActivityName?.trim() ||
+      formData.activityName?.trim() ||
+      formData.gussetProgramName?.trim() ||
+      formData.programName?.trim();
+
+    setLoading(true);
+
+    try {
+      const programType = getProgramType();
+      const productDetails = buildProductDetails();
+
+      const gussetPayload = {
+        customer_name: formData.gussetCustomerName.trim(),
+        program_name: formData.gussetProgramName.trim(),
+        tc: formData.fabric?.trim() || "",
+        weave: formData.gussetWeave?.trim() || "",
+        product_group: formData.gussetProductGroup?.trim() || "",
+        size: (formData.gussetSizes || [])
+          .map(s => (s === "Other" ? formData.gussetOtherSizeText?.trim() : s))
+          .filter(Boolean)
+          .join(", "),
+        down: formData.gussetDown?.trim() || "",
+        value_addition_flat_sheet: formData.gussetValueAdditionFlatSheet?.trim() || "",
+        value_addition_duvet_cover: formData.gussetValueAdditionDuvetCover?.trim() || "",
+        value_addition_fitted_sheet: formData.gussetValueAdditionFittedSheet?.trim() || "",
+        value_addition_pillowcase: formData.gussetValueAdditionPillowcase?.trim() || "",
+        fold_length: formData.gussetFoldLength || null,
+        fold_width: formData.gussetFoldWidth || null,
+        cardboard_required: formData.cardboardRequired === "Yes",
+        fold_type: formData.cardboardFoldType?.trim() || "",
+        ply: formData.cardboardPly?.trim() || "",
+        fold_on_side: formData.cardboardFoldOnSide?.trim() || "",
+        reference_program: formData.referenceProgram?.trim() || "",
+        comments: formData.comments?.trim() || "",
+        polybag_required: formData.polybagRequired === "Yes",
+        material_type: formData.polybagMaterialType?.trim() || "",
+        opening_type: formData.polybagOpeningType?.trim() || "",
+        opening_on_side: formData.polybagOpeningOnSide?.trim() || "",
+        inlay_or_belly_band: formData.polybagInlayOrBellyBand?.trim() || "",
+        polybag_type: formData.polybagType?.trim() || "",
+        gusset_bank: formData.gussetBank?.trim() || "",
+        program_specifications: gussetSpecRows
+          .filter(row => row.size?.trim())
+          .map(row => ({
+            size: row.size?.trim() || "",
+            fold_length: row.foldLength || null,
+            fold_width: row.foldWidth || null,
+            gusset_name: row.gussetName?.trim() || "",
+            wt: row.wt ? Number(row.wt) : null,
+            gsm: row.gsm ? Number(row.gsm) : null,
+          })),
+        samples: sampleRows
+          .filter(row => row.col1 || row.col2)
+          .map(row => ({
+            program_name: row.col3?.trim() || "",
+            size: row.col2?.trim() || "",
+            sample: row.col1?.trim() || "",
+            sample_code: row.col12?.trim() || "",
+            quality: row.col4?.trim() || "",
+            lbs_per_dz: Number(row.col5) || 0,
+            gsm: Number(row.col6) || 0,
+            shade: row.col7?.trim() || "",
+            width_in: Number(row.col8) || 0,
+            length_in: Number(row.col10) || 0,
+            width_cm: Number(row.col9) || 0,
+            length_cm: Number(row.col11) || 0,
+          })),
+      };
+
+      const bedsheetPayload = {
+        program_name: formData.programName.trim(),
+        carton_program: {
+          customer_name: formData.customerName.trim(),
+          remark: formData.remark?.trim() || '',
+          customer_protocol: formData.customerProtocol?.trim() || "",
+          confirm_new_or_shifted_from_vapi: formData.newOrShifted?.trim() || "",
+          original_towel: formData.original_towel?.trim() || "",
+          polybag_manual_or_automatic: formData.polybagManualAuto?.trim() || "",
+          polybag_type: formData.polybag_type?.trim() || "",
+          pallet_or_slipsheet_requirement: formData.palletRequirement === "True",
+          special_carton_required: formData.specialCarton === "True",
+          pdq_required: formData.specialPDQ === "True",
+          cdu_required: formData.specialCDU === "True",
+          sample_carton_arranged: formData.sampleCarton === "True",
+          pdq_arranged: formData.samplePDQ === "True",
+          cdu_arranged: formData.sampleCDU === "True",
+          shipped_as_single_pdq_or_monster_pdq: formData.singleOrMonsterPDQ?.trim() || "",
+          pdq_layers_stacking_details: formData.pdqLayers?.trim() || "",
+          common_pdq_same_dimension_for_all_sizes: formData.commonPDQ?.trim() || "",
+          small_pdq_on_pallet_or_slipsheet: formData.smallPDQRequirement?.trim() || "",
+          small_pdq_count_on_pallet_or_slipsheet: formData.smallPDQQuantity?.trim() || "",
+          warehouse_store_handling_method: formData.warehouse_store_handling_method?.trim() || "",
+          towel_folded_and_poly_packed_before_carton: formData.towel_folded_and_poly_packed_before_carton?.trim() || "",
+          separator_protector_stiffener_required: formData.separatorRequired?.trim() || "",
+          ribbon_packing_required: formData.ribbonPacking?.trim() || "",
+          belly_band_packing_required: formData.bellyBandPacking?.trim() || "",
+          elastic_required: formData.elasticRequired === "Yes",
+        },
+        subprograms: [...setsTables, ...unitTables]
+          .filter(group => group.program?.trim())
+          .flatMap(group => {
+            return group.variants
+              .filter(variant =>
+                variant.style?.trim() ||
+                variant.w_in?.trim() ||
+                variant.l_in?.trim() ||
+                variant.wt_unit?.trim() ||
+                variant.gsm?.trim()
+              )
+              .map(variant => ({
+                program_name: group.program?.trim() || "",
+                style: variant.style?.trim() || "",
+                width_in: Number(variant.w_in) || 0,
+                length_in: Number(variant.l_in) || 0,
+                wt_per_unit: variant.wt_unit ? Number(variant.wt_unit) : null,
+                gsm: Number(variant.gsm) || 0,
+                unit_per_carton: group.unit_carton?.trim() || "",
+                inner_pack_unit_qty: group.inner_pack?.trim() || "",
+                polybags_per_carton: group.polybags_carton ? Number(group.polybags_carton) : null,
+                fold: group.fold?.trim() || ""
+              }));
+          }),
+        samples: sampleRows
+          .filter(row => row.col1 || row.col2)
+          .map(row => ({
+            program_name: row.col3?.trim() || "",
+            size: row.col2?.trim() || "",
+            sample: row.col1?.trim() || "",
+            sample_code: row.col12?.trim() || "",
+            quality: row.col4?.trim() || "",
+            lbs_per_dz: Number(row.col5) || 0,
+            gsm: Number(row.col6) || 0,
+            shade: row.col7?.trim() || "",
+            width_in: Number(row.col8) || 0,
+            width_cm: Number(row.col9) || 0,
+            length_in: Number(row.col10) || 0,
+            length_cm: Number(row.col11) || 0
+          })),
+        freezing_note_rows: freezingNoteRows
+          .filter(row => Object.values(row).some(v => v !== '' && v !== null))
+          .map(row => ({
+            ...row,
+            net_weight_kgs: row.net_weight_kgs ? Number(row.net_weight_kgs) : null,
+            gross_weight_kgs: row.gross_weight_kgs ? Number(row.gross_weight_kgs) : null,
+            ld_polybag_length_cm: row.ld_polybag_length_cm ? Number(row.ld_polybag_length_cm) : null,
+            ld_polybag_width_cm: row.ld_polybag_width_cm ? Number(row.ld_polybag_width_cm) : null,
+            ld_polybag_flap_cm: row.ld_polybag_flap_cm ? Number(row.ld_polybag_flap_cm) : null,
+          })),
+        ...productDetails
+      };
+
+      const payload = {
+        activity_name: effectiveActivityName,
+        sent_to_user_id: selectedUserId,
+        btn: status,
+        gusset: gussetPayload,
+        bedsheet: bedsheetPayload,
+      };
+
+      await api.post('/api/combined-program/submit/', payload);
+
+      toast.success('Combined Gusset + Bedsheet Program Submitted Successfully');
+      setTimeout(() => navigate('/'), 1500);
+    } catch (error) {
+      console.error('Combined submit failed:', error);
+      const errMsg = error.response?.data?.error || error.message || 'Unknown error';
+      toast.error(`Submission failed: ${errMsg}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1109,6 +1318,7 @@ function FormMain({ onBack }) {
         program_type: programType,
         btn: status,
         sent_to_user_id: selectedUserId,
+        linked_gusset_program_id: linkedGussetProgramId || null,
         // remark: formData.remark?.trim() || '',  
 
         carton_program: {
@@ -1358,7 +1568,6 @@ function FormMain({ onBack }) {
               hideTqmOnlyFields={true}
             />
           )}
-
           {showGussetSpecs && (
             <Table
               title="Gusset Specifications"
@@ -1366,7 +1575,7 @@ function FormMain({ onBack }) {
                 { label: "Size", key: "size" },
                 { label: "Fold Length", key: "foldLength" },
                 { label: "Fold Width", key: "foldWidth" },
-                { label: "Gusset", key: "gussetName" },
+                { label: "Gusset Name (TQM fills later)", key: "gussetName" },
                 { label: "WT", key: "wt" },
                 { label: "GSM", key: "gsm" },
                 { label: "", key: "actions", hasAddBtn: true },
@@ -1375,7 +1584,12 @@ function FormMain({ onBack }) {
               type="flat"
               onAddRow={handleAddGussetSpecRow}
               onDeleteRow={handleDeleteGussetSpecRow}
-              onUpdateCell={(idx, _, key, value) => handleGussetSpecCellChange(idx, key, value)}
+              onUpdateCell={(idx, _, key, value) => {
+                // Marketing is not allowed to fill Gusset Name — TQM fills
+                // this later on GussetView. Silently ignore edits to it here.
+                if (key === 'gussetName') return;
+                handleGussetSpecCellChange(idx, key, value);
+              }}
             />
           )}
        
@@ -1517,7 +1731,7 @@ function FormMain({ onBack }) {
 export default FormMain;
 
 // import React, { useState, useEffect, useCallback } from 'react';
-// import { useNavigate } from 'react-router-dom';
+// import { useNavigate, useLocation } from 'react-router-dom';
 // import Form from './Form';
 // import Table from './Table';
 // import api from '../../api/axiosInstance';

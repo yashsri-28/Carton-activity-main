@@ -107,7 +107,17 @@
 //   return [...new Set(choices)];
 // }
 
-// function SpecField({ field, value, onChange }) {
+// // Multiple sections can have fields with the SAME label (e.g. OTHER
+// // category's "SIZE" appears under Hanger, Zipper, Velcro etc.) — so
+// // state must be keyed by section+label, not label alone, otherwise
+// // filling one field overwrites every same-named field in other
+// // sections.
+// function specFieldKey(field) {
+//   return field.section ? `${field.section} - ${field.label}` : field.label;
+// }
+
+// // function SpecField({ field, value, onChange }) {
+
 //   const options = flattenOptions(field.options || []);
 //   const hasOptions = options.length > 0;
 //   const [customMode, setCustomMode] = useState(false);
@@ -121,7 +131,9 @@
 //         <input
 //           type="text"
 //           value={value || ''}
-//           onChange={(e) => onChange(field.label, e.target.value)}
+//           // onChange={(e) => onChange(field.label, e.target.value)}
+//           // placeholder={`Enter ${field.label.toLowerCase()}`}
+//           onChange={(e) => onChange(fieldKey, e.target.value)}
 //           placeholder={`Enter ${field.label.toLowerCase()}`}
 //           className="w-full px-3 py-2 text-sm text-gray-800 placeholder-gray-400 bg-white border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
 //         />
@@ -131,12 +143,19 @@
 
 //   const handleSelectChange = (e) => {
 //     const v = e.target.value;
-//     if (v === OTHER_SENTINEL) {
+//     // if (v === OTHER_SENTINEL) {
+//     //   setCustomMode(true);
+//     //   onChange(field.label, '');
+//     // } else {
+//     //   setCustomMode(false);
+//     //   onChange(field.label, v);
+//     // }
+//       if (v === OTHER_SENTINEL) {
 //       setCustomMode(true);
-//       onChange(field.label, '');
+//       onChange(fieldKey, '');
 //     } else {
 //       setCustomMode(false);
-//       onChange(field.label, v);
+//       onChange(fieldKey, v);
 //     }
 //   };
 
@@ -162,8 +181,11 @@
 //           <input
 //             type="text"
 //             autoFocus
+//             // value={value || ''}
+//             // onChange={(e) => onChange(field.label, e.target.value)}
+//             // placeholder="Type your own value..."
 //             value={value || ''}
-//             onChange={(e) => onChange(field.label, e.target.value)}
+//             onChange={(e) => onChange(fieldKey, e.target.value)}
 //             placeholder="Type your own value..."
 //             className="w-full px-3 py-2 text-sm text-gray-800 bg-white border border-amber-300 rounded-md outline-none focus:ring-2 focus:ring-amber-400"
 //           />
@@ -180,6 +202,49 @@
 //   );
 // }
 
+// // Small reusable chevron used by both collapsible headers below, so
+// // both boxes always animate/look exactly the same way.
+// function ChevronIcon({ open }) {
+//   return (
+//     <svg
+//       xmlns="http://www.w3.org/2000/svg"
+//       className={`h-5 w-5 text-white/70 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+//       fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+//     >
+//       <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+//     </svg>
+//   );
+// }
+
+// // A single approval-stage row, styled exactly like the rest of the
+// // form's inputs (same border, same font-size) instead of a bare
+// // browser checkbox — so it doesn't look like it belongs to a
+// // different form.
+// function ApprovalStageRow({ label, checked, onChange, locked }) {
+//   if (locked) {
+//     return (
+//       <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+//         <span className="text-sm text-gray-500">{label}</span>
+//         <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide bg-gray-200 px-2 py-0.5 rounded">
+//           Always Required
+//         </span>
+//       </div>
+//     );
+//   }
+
+//   return (
+//     <label className="flex items-center justify-between px-3 py-2 bg-white border border-gray-300 rounded-md cursor-pointer hover:border-blue-400">
+//       <span className="text-sm text-gray-800">{label}</span>
+//       <input
+//         type="checkbox"
+//         checked={checked}
+//         onChange={(e) => onChange(e.target.checked)}
+//         className="h-4 w-4 accent-blue-600 rounded"
+//       />
+//     </label>
+//   );
+// }
+
 // function PackagingSpecForm() {
 //   const navigate = useNavigate();
 
@@ -188,6 +253,10 @@
 //   const [assignedVendorId, setAssignedVendorId] = useState('');
 //   const [procurementUsers, setProcurementUsers] = useState([]);
 //   const [legalApprovalRequired, setLegalApprovalRequired] = useState(false);
+//   // const [ppcApprovalRequired, setPpcApprovalRequired] = useState(true);
+//   // const [tqmApprovalRequired, setTqmApprovalRequired] = useState(true);
+//   const [ppcApprovalRequired, setPpcApprovalRequired] = useState(false);
+//   const [tqmApprovalRequired, setTqmApprovalRequired] = useState(false);
 //   const [complianceApprovalRequired, setComplianceApprovalRequired] = useState(false);
 //   const [labApprovalRequired, setLabApprovalRequired] = useState(false);
 //   const [showProcurementAssign, setShowProcurementAssign] = useState(false);
@@ -238,14 +307,25 @@
 
 //     setSubmitting(true);
 //     try {
+//       // const payload = {
+//       //   category,
+//       //   spec_data: specValues,
+//       //   assigned_vendor_id: assignedVendorId || null,
+//       //   legal_approval_required: legalApprovalRequired,
+//       //   compliance_approval_required: complianceApprovalRequired,
+//       //   lab_approval_required: labApprovalRequired,
+//       // };
+
 //       const payload = {
-//         category,
-//         spec_data: specValues,
-//         assigned_vendor_id: assignedVendorId || null,
-//         legal_approval_required: legalApprovalRequired,
-//         compliance_approval_required: complianceApprovalRequired,
-//         lab_approval_required: labApprovalRequired,
-//       };
+//           category,
+//           spec_data: specValues,
+//           assigned_vendor_id: assignedVendorId || null,
+//           ppc_approval_required: ppcApprovalRequired,
+//           tqm_approval_required: tqmApprovalRequired,
+//           legal_approval_required: legalApprovalRequired,
+//           compliance_approval_required: complianceApprovalRequired,
+//           lab_approval_required: labApprovalRequired,
+//         };
 //       const res = await createArtworkWithSpec(payload);
 
 //       // If the user left a remark or attached a reference file, post it
@@ -297,7 +377,8 @@
 //   // WOVEN/PRINTED). Other categories (e.g. OTHER: Hanger, Dori,
 //   // Zipper, Velcro...) have sections that are independent components
 //   // with NO such selector — those must always show, never be hidden.
-//   const typeFieldEntry = categoryFields.find((f) => /^type\b/i.test(f.label));
+//   // const typeFieldEntry = categoryFields.find((f) => /^type\b/i.test(f.label));
+//   const typeFieldEntry = categoryFields.find((f) => !f.section && /^type\b/i.test(f.label));
 //   const hasTypeSelectorField = Boolean(typeFieldEntry);
 //   const selectedType = typeFieldEntry ? specValues[typeFieldEntry.label] : null;
 
@@ -324,11 +405,21 @@
 //       {/* Step 1 — the 4 fields common to every category */}
 //       <div className="bg-white border border-gray-200 rounded-lg p-6 mb-5">
 //         <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-5">
-//           {commonFields.map((f, fi) => (
+//           {/* {commonFields.map((f, fi) => (
 //             <SpecField
 //               key={fi}
 //               field={f}
 //               value={specValues[f.label]}
+//               onChange={handleFieldChange}
+//             />
+//           ))} */}
+
+//           {commonFields.map((f, fi) => (
+//             <SpecField
+//               key={fi}
+//               field={f}
+//               fieldKey={specFieldKey(f)}
+//               value={specValues[specFieldKey(f)]}
 //               onChange={handleFieldChange}
 //             />
 //           ))}
@@ -361,13 +452,22 @@
 //                 </div>
 //               )}
 //               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-5 p-5">
-//                 {group.fields.map((f, fi) => (
+//                 {/* {group.fields.map((f, fi) => (
 //                   <SpecField
 //                     key={fi}
 //                     field={f}
 //                     value={specValues[f.label]}
 //                     onChange={handleFieldChange}
 //                   />
+//                 ))} */}
+//                   {group.fields.map((f, fi) => (
+//                     <SpecField
+//                       key={fi}
+//                       field={f}
+//                       fieldKey={specFieldKey(f)}
+//                       value={specValues[specFieldKey(f)]}
+//                       onChange={handleFieldChange}
+//                     />
 //                 ))}
 //               </div>
 //             </div>
@@ -397,32 +497,32 @@
 //           </div>
 
 //           {/* Assign Procurement (left) + Assign for Approval (right) —
-//               both click-to-expand, collapsed by default, same style. */}
+//               both use the SAME navy section-header bar as the
+//               category groups above, and the same label/input styling
+//               as SpecField, so this row no longer looks like it
+//               belongs to a different form. */}
 //           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
 
 //             {/* LEFT — Procurement */}
-//             <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+//             <div className="border border-gray-300 rounded overflow-hidden">
 //               <button
 //                 type="button"
 //                 onClick={() => setShowProcurementAssign((prev) => !prev)}
-//                 className="w-full flex items-center justify-between p-6 text-left"
+//                 className="w-full flex items-center justify-between bg-[#003366] text-white px-3 py-1.5"
 //               >
-//                 <span className="text-sm font-medium text-gray-700">Assign Procurement</span>
-//                 <svg
-//                   xmlns="http://www.w3.org/2000/svg"
-//                   className={`h-5 w-5 text-gray-400 transition-transform duration-200 ${showProcurementAssign ? 'rotate-180' : ''}`}
-//                   fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-//                 >
-//                   <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-//                 </svg>
+//                 <span className="font-semibold text-xs uppercase tracking-wide">Assign Procurement</span>
+//                 <ChevronIcon open={showProcurementAssign} />
 //               </button>
 
 //               {showProcurementAssign && (
-//                 <div className="px-6 pb-6">
+//                 <div className="bg-white p-5">
+//                   <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1.5">
+//                     Procurement Contact
+//                   </label>
 //                   <select
 //                     value={assignedVendorId}
 //                     onChange={(e) => setAssignedVendorId(e.target.value)}
-//                     className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+//                     className="w-full px-3 py-2 text-sm text-gray-800 bg-white border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
 //                   >
 //                     <option value="">-- No procurement contact (assign later) --</option>
 //                     {procurementUsers.map((v) => (
@@ -434,60 +534,51 @@
 //             </div>
 
 //             {/* RIGHT — Assign for Approval */}
-//             <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+//             <div className="border border-gray-300 rounded overflow-hidden">
 //               <button
 //                 type="button"
 //                 onClick={() => setShowApprovalAssign((prev) => !prev)}
-//                 className="w-full flex items-center justify-between p-6 text-left"
+//                 className="w-full flex items-center justify-between bg-[#003366] text-white px-3 py-1.5"
 //               >
-//                 <span className="text-sm font-medium text-gray-700">Assign for Approval</span>
-//                 <svg
-//                   xmlns="http://www.w3.org/2000/svg"
-//                   className={`h-5 w-5 text-gray-400 transition-transform duration-200 ${showApprovalAssign ? 'rotate-180' : ''}`}
-//                   fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-//                 >
-//                   <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-//                 </svg>
+//                 <span className="font-semibold text-xs uppercase tracking-wide">Assign for Approval</span>
+//                 <ChevronIcon open={showApprovalAssign} />
 //               </button>
 
+           
+
 //               {showApprovalAssign && (
-//                 <div className="px-6 pb-6 space-y-2">
-//                   <label className="flex items-center gap-2 text-sm text-gray-500">
-//                     <input type="checkbox" checked disabled />
-//                     Marketing
+//                 <div className="bg-white p-5">
+//                   <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">
+//                     Approval Stages
 //                   </label>
-//                   <label className="flex items-center gap-2 text-sm text-gray-500">
-//                     <input type="checkbox" checked disabled />
-//                     PPC
-//                   </label>
-//                   <label className="flex items-center gap-2 text-sm text-gray-500">
-//                     <input type="checkbox" checked disabled />
-//                     TQM
-//                   </label>
-//                   <label className="flex items-center gap-2 text-sm text-gray-700">
-//                     <input
-//                       type="checkbox"
+//                   {/* <p className="text-xs text-gray-400 mb-2">Marketing always reviews every request automatically.</p> */}
+//                   <div className="space-y-2">
+//                     <ApprovalStageRow
+//                       label="PPC"
+//                       checked={ppcApprovalRequired}
+//                       onChange={setPpcApprovalRequired}
+//                     />
+//                     <ApprovalStageRow
+//                       label="TQM"
+//                       checked={tqmApprovalRequired}
+//                       onChange={setTqmApprovalRequired}
+//                     />
+//                     <ApprovalStageRow
+//                       label="Legal"
 //                       checked={legalApprovalRequired}
-//                       onChange={(e) => setLegalApprovalRequired(e.target.checked)}
+//                       onChange={setLegalApprovalRequired}
 //                     />
-//                     Legal
-//                   </label>
-//                   <label className="flex items-center gap-2 text-sm text-gray-700">
-//                     <input
-//                       type="checkbox"
+//                     <ApprovalStageRow
+//                       label="Compliance"
 //                       checked={complianceApprovalRequired}
-//                       onChange={(e) => setComplianceApprovalRequired(e.target.checked)}
+//                       onChange={setComplianceApprovalRequired}
 //                     />
-//                     Compliance
-//                   </label>
-//                   <label className="flex items-center gap-2 text-sm text-gray-700">
-//                     <input
-//                       type="checkbox"
+//                     <ApprovalStageRow
+//                       label="Lab"
 //                       checked={labApprovalRequired}
-//                       onChange={(e) => setLabApprovalRequired(e.target.checked)}
+//                       onChange={setLabApprovalRequired}
 //                     />
-//                     Lab
-//                   </label>
+//                   </div>
 //                 </div>
 //               )}
 //             </div>
@@ -517,6 +608,7 @@
 // }
 
 // export default PackagingSpecForm;
+
 
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -628,7 +720,16 @@ function flattenOptions(rawOptions) {
   return [...new Set(choices)];
 }
 
-function SpecField({ field, value, onChange }) {
+// Multiple sections can have fields with the SAME label (e.g. OTHER
+// category's "SIZE" appears under Hanger, Zipper, Velcro etc.) — so
+// state must be keyed by section+label, not label alone, otherwise
+// filling one field overwrites every same-named field in other
+// sections.
+function specFieldKey(field) {
+  return field.section ? `${field.section} - ${field.label}` : field.label;
+}
+
+function SpecField({ field, fieldKey, value, onChange }) {
   const options = flattenOptions(field.options || []);
   const hasOptions = options.length > 0;
   const [customMode, setCustomMode] = useState(false);
@@ -642,7 +743,7 @@ function SpecField({ field, value, onChange }) {
         <input
           type="text"
           value={value || ''}
-          onChange={(e) => onChange(field.label, e.target.value)}
+          onChange={(e) => onChange(fieldKey, e.target.value)}
           placeholder={`Enter ${field.label.toLowerCase()}`}
           className="w-full px-3 py-2 text-sm text-gray-800 placeholder-gray-400 bg-white border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
         />
@@ -654,10 +755,10 @@ function SpecField({ field, value, onChange }) {
     const v = e.target.value;
     if (v === OTHER_SENTINEL) {
       setCustomMode(true);
-      onChange(field.label, '');
+      onChange(fieldKey, '');
     } else {
       setCustomMode(false);
-      onChange(field.label, v);
+      onChange(fieldKey, v);
     }
   };
 
@@ -684,13 +785,13 @@ function SpecField({ field, value, onChange }) {
             type="text"
             autoFocus
             value={value || ''}
-            onChange={(e) => onChange(field.label, e.target.value)}
+            onChange={(e) => onChange(fieldKey, e.target.value)}
             placeholder="Type your own value..."
             className="w-full px-3 py-2 text-sm text-gray-800 bg-white border border-amber-300 rounded-md outline-none focus:ring-2 focus:ring-amber-400"
           />
           <button
             type="button"
-            onClick={() => { setCustomMode(false); onChange(field.label, ''); }}
+            onClick={() => { setCustomMode(false); onChange(fieldKey, ''); }}
             className="text-xs text-blue-600 hover:underline mt-1"
           >
             ← Back to list
@@ -752,8 +853,6 @@ function PackagingSpecForm() {
   const [assignedVendorId, setAssignedVendorId] = useState('');
   const [procurementUsers, setProcurementUsers] = useState([]);
   const [legalApprovalRequired, setLegalApprovalRequired] = useState(false);
-  // const [ppcApprovalRequired, setPpcApprovalRequired] = useState(true);
-  // const [tqmApprovalRequired, setTqmApprovalRequired] = useState(true);
   const [ppcApprovalRequired, setPpcApprovalRequired] = useState(false);
   const [tqmApprovalRequired, setTqmApprovalRequired] = useState(false);
   const [complianceApprovalRequired, setComplianceApprovalRequired] = useState(false);
@@ -793,8 +892,8 @@ function PackagingSpecForm() {
     });
   };
 
-  const handleFieldChange = (label, value) => {
-    setSpecValues((prev) => ({ ...prev, [label]: value }));
+  const handleFieldChange = (key, value) => {
+    setSpecValues((prev) => ({ ...prev, [key]: value }));
   };
 
   const handleSubmit = async (e) => {
@@ -806,15 +905,6 @@ function PackagingSpecForm() {
 
     setSubmitting(true);
     try {
-      // const payload = {
-      //   category,
-      //   spec_data: specValues,
-      //   assigned_vendor_id: assignedVendorId || null,
-      //   legal_approval_required: legalApprovalRequired,
-      //   compliance_approval_required: complianceApprovalRequired,
-      //   lab_approval_required: labApprovalRequired,
-      // };
-
       const payload = {
           category,
           spec_data: specValues,
@@ -876,7 +966,6 @@ function PackagingSpecForm() {
   // WOVEN/PRINTED). Other categories (e.g. OTHER: Hanger, Dori,
   // Zipper, Velcro...) have sections that are independent components
   // with NO such selector — those must always show, never be hidden.
-  // const typeFieldEntry = categoryFields.find((f) => /^type\b/i.test(f.label));
   const typeFieldEntry = categoryFields.find((f) => !f.section && /^type\b/i.test(f.label));
   const hasTypeSelectorField = Boolean(typeFieldEntry);
   const selectedType = typeFieldEntry ? specValues[typeFieldEntry.label] : null;
@@ -908,7 +997,8 @@ function PackagingSpecForm() {
             <SpecField
               key={fi}
               field={f}
-              value={specValues[f.label]}
+              fieldKey={specFieldKey(f)}
+              value={specValues[specFieldKey(f)]}
               onChange={handleFieldChange}
             />
           ))}
@@ -945,7 +1035,8 @@ function PackagingSpecForm() {
                   <SpecField
                     key={fi}
                     field={f}
-                    value={specValues[f.label]}
+                    fieldKey={specFieldKey(f)}
+                    value={specValues[specFieldKey(f)]}
                     onChange={handleFieldChange}
                   />
                 ))}
@@ -1024,14 +1115,11 @@ function PackagingSpecForm() {
                 <ChevronIcon open={showApprovalAssign} />
               </button>
 
-           
-
               {showApprovalAssign && (
                 <div className="bg-white p-5">
                   <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">
                     Approval Stages
                   </label>
-                  {/* <p className="text-xs text-gray-400 mb-2">Marketing always reviews every request automatically.</p> */}
                   <div className="space-y-2">
                     <ApprovalStageRow
                       label="PPC"

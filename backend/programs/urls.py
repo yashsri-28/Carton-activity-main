@@ -15,7 +15,8 @@ from .views import (submit_carton_program, get_activity_program_status_list,
                     superadmin_list_all_programs, superadmin_delete_program, superadmin_delete_logs,
                     recalculate_freezing_note_preview,
                     submit_freezing_note_tqm,
-                    submit_combined_gusset_bedsheet
+                    submit_combined_gusset_bedsheet,
+                    attach_bedsheet_to_gusset
                     )
 
 urlpatterns = [
@@ -320,5 +321,11 @@ urlpatterns = [
         "combined-program/submit/",
         submit_combined_gusset_bedsheet,
         name="submit_combined_gusset_bedsheet"
+    ),
+
+    path(
+        "gusset-program/attach-bedsheet/",
+        attach_bedsheet_to_gusset,
+        name="attach_bedsheet_to_gusset"
     ),
 ]

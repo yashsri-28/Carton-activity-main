@@ -726,8 +726,10 @@
 
 
 
-import React from "react";
+import React, { useState } from "react";
 import Attachment from "./Attachment";
+import Table from "./Table";
+import FreezingNoteTable from "./FreezingNoteTable";
 
 const InputField = ({
     label,
@@ -825,6 +827,14 @@ function BedSheetForm({
     onRemoveFile,
     loading,
     hideAttachment = false,
+    gussetSpecRows,
+    onAddGussetSpecRow,
+    onDeleteGussetSpecRow,
+    onGussetSpecCellChange,
+    freezingNoteRows,
+    onAddFreezingNoteRow,
+    onDeleteFreezingNoteRow,
+    onFreezingNoteCellChange,
 }) {
     // Open/close state lives in formData (via onInputChange) so the parent
     // (FormMain) can read which section(s) are open when the single main
@@ -960,7 +970,7 @@ function BedSheetForm({
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+                                                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
                                 <InputField label="Reference Program :" name="referenceProgram" value={formData.referenceProgram} onChange={onInputChange} />
                                 <InputField label="Comments :" name="comments" value={formData.comments} onChange={onInputChange} />
 
@@ -972,6 +982,31 @@ function BedSheetForm({
                                     placeholder="Enter gusset bank details"
                                 /> */}
                             </div>
+
+                            {/* Gusset Specifications table — lives inside the Gusset
+                                Finalization section, right below its own fields. */}
+                            <div className="mt-8">
+                                <Table
+                                    title="Gusset Specifications"
+                                    headers={[
+                                        { label: "Size", key: "size" },
+                                        { label: "Fold Length", key: "foldLength" },
+                                        { label: "Fold Width", key: "foldWidth" },
+                                        { label: "Gusset Name (TQM fills later)", key: "gussetName" },
+                                        { label: "WT", key: "wt" },
+                                        { label: "GSM", key: "gsm" },
+                                        { label: "", key: "actions", hasAddBtn: true },
+                                    ]}
+                                    data={gussetSpecRows}
+                                    type="flat"
+                                    onAddRow={onAddGussetSpecRow}
+                                    onDeleteRow={onDeleteGussetSpecRow}
+                                    onUpdateCell={(idx, _, key, value) => {
+                                        if (key === 'gussetName') return;
+                                        onGussetSpecCellChange(idx, key, value);
+                                    }}
+                                />
+                            </div>
                         </div>
                     )}
                 </div>
@@ -979,7 +1014,7 @@ function BedSheetForm({
                 {/* ==================== STANDARD BEDSHEET TOGGLE + FORM ==================== */}
                 <div className="w-full px-4 mb-6">
                     <SectionToggle
-                        label="Standard Bedsheet"
+                        label="Carton Working"
                         isOpen={isBedsheetOpen}
                         onClick={toggleBedsheet}
                     />
@@ -1399,6 +1434,18 @@ function BedSheetForm({
                                     rows={4}
                                 />
                             </FormItem>
+
+                            {/* Freezing Note table — lives inside the Carton Working
+                                (Standard Bedsheet) section, right after its own fields. */}
+                            <div className="w-full mt-8">
+                                <FreezingNoteTable
+                                    rows={freezingNoteRows}
+                                    onAddRow={onAddFreezingNoteRow}
+                                    onCellChange={onFreezingNoteCellChange}
+                                    onDeleteRow={onDeleteFreezingNoteRow}
+                                    hideTqmOnlyFields={true}
+                                />
+                            </div>
                         </div>
                     </div>
                 )}

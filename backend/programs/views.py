@@ -1512,11 +1512,19 @@ def edit_carton_program(request):
     freezing_note_rows = data.get("freezing_note_rows", [])
 
     if new_program_type == "BEDSHEET":
-        BedsheetFreezingNoteRow.objects.filter(carton_program=program).delete()
+        # UPDATE IN PLACE instead of delete-and-recreate — this preserves
+        # freezing_note_id and is_recalculated status, which the TQM
+        # Recalculate/Submit flow depends on. Deleting+recreating here
+        # broke that flow (stale IDs on the frontend after Save).
+        existing_ids = set(
+            BedsheetFreezingNoteRow.objects.filter(carton_program=program).values_list("id", flat=True)
+        )
+        incoming_ids = set()
 
         for fn in freezing_note_rows:
-            BedsheetFreezingNoteRow.objects.create(
-                carton_program=program,
+            fn_id = fn.get("freezing_note_id")
+
+            field_values = dict(
                 sr_no=fn.get("sr_no"),
                 size=fn.get("size"),
                 product_dimension=fn.get("product_dimension"),
@@ -1524,9 +1532,6 @@ def edit_carton_program(request):
                 bag_or_innerbox_per_carton=fn.get("bag_or_innerbox_per_carton"),
                 pcs_per_carton=fn.get("pcs_per_carton"),
                 carton_type_paper=fn.get("carton_type_paper"),
-                carton_length_cm=fn.get("carton_length_cm"),
-                carton_width_cm=fn.get("carton_width_cm"),
-                carton_height_cm=fn.get("carton_height_cm"),
                 net_weight_kgs=fn.get("net_weight_kgs"),
                 gross_weight_kgs=fn.get("gross_weight_kgs"),
                 carton_ply_no=fn.get("carton_ply_no"),
@@ -1559,9 +1564,31 @@ def edit_carton_program(request):
                 macys_tmcl_placement_type=fn.get("macys_tmcl_placement_type"),
                 pdq_accessories_others=fn.get("pdq_accessories_others"),
                 remarks=fn.get("remarks"),
+                # NOTE: carton_length_cm/width_cm/height_cm and
+                # is_recalculated are intentionally NOT touched here —
+                # those belong to the TQM Recalculate flow only, so a
+                # Marketing/other-field save here never resets them.
             )
+
+            if fn_id and fn_id in existing_ids:
+                # Update existing row in place — preserves is_recalculated
+                # and carton dimensions untouched.
+                BedsheetFreezingNoteRow.objects.filter(id=fn_id).update(**field_values)
+                incoming_ids.add(fn_id)
+            else:
+                # New row (no id, or id no longer exists) — create fresh.
+                new_row = BedsheetFreezingNoteRow.objects.create(
+                    carton_program=program, **field_values
+                )
+                incoming_ids.add(new_row.id)
+
+        # Delete rows that existed before but are no longer in the incoming
+        # list (i.e. were actually removed by the user).
+        BedsheetFreezingNoteRow.objects.filter(
+            carton_program=program
+        ).exclude(id__in=incoming_ids).delete()
+
     elif old_program_type == "BEDSHEET" and new_program_type != "BEDSHEET":
-        # Type changed away from Bedsheet — freezing note no longer applies
         BedsheetFreezingNoteRow.objects.filter(carton_program=program).delete()
 
     create_log(
@@ -1882,6 +1909,7 @@ def get_carton_program_details(request):
         g_specs = []
         for s in g.program_specifications.all():
             g_specs.append({
+                "spec_id": s.id,
                 "size": s.size,
                 "fold_length": s.fold_length,
                 "fold_width": s.fold_width,
@@ -5485,4 +5513,217 @@ def submit_combined_gusset_bedsheet(request):
             "bedsheet_sample_ids": bedsheet_sample_ids,
         },
         status=201
+    )
+
+
+
+
+
+
+# ------------------------------------------------------------------
+# API: Attach Standard Bedsheet to an EXISTING Gusset ActivityProgramStatus
+# Description:
+#   Used by "Add Standard Bedsheet" on GussetView, when the Gusset has
+#   already progressed through PPC/TQM. Instead of creating a brand-new
+#   ActivityProgramStatus row, this creates the new CartonProgram (linked
+#   to the same GussetProgram) and UPDATES the existing
+#   ActivityProgramStatus in place — same id, status reset to "Pending"
+#   so it re-enters the PPC -> TQM pipeline as a combined (both) entry.
+# ------------------------------------------------------------------
+
+@swagger_auto_schema(
+    method="post",
+    operation_summary="Attach Standard Bedsheet to an existing Gusset entry (same activity_program_status_id)",
+)
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@transaction.atomic
+def attach_bedsheet_to_gusset(request):
+
+    data = request.data
+
+    aps_id = data.get("activity_program_status_id")
+    sent_to_user_id = data.get("sent_to_user_id")
+    program_name = data.get("program_name")
+
+    if not aps_id:
+        return Response({"error": "activity_program_status_id is required"}, status=400)
+    if not program_name:
+        return Response({"error": "program_name is required"}, status=400)
+    if not sent_to_user_id:
+        return Response({"error": "sent_to_user_id is required"}, status=400)
+
+    try:
+        aps = ActivityProgramStatus.objects.select_related("gusset_program", "program").get(id=aps_id)
+    except ActivityProgramStatus.DoesNotExist:
+        return Response({"error": "Invalid activity_program_status_id"}, status=404)
+
+    if not aps.gusset_program_id:
+        return Response({"error": "This activity is not a Gusset program"}, status=400)
+    if aps.program_id:
+        return Response({"error": "This entry already has a Bedsheet program attached"}, status=400)
+
+    carton_program_data = data.get("carton_program", {})
+    subprograms = data.get("subprograms", [])
+    samples = data.get("samples", [])
+
+    # ---------------- Create the Bedsheet CartonProgram ----------------
+    carton_program = CartonProgram.objects.create(
+        program_type="BEDSHEET",
+        program_name=program_name,
+        created_by=request.user,
+        linked_gusset_program=aps.gusset_program,
+        remark=carton_program_data.get("remark"),
+        customer_name=carton_program_data.get("customer_name"),
+        customer_protocol=carton_program_data.get("customer_protocol"),
+        confirm_new_or_shifted_from_vapi=carton_program_data.get("confirm_new_or_shifted_from_vapi"),
+        original_towel=carton_program_data.get("original_towel"),
+        polybag_manual_or_automatic=carton_program_data.get("polybag_manual_or_automatic"),
+        polybag_type=carton_program_data.get("polybag_type"),
+        pallet_or_slipsheet_requirement=carton_program_data.get("pallet_or_slipsheet_requirement", False),
+        special_carton_required=carton_program_data.get("special_carton_required", False),
+        pdq_required=carton_program_data.get("pdq_required", False),
+        cdu_required=carton_program_data.get("cdu_required", False),
+        sample_arranged_for_special_carton=carton_program_data.get("sample_carton_arranged", False),
+        sample_arranged_for_special_carton_pdq=carton_program_data.get("pdq_arranged", False),
+        sample_arranged_for_special_carton_cdu=carton_program_data.get("cdu_arranged", False),
+        shipped_as_single_pdq_or_monster_pdq=carton_program_data.get("shipped_as_single_pdq_or_monster_pdq"),
+        pdq_layers_stacking_details=carton_program_data.get("pdq_layers_stacking_details"),
+        common_pdq_same_dimension_for_all_sizes=carton_program_data.get("common_pdq_same_dimension_for_all_sizes"),
+        small_pdq_on_pallet_or_slipsheet=carton_program_data.get("small_pdq_on_pallet_or_slipsheet"),
+        small_pdq_count_on_pallet_or_slipsheet=carton_program_data.get("small_pdq_count_on_pallet_or_slipsheet"),
+        warehouse_store_handling_method=carton_program_data.get("warehouse_store_handling_method"),
+        towel_folded_and_poly_packed_before_carton=carton_program_data.get("towel_folded_and_poly_packed_before_carton"),
+        separator_protector_stiffener_required=carton_program_data.get("separator_protector_stiffener_required"),
+        ribbon_packing_required=carton_program_data.get("ribbon_packing_required"),
+        belly_band_packing_required=carton_program_data.get("belly_band_packing_required"),
+    )
+
+    BedsheetProgramDetails.objects.create(
+        carton_program=carton_program,
+        **clean_kwargs(BedsheetProgramDetails, data.get("bedsheet_details", {}))
+    )
+
+    for sp in subprograms:
+        try:
+            calc = CartonCalculator()
+            result = calc.compute(sp)
+        except ValueError as e:
+            return Response({"error": f"{e} (Bedsheet subprogram)"}, status=400)
+
+        CartonProgramSubProgram.objects.create(
+            carton_program=carton_program,
+            program_name=sp.get("program_name"),
+            style=sp.get("style"),
+            width_in=sp.get("width_in"),
+            length_in=sp.get("length_in"),
+            gsm=sp.get("gsm"),
+            wt_per_unit=result["weight"],
+            unit_per_carton=sp.get("unit_per_carton"),
+            inner_pack_unit_qty=sp.get("inner_pack_unit_qty"),
+            polybags_per_carton=sp.get("polybags_per_carton"),
+            fold=sp.get("fold"),
+            pcs_per_set=sp.get("pcs_per_set"),
+            remark=sp.get("remark"),
+            folded_length=result["folded_length"],
+            folded_width=result["folded_width"],
+            carton_length=result["carton"]["length"],
+            carton_width=result["carton"]["width"],
+            carton_height=result["carton"]["height"],
+        )
+
+    sample_ids = []
+    for sm in samples:
+        sample_obj = SampleProgram.objects.create(
+            carton_program=carton_program,
+            program_name=sm.get("program_name"),
+            sample_code=sm.get("sample_code"),
+            size=sm.get("size"),
+            sample=sm.get("sample"),
+            quality=sm.get("quality"),
+            lbs_per_dz=sm.get("lbs_per_dz"),
+            gsm=sm.get("gsm"),
+            shade=sm.get("shade"),
+            width_in=sm.get("width_in"),
+            length_in=sm.get("length_in"),
+            width_cm=sm.get("width_cm"),
+            length_cm=sm.get("length_cm"),
+        )
+        sample_ids.append(sample_obj.id)
+
+    for fn in data.get("freezing_note_rows", []):
+        BedsheetFreezingNoteRow.objects.create(
+            carton_program=carton_program,
+            sr_no=fn.get("sr_no"),
+            size=fn.get("size"),
+            product_dimension=fn.get("product_dimension"),
+            pcs_per_bag_or_inner_box=fn.get("pcs_per_bag_or_inner_box"),
+            bag_or_innerbox_per_carton=fn.get("bag_or_innerbox_per_carton"),
+            pcs_per_carton=fn.get("pcs_per_carton"),
+            carton_type_paper=fn.get("carton_type_paper"),
+            net_weight_kgs=fn.get("net_weight_kgs"),
+            gross_weight_kgs=fn.get("gross_weight_kgs"),
+            carton_ply_no=fn.get("carton_ply_no"),
+            carton_min_bursting_strength=fn.get("carton_min_bursting_strength"),
+            carton_min_edge_crush_test=fn.get("carton_min_edge_crush_test"),
+            stiffener_dimension=fn.get("stiffener_dimension"),
+            stiffener_no_of_ply=fn.get("stiffener_no_of_ply"),
+            stiffener_type_cut=fn.get("stiffener_type_cut"),
+            side_stiffener_dimension=fn.get("side_stiffener_dimension"),
+            side_stiffener_no_of_ply=fn.get("side_stiffener_no_of_ply"),
+            side_stiffener_type_cut=fn.get("side_stiffener_type_cut"),
+            separator_dimension=fn.get("separator_dimension"),
+            separator_no_of_ply=fn.get("separator_no_of_ply"),
+            bag_or_innerbox_size=fn.get("bag_or_innerbox_size"),
+            bag_type_or_box_type=fn.get("bag_type_or_box_type"),
+            ld_polybag_length_cm=fn.get("ld_polybag_length_cm"),
+            ld_polybag_width_cm=fn.get("ld_polybag_width_cm"),
+            ld_polybag_flap_cm=fn.get("ld_polybag_flap_cm"),
+            ld_polybag_thickness_micron=fn.get("ld_polybag_thickness_micron"),
+            ld_polybag_quality=fn.get("ld_polybag_quality"),
+            printing_matter_polybag=fn.get("printing_matter_polybag"),
+            product_position_in_carton=fn.get("product_position_in_carton"),
+            product_dim_length=fn.get("product_dim_length"),
+            product_dim_width=fn.get("product_dim_width"),
+            product_dim_height=fn.get("product_dim_height"),
+            bellyband_ribbon_dimension=fn.get("bellyband_ribbon_dimension"),
+            bellyband_ribbon_quality=fn.get("bellyband_ribbon_quality"),
+            macys_tmcl_placement=fn.get("macys_tmcl_placement"),
+            macys_carton_type=fn.get("macys_carton_type"),
+            macys_tmcl_placement_type=fn.get("macys_tmcl_placement_type"),
+            pdq_accessories_others=fn.get("pdq_accessories_others"),
+            remarks=fn.get("remarks"),
+        )
+
+    # ---------------- Update the SAME ActivityProgramStatus (no new row) ----------------
+    aps.program = carton_program
+    aps.status = "Pending"
+    aps.rejection_reason = None
+    aps.sent_to_id = sent_to_user_id
+    aps.save()
+
+    create_log(
+        module_name="Combined Program",
+        record_id=aps.id,
+        action="Bedsheet Attached",
+        message=f"Standard Bedsheet '{program_name}' attached to existing Gusset entry (same activity_program_status_id={aps.id})",
+        user=request.user
+    )
+
+    User = get_user_model()
+    notification = NotificationService()
+    try:
+        User.objects.get(id=sent_to_user_id)
+        notification.send_tqm_notification(carton_program)
+    except Exception:
+        logger.exception("Failed to send notification for attach-bedsheet %s", aps.id)
+
+    return Response(
+        {
+            "message": "Standard Bedsheet attached to existing Gusset entry",
+            "activity_program_status_id": aps.id,
+            "carton_program_id": carton_program.id,
+            "sample_ids": sample_ids,
+        },
+        status=200
     )

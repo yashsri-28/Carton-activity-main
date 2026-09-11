@@ -140,7 +140,17 @@ function Form({
   onFileChange,
   onRemoveFile,
   loading,
-  hideAttachment = false
+  hideAttachment = false,
+  // Gusset Specifications table (rendered inside Gusset Finalization section)
+  gussetSpecRows,
+  onAddGussetSpecRow,
+  onDeleteGussetSpecRow,
+  onGussetSpecCellChange,
+  // Freezing Note table (rendered inside Carton Working section)
+  freezingNoteRows,
+  onAddFreezingNoteRow,
+  onDeleteFreezingNoteRow,
+  onFreezingNoteCellChange,
 }) {
   const fileInputRef = useRef(null);
 
@@ -228,6 +238,14 @@ function Form({
             onRemoveFile={onRemoveFile}
             loading={loading}
             hideAttachment={hideAttachment}
+            gussetSpecRows={gussetSpecRows}
+            onAddGussetSpecRow={onAddGussetSpecRow}
+            onDeleteGussetSpecRow={onDeleteGussetSpecRow}
+            onGussetSpecCellChange={onGussetSpecCellChange}
+            freezingNoteRows={freezingNoteRows}
+            onAddFreezingNoteRow={onAddFreezingNoteRow}
+            onDeleteFreezingNoteRow={onDeleteFreezingNoteRow}
+            onFreezingNoteCellChange={onFreezingNoteCellChange}
           />
         )}
 

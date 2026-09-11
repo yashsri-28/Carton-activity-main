@@ -14,6 +14,7 @@ function FormMain({ onBack }) {
   // carries the Gusset program to link this new submission back to, plus
   // some prefill data.
   const linkedGussetProgramId = location.state?.linkedGussetProgramId || null;
+  const linkedActivityProgramStatusId = location.state?.linkedActivityProgramStatusId || null;
   const prefillCustomerName = location.state?.prefillCustomerName || '';
   const prefillProgramName = location.state?.prefillProgramName || '';
 
@@ -1416,14 +1417,26 @@ function FormMain({ onBack }) {
         ...productDetails
       };
 
-      const submitResponse = await api.post('/api/carton-program/submit/', payload, {
+      // If this submission came from "Add Standard Bedsheet" on a
+      // TQM-approved Gusset, attach it to the SAME ActivityProgramStatus
+      // instead of creating a brand-new one.
+      const submitUrl = linkedGussetProgramId
+        ? '/api/gusset-program/attach-bedsheet/'
+        : '/api/carton-program/submit/';
+
+      const submitPayload = linkedGussetProgramId
+        ? { ...payload, activity_program_status_id: linkedActivityProgramStatusId }
+        : payload;
+
+      const submitResponse = await api.post(submitUrl, submitPayload, {
         headers: {
           'Content-Type': 'application/json',
         }
       });
 
       // Extract program_id and sample_ids from response
-      const { message: submitMessage, program_id, sample_ids } = submitResponse.data;
+      const program_id = submitResponse.data.carton_program_id || submitResponse.data.program_id;
+      const { sample_ids } = submitResponse.data;
 
       // Store program_id
       setLastProgramId(program_id);
@@ -1536,6 +1549,16 @@ function FormMain({ onBack }) {
           onFileChange={handleFileChange}
           onRemoveFile={handleRemoveFile}
           loading={loading}
+
+          gussetSpecRows={gussetSpecRows}
+          onAddGussetSpecRow={handleAddGussetSpecRow}
+          onDeleteGussetSpecRow={handleDeleteGussetSpecRow}
+          onGussetSpecCellChange={handleGussetSpecCellChange}
+
+          freezingNoteRows={freezingNoteRows}
+          onAddFreezingNoteRow={handleAddFreezingNoteRow}
+          onDeleteFreezingNoteRow={handleDeleteFreezingNoteRow}
+          onFreezingNoteCellChange={handleFreezingNoteCellChange}
         />
 
         {/* Tables */}
@@ -1559,7 +1582,7 @@ function FormMain({ onBack }) {
           {/* Freezing Note (Carton and Packing Details) — Bedsheet only.
               Only shown when Standard Bedsheet is filled, regardless of
               whether Gusset is also filled. Marketing-only. */}
-          {showFreezingNote && (
+          {/* {showFreezingNote && (
             <FreezingNoteTable
               rows={freezingNoteRows}
               onAddRow={handleAddFreezingNoteRow}
@@ -1567,8 +1590,8 @@ function FormMain({ onBack }) {
               onDeleteRow={handleDeleteFreezingNoteRow}
               hideTqmOnlyFields={true}
             />
-          )}
-          {showGussetSpecs && (
+          )} */}
+          {/* {showGussetSpecs && (
             <Table
               title="Gusset Specifications"
               headers={[
@@ -1591,7 +1614,7 @@ function FormMain({ onBack }) {
                 handleGussetSpecCellChange(idx, key, value);
               }}
             />
-          )}
+          )} */}
        
 
           <Table

@@ -230,7 +230,7 @@ const formatDateTime = (dateTime) => {
         };
         const labels = {
           gusset: 'Gusset',
-          both: 'Gusset + Bedsheet',
+          both: 'Carton',
           carton: 'Carton',
         };
         const group = row.program_type_group || 'carton';

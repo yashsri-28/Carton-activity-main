@@ -336,22 +336,49 @@ def upload_artwork_version(request, artwork_id):
     #         ArtworkApproval.objects.create(artwork=artwork, version=version, stage=stage, sequence=i)
     #     artwork.status = "MARKETING_REVIEW"
     
+    # if artwork.workflow_key == "STANDARD":
+    #     # Base chain, plus whichever OPTIONAL stages were selected at
+    #     # request-creation time (legal_approval_required etc.) — chosen
+    #     # per-request by Marketing, not fixed per category.
+    #     stages = ["MARKETING", "PPC", "TQM"]
+    #     if artwork.legal_approval_required:
+    #         stages.append("LEGAL")
+    #     if artwork.compliance_approval_required:
+    #         stages.append("COMPLIANCE")
+    #     if artwork.lab_approval_required:
+    #         stages.append("LAB")
+    #     if artwork.customer_approval_required:
+    #         stages.append("CUSTOMER")
+    #     for i, stage in enumerate(stages, start=1):
+    #         ArtworkApproval.objects.create(artwork=artwork, version=version, stage=stage, sequence=i)
+    #     artwork.status = "MARKETING_REVIEW"
+    
     if artwork.workflow_key == "STANDARD":
-        # Base chain, plus whichever OPTIONAL stages were selected at
-        # request-creation time (legal_approval_required etc.) — chosen
-        # per-request by Marketing, not fixed per category.
-        stages = ["MARKETING", "PPC", "TQM"]
-        if artwork.legal_approval_required:
-            stages.append("LEGAL")
-        if artwork.compliance_approval_required:
-            stages.append("COMPLIANCE")
-        if artwork.lab_approval_required:
-            stages.append("LAB")
-        if artwork.customer_approval_required:
-            stages.append("CUSTOMER")
-        for i, stage in enumerate(stages, start=1):
-            ArtworkApproval.objects.create(artwork=artwork, version=version, stage=stage, sequence=i)
-        artwork.status = "MARKETING_REVIEW"
+            stages = ["MARKETING", "PPC", "TQM"]
+            if artwork.legal_approval_required:
+                stages.append("LEGAL")
+            if artwork.compliance_approval_required:
+                stages.append("COMPLIANCE")
+            if artwork.lab_approval_required:
+                stages.append("LAB")
+            if artwork.customer_approval_required:
+                stages.append("CUSTOMER")
+            for i, stage in enumerate(stages, start=1):
+                ArtworkApproval.objects.create(artwork=artwork, version=version, stage=stage, sequence=i)
+            artwork.status = "MARKETING_REVIEW"
+
+            # NEW — sabhi ticked stages ke roles ko turant batao ki naya
+            # version upload ho gaya hai, taki sabko pata ho unki approval
+            # is chain mein pending hai (sirf jiski turn hai usko nahi,
+            # balki poori chain ke sabhi roles ko).
+            for stage in stages:
+                stage_role = ArtworkApproval.STAGE_ROLE_MAP.get(stage)
+                if stage_role:
+                    _notify_role(
+                        stage_role, artwork,
+                        f"{artwork.artwork_id} has a new version uploaded — you're in the {stage} approval chain for this request.",
+                        exclude_user=request.user,
+                    )
     # else:
     #     # Custom category workflow — build a FRESH WorkflowStep chain
     #     # for this new version. Old versions' steps are NEVER deleted,
@@ -370,13 +397,28 @@ def upload_artwork_version(request, artwork_id):
     #         )
     #     artwork.status = "MARKETING_REVIEW"
     
+    # else:
+    #     # Custom category workflow — build a FRESH WorkflowStep chain
+    #     # for this new version. Old versions' steps are NEVER deleted,
+    #     # so a full reject/re-upload history stays traceable forever.
+    #     # Steps come from a per-artwork builder (not a fixed config
+    #     # list) because RIBBON's gates depend on which stakeholders
+    #     # were ticked at request-creation time.
+    #     step_defs = get_workflow_steps_for_artwork(artwork)
+    #     for step_def in step_defs:
+    #         WorkflowStep.objects.create(
+    #             artwork=artwork,
+    #             version=version,
+    #             workflow_key=artwork.workflow_key,
+    #             step_code=step_def["code"],
+    #             step_type=step_def["type"],
+    #             step_label=step_def["label"],
+    #             actor_role=step_def["role"],
+    #             sequence=step_def["sequence"],
+    #         )
+    #     artwork.status = "MARKETING_REVIEW"
+    
     else:
-        # Custom category workflow — build a FRESH WorkflowStep chain
-        # for this new version. Old versions' steps are NEVER deleted,
-        # so a full reject/re-upload history stays traceable forever.
-        # Steps come from a per-artwork builder (not a fixed config
-        # list) because RIBBON's gates depend on which stakeholders
-        # were ticked at request-creation time.
         step_defs = get_workflow_steps_for_artwork(artwork)
         for step_def in step_defs:
             WorkflowStep.objects.create(
@@ -390,6 +432,17 @@ def upload_artwork_version(request, artwork_id):
                 sequence=step_def["sequence"],
             )
         artwork.status = "MARKETING_REVIEW"
+
+        # NEW — Gate 1 ke sabhi roles (Marketing + jo bhi ticked the) ko
+        # turant batao, kyunki custom flow mein ye sab EK saath parallel
+        # gate mein hote hain — sabki approval ek sath chahiye hoti hai.
+        gate_1_roles = {s["role"] for s in step_defs if s["sequence"] == 1}
+        for role in gate_1_roles:
+            _notify_role(
+                role, artwork,
+                f"{artwork.artwork_id} has a new version uploaded and is ready for your review.",
+                exclude_user=request.user,
+            )
 
     artwork.updated_by = request.user
     artwork.save(update_fields=["status", "updated_by", "updated_on"])

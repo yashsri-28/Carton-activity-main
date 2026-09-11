@@ -776,7 +776,7 @@
       }
     ]
   },
-  "OTHER": {
+"OTHER": {
     "sheet_name": "OTHER",
     "fields": [
       {
@@ -800,12 +800,27 @@
         "options": []
       },
       {
+        "label": "TRIM TYPE",
+        "section": null,
+        "options": [
+          "HANGER",
+          "DORI",
+          "PLASTIC BAND",
+          "VELCRO",
+          "ZIPPER",
+          "PULLER",
+          "LACES",
+          "LAMINATE BAG",
+          "BUTTON"
+        ]
+      },
+      {
         "label": "SOLE/MULTIPLE NOMINATED/NON NOMINATED",
         "section": null,
         "options": []
       },
       {
-        "label": "QTY",
+        "label": "ORDER",
         "section": null,
         "options": [
           "no. of SKU wise Roll out /  Monthly  / Yearly"
@@ -1071,7 +1086,7 @@
         ]
       }
     ]
-  },
+},
   "PDQ": {
     "sheet_name": "PDQ",
     "fields": [

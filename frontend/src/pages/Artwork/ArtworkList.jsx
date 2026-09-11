@@ -192,7 +192,7 @@ function ArtworkList({ role }) {
           onChange={(e) => setFilters({ ...filters, sku_code: e.target.value })}
         />
         <input
-          placeholder="Brand"
+          placeholder="Customer"
           className="border border-gray-300 rounded-md px-3 py-2 text-sm"
           value={filters.brand_name}
           onChange={(e) => setFilters({ ...filters, brand_name: e.target.value })}
@@ -229,7 +229,7 @@ function ArtworkList({ role }) {
               <th className="text-left px-4 py-3">Artwork ID</th>
               <th className="text-left px-4 py-3">Title</th>
               <th className="text-left px-4 py-3">SKU</th>
-              <th className="text-left px-4 py-3">Brand</th>
+              <th className="text-left px-4 py-3">Customer</th>
               <th className="text-left px-4 py-3">Status</th>
               <th className="text-left px-4 py-3">Ageing</th>
               <th className="text-left px-4 py-3">TAT</th>

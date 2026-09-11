@@ -753,7 +753,19 @@ def generate_matcode(request, artwork_id):
         )
 
     # Auto-generated — no manual typing, guaranteed unique (race-safe).
-    material_code = MatcodeSequence.next_code()
+    # material_code = MatcodeSequence.next_code()
+        # Auto-generated — no manual typing, guaranteed unique (race-safe).
+    # Follows the client's structured format: PREFIX-YYMM-RUNNING-SUFFIX
+    # (e.g. 737-2601-0001-LAB). Prefix/suffix depend on this artwork's
+    # packaging category — and, only for PAPER_PRINTED_ITEM, on the
+    # "TYPE OF PACKAGING" value, which decides Sticker/Belly Band vs
+    # everything else.
+    spec = getattr(artwork, "packaging_spec", None)
+    category = spec.category if spec else None
+    packaging_type = None
+    if category == "PAPER_PRINTED_ITEM" and spec:
+        packaging_type = (spec.spec_data or {}).get("TYPE OF PACKAGING")
+    material_code = MatcodeSequence.next_code(category, packaging_type)
 
     pending.status = "DONE"
     pending.acted_by = request.user

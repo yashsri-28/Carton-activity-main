@@ -661,18 +661,90 @@ class PhysicalSample(models.Model):
         return f"{self.artwork.artwork_id} - Sample sent {self.sent_on}"
     
     
+# class MatcodeSequence(models.Model):
+#     year = models.PositiveIntegerField(unique=True)
+#     last_number = models.PositiveIntegerField(default=0)
+
+#     class Meta:
+#         db_table = "artwork_matcode_sequence"
+
+#     @classmethod
+#     def next_code(cls):
+#         year = timezone.now().year
+#         with transaction.atomic():
+#             seq, _ = cls.objects.select_for_update().get_or_create(year=year)
+#             seq.last_number += 1
+#             seq.save(update_fields=["last_number"])
+#             return f"MAT-{year}-{seq.last_number:05d}"    
+
+
 class MatcodeSequence(models.Model):
-    year = models.PositiveIntegerField(unique=True)
+    """
+    Auto-generated "Reference Code" — follows the client's structured
+    format:
+
+        <PREFIX>-<YYMM>-<RUNNING>-<SUFFIX>
+        e.g. 737-2601-0001-LAB
+
+    - PREFIX (3 digits) and SUFFIX are fixed per packaging category
+      (see CATEGORY_CODE_MAP below).
+    - YYMM is the 2-digit year + 2-digit month the code is generated in
+      (e.g. "2601" = Jan 2026).
+    - RUNNING is a 4-digit, race-safe running number — it has its OWN
+      counter per (prefix, year_month) combination, so each category
+      gets its own series, and every series restarts at 0001 at the
+      start of a new month.
+    """
+
+    # PackagingSpecification.category -> (prefix, suffix)
+    CATEGORY_CODE_MAP = {
+        "PVC_BAG": ("733", "BAG"),
+        "RIBBON": ("734", "RIB"),
+        "BW_STICKER": ("735", "STK"),
+        "LABEL": ("737", "LAB"),
+        "BOX": ("739", "BOX"),
+        "OTHER": ("740", "OTH"),
+    }
+
+    # PAPER_PRINTED_ITEM doesn't map to one fixed prefix — the client's
+    # table splits it in two, based on the "TYPE OF PACKAGING" value
+    # chosen on the packaging-spec form:
+    #   - Color Sticker / Belly Band -> 736 / CSTK
+    #   - everything else (Hangtag, U-Card, Header Card, Insert,
+    #     UPC Ticket, Cuffcard, Slit Card, etc.) -> 738 / TAG
+    PAPER_PRINTED_ITEM_STICKER_TYPES = {"COLOR STICKER", "BELLYBAND"}
+    PAPER_PRINTED_ITEM_STICKER_CODE = ("736", "CSTK")
+    PAPER_PRINTED_ITEM_DEFAULT_CODE = ("738", "TAG")
+
+    # Fallback for any category not explicitly listed above (e.g. PDQ,
+    # or a future category) — falls into the client's own "Other
+    # Items" bucket rather than crashing.
+    DEFAULT_CODE = ("740", "OTH")
+
+    prefix = models.CharField(max_length=3)
+    year_month = models.CharField(max_length=4)
     last_number = models.PositiveIntegerField(default=0)
 
     class Meta:
         db_table = "artwork_matcode_sequence"
+        unique_together = ("prefix", "year_month")
 
     @classmethod
-    def next_code(cls):
-        year = timezone.now().year
+    def _resolve_prefix_suffix(cls, category, packaging_type=None):
+        if category == "PAPER_PRINTED_ITEM":
+            if packaging_type and packaging_type.strip().upper() in cls.PAPER_PRINTED_ITEM_STICKER_TYPES:
+                return cls.PAPER_PRINTED_ITEM_STICKER_CODE
+            return cls.PAPER_PRINTED_ITEM_DEFAULT_CODE
+        return cls.CATEGORY_CODE_MAP.get(category, cls.DEFAULT_CODE)
+
+    @classmethod
+    def next_code(cls, category=None, packaging_type=None):
+        prefix, suffix = cls._resolve_prefix_suffix(category, packaging_type)
+        year_month = timezone.now().strftime("%y%m")
         with transaction.atomic():
-            seq, _ = cls.objects.select_for_update().get_or_create(year=year)
+            seq, _ = cls.objects.select_for_update().get_or_create(
+                prefix=prefix, year_month=year_month
+            )
             seq.last_number += 1
             seq.save(update_fields=["last_number"])
-            return f"MAT-{year}-{seq.last_number:05d}"    
+            return f"{prefix}-{year_month}-{seq.last_number:04d}-{suffix}"

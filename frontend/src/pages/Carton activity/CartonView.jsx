@@ -944,6 +944,8 @@ function CartonView() {
   const [actualProgramId, setActualProgramId] = useState(null);
   const [freezingNoteRows, setFreezingNoteRows] = useState([]);
   const [linkedGusset, setLinkedGusset] = useState(null);
+  const [linkedGussetSpecs, setLinkedGussetSpecs] = useState([]);
+  const [savingGussetSpecs, setSavingGussetSpecs] = useState(false);
   const [canEditFreezingNote, setCanEditFreezingNote] = useState(false);
   const [savingFreezingNote, setSavingFreezingNote] = useState(false);
   const [freezingNoteCalcMode, setFreezingNoteCalcMode] = useState(false);
@@ -1003,6 +1005,7 @@ function CartonView() {
         setFreezingNoteRows(data.freezing_note_rows || []);
         setCanEditFreezingNote(data.can_edit_freezing_note === true);
         setLinkedGusset(data.linked_gusset || null);
+        setLinkedGussetSpecs(data.linked_gusset?.program_specifications || []);
         setSubprograms(
           (data.subprograms || [])
             .filter(sp => {
@@ -1368,6 +1371,38 @@ function CartonView() {
       toast.error('Failed to update Freezing Note.');
     } finally {
       setSavingFreezingNote(false);
+    }
+  };
+
+
+
+    // ==================== LINKED GUSSET SPECIFICATIONS (TQM only) ====================
+  const handleGussetSpecFieldChange = (idx, field, value) => {
+    setLinkedGussetSpecs(prev =>
+      prev.map((row, i) => (i === idx ? { ...row, [field]: value } : row))
+    );
+  };
+
+  const handleSaveGussetSpecs = async () => {
+    setSavingGussetSpecs(true);
+    try {
+      await api.post('/api/gusset-program/specs/update/', {
+        specs: linkedGussetSpecs.map(sp => ({
+          spec_id: sp.spec_id,
+          size: sp.size,
+          fold_length: sp.fold_length,
+          fold_width: sp.fold_width,
+          gusset_name: sp.gusset_name,
+          wt: sp.wt !== '' ? sp.wt : null,
+          gsm: sp.gsm !== '' ? sp.gsm : null,
+        }))
+      });
+      toast.success('Gusset Specifications updated successfully!');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to update Gusset Specifications.');
+    } finally {
+      setSavingGussetSpecs(false);
     }
   };
   // ==================== FREEZING NOTE — TQM RECALCULATE FLOW ====================
@@ -1777,9 +1812,20 @@ function CartonView() {
                   </div>
                 </div>
 
-                {linkedGusset.program_specifications?.length > 0 && (
+                {linkedGussetSpecs.length > 0 && (
                   <div className="mt-6 pt-4 border-t border-purple-200">
-                    <h3 className="text-sm font-semibold text-purple-800 mb-3">Gusset Program Specifications</h3>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold text-purple-800">Gusset Program Specifications</h3>
+                      {isTTQM && (
+                        <button
+                          onClick={handleSaveGussetSpecs}
+                          disabled={savingGussetSpecs}
+                          className="px-4 py-1.5 bg-purple-700 hover:bg-purple-800 text-white rounded-md text-xs font-medium disabled:opacity-50"
+                        >
+                          {savingGussetSpecs ? 'Saving...' : 'Save Gusset Specifications'}
+                        </button>
+                      )}
+                    </div>
                     <div className="overflow-x-auto">
                       <table className="min-w-full border-collapse text-sm">
                         <thead>
@@ -1793,14 +1839,22 @@ function CartonView() {
                           </tr>
                         </thead>
                         <tbody>
-                          {linkedGusset.program_specifications.map((sp, i) => (
-                            <tr key={i} className="border-t border-purple-100">
-                              <td className="px-3 py-2">{sp.size ?? '-'}</td>
-                              <td className="px-3 py-2">{sp.fold_length ?? '-'}</td>
-                              <td className="px-3 py-2">{sp.fold_width ?? '-'}</td>
-                              <td className="px-3 py-2">{sp.gusset_name ?? '-'}</td>
-                              <td className="px-3 py-2">{sp.wt ?? '-'}</td>
-                              <td className="px-3 py-2">{sp.gsm ?? '-'}</td>
+                          {linkedGussetSpecs.map((sp, i) => (
+                            <tr key={sp.spec_id ?? i} className="border-t border-purple-100">
+                              {['size', 'fold_length', 'fold_width', 'gusset_name', 'wt', 'gsm'].map((field) => (
+                                <td key={field} className="px-3 py-2">
+                                  {isTTQM ? (
+                                    <input
+                                      type={field === 'wt' || field === 'gsm' ? 'number' : 'text'}
+                                      value={sp[field] ?? ''}
+                                      onChange={(e) => handleGussetSpecFieldChange(i, field, e.target.value)}
+                                      className="border px-2 py-1 rounded w-24 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500"
+                                    />
+                                  ) : (
+                                    <span className="text-xs">{sp[field] ?? '-'}</span>
+                                  )}
+                                </td>
+                              ))}
                             </tr>
                           ))}
                         </tbody>

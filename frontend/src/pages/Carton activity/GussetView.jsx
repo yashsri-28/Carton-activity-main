@@ -287,6 +287,7 @@ function GussetView() {
                   navigate('/form', {
                     state: {
                       linkedGussetProgramId: details?.program_id,
+                      linkedActivityProgramStatusId: details?.activity_program_status_id,
                       prefillCustomerName: details?.customer_name,
                       prefillProgramName: details?.program_name,
                     },
@@ -294,7 +295,7 @@ function GussetView() {
                 }
                 className="px-5 py-2 bg-green-50 text-green-700 rounded-lg cursor-pointer border border-green-600 font-semibold hover:bg-green-100 transition-colors"
               >
-                + Add Standard Bedsheet
+                + Add Carton Working
               </button>
             )}
           </div>

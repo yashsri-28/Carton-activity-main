@@ -417,7 +417,7 @@ function FormMain({ onBack }) {
 
   // TEXT / ALPHABET VALIDATION
   if (textOnlyFields.includes(name)) {
-    const textValue = value.replace(/[^A-Za-z\s]/g, '');
+    const textValue = value.replace(/[^A-Za-z0-9\s]/g, '');
 
     setFormData(prev => ({
       ...prev,

@@ -1600,11 +1600,107 @@ def export_artwork_excel(request, artwork_id):
 # BRD Section 12 — Performance Dashboard
 # ------------------------------------------------------------------
 
+# @api_view(["GET"])
+# @permission_classes([IsAuthenticated])
+# def artwork_performance_stats(request):
+#     stage_durations = {"MARKETING": [], "PPC": [], "TQM": [], "CUSTOMER": []}
+
+#     versions = ArtworkVersion.objects.prefetch_related("approvals")
+#     for v in versions:
+#         approvals = list(v.approvals.order_by("sequence"))
+#         prev_time = v.uploaded_on
+#         for a in approvals:
+#             if not a.acted_on:
+#                 break
+#             duration_hours = (a.acted_on - prev_time).total_seconds() / 3600.0
+#             if duration_hours >= 0:
+#                 stage_durations[a.stage].append(duration_hours)
+#             prev_time = a.acted_on
+#             if a.decision == "REJECTED":
+#                 break
+
+#     avg_review_time_days = {}
+#     for stage, durations in stage_durations.items():
+#         avg_review_time_days[stage] = round((sum(durations) / len(durations)) / 24, 2) if durations else None
+
+#     terminal_qs = ArtworkRequest.objects.filter(status__in=["APPROVED", "RELEASED"])
+#     terminal_count = terminal_qs.count()
+#     first_pass_count = sum(1 for artwork in terminal_qs if artwork.versions.count() == 1)
+#     first_pass_rate = round((first_pass_count / terminal_count) * 100, 1) if terminal_count else None
+
+#     valid_stages = {k: v for k, v in avg_review_time_days.items() if v is not None}
+#     bottleneck_stage = max(valid_stages, key=valid_stages.get) if valid_stages else None
+
+#     from collections import defaultdict
+#     vendor_turnarounds = defaultdict(list)
+#     vendor_version_counts = defaultdict(list)
+
+#     for artwork in ArtworkRequest.objects.select_related("assigned_vendor").prefetch_related("versions"):
+#         if not artwork.assigned_vendor:
+#             continue
+#         vendor_name = artwork.assigned_vendor.username
+#         vendor_version_counts[vendor_name].append(artwork.versions.count())
+#         if artwork.status in ["APPROVED", "RELEASED"]:
+#             days = (artwork.updated_on - artwork.created_on).total_seconds() / 86400.0
+#             vendor_turnarounds[vendor_name].append(days)
+
+#     vendor_performance = []
+#     all_vendors = set(vendor_version_counts.keys()) | set(vendor_turnarounds.keys())
+#     for vendor_name in all_vendors:
+#         turnarounds = vendor_turnarounds.get(vendor_name, [])
+#         versions_list = vendor_version_counts.get(vendor_name, [])
+#         vendor_performance.append({
+#             "vendor": vendor_name,
+#             "avg_turnaround_days": round(sum(turnarounds) / len(turnarounds), 1) if turnarounds else None,
+#             "revisions": round(sum(versions_list) / len(versions_list), 1) if versions_list else 0,
+#         })
+
+#     return Response(
+#         {
+#             "avg_review_time_by_department": avg_review_time_days,
+#             "first_pass_approval_rate": first_pass_rate,
+#             "bottleneck_stage": bottleneck_stage,
+#             "bottleneck_days": valid_stages.get(bottleneck_stage) if bottleneck_stage else None,
+#             "vendor_performance": vendor_performance,
+#             "sample_size": {
+#                 "versions_analyzed": versions.count(),
+#                 "terminal_artworks": terminal_count,
+#             },
+#         },
+#         status=http_status.HTTP_200_OK,
+#     )
+
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def artwork_performance_stats(request):
-    stage_durations = {"MARKETING": [], "PPC": [], "TQM": [], "CUSTOMER": []}
+    from collections import defaultdict
 
+    # Custom-flow WorkflowStep.actor_role uses "TTQM" (matching
+    # userManagement's role code), but the STANDARD flow's
+    # ArtworkApproval.stage uses "TQM" — normalize both to the same
+    # stage-key so Marketing/PPC/TQM/Legal/Compliance/Lab/Customer all
+    # merge into ONE consistent set of buckets regardless of which
+    # workflow engine an artwork used.
+    ROLE_TO_STAGE_KEY = {
+        "MARKETING": "MARKETING",
+        "PPC": "PPC",
+        "TTQM": "TQM",
+        "LEGAL": "LEGAL",
+        "COMPLIANCE": "COMPLIANCE",
+        "LAB": "LAB",
+        "ADMIN": "CUSTOMER",
+    }
+
+    # stage_key -> list of individual stage-dwell-times (days) — how
+    # long THAT stage alone took, once it became that stage's turn.
+    stage_durations = defaultdict(list)
+    # stage_key -> list of CUMULATIVE times (days) from the version
+    # being uploaded until THAT stage finished — i.e. lead time.
+    lead_times = defaultdict(list)
+
+    # ---- STANDARD flow (ArtworkApproval) ----
     versions = ArtworkVersion.objects.prefetch_related("approvals")
     for v in versions:
         approvals = list(v.approvals.order_by("sequence"))
@@ -1612,45 +1708,77 @@ def artwork_performance_stats(request):
         for a in approvals:
             if not a.acted_on:
                 break
-            duration_hours = (a.acted_on - prev_time).total_seconds() / 3600.0
-            if duration_hours >= 0:
-                stage_durations[a.stage].append(duration_hours)
+            dwell_days = (a.acted_on - prev_time).total_seconds() / 86400.0
+            cumulative_days = (a.acted_on - v.uploaded_on).total_seconds() / 86400.0
+            if dwell_days >= 0:
+                stage_durations[a.stage].append(dwell_days)
+                lead_times[a.stage].append(cumulative_days)
             prev_time = a.acted_on
             if a.decision == "REJECTED":
                 break
 
-    avg_review_time_days = {}
-    for stage, durations in stage_durations.items():
-        avg_review_time_days[stage] = round((sum(durations) / len(durations)) / 24, 2) if durations else None
+    # ---- Custom flow (WorkflowStep) — Artwork-Approval-type and
+    # Sample-Approval-type steps only (these are the "review" steps;
+    # PHYSICAL_SAMPLE/MATCODE are action steps, not reviews) ----
+    steps_by_version = defaultdict(list)
+    for s in WorkflowStep.objects.filter(step_type__in=["APPROVAL", "SAMPLE_APPROVAL"]).select_related("version"):
+        if s.version_id:
+            steps_by_version[s.version_id].append(s)
+
+    for step_list in steps_by_version.values():
+        step_list.sort(key=lambda s: s.sequence)
+        version = step_list[0].version
+        prev_time = version.uploaded_on
+        for s in step_list:
+            if not s.acted_on:
+                continue
+            stage_key = ROLE_TO_STAGE_KEY.get(s.actor_role, s.actor_role)
+            dwell_days = (s.acted_on - prev_time).total_seconds() / 86400.0
+            cumulative_days = (s.acted_on - version.uploaded_on).total_seconds() / 86400.0
+            if dwell_days >= 0:
+                stage_durations[stage_key].append(dwell_days)
+                lead_times[stage_key].append(cumulative_days)
+            prev_time = s.acted_on
+            if s.status == "REJECTED":
+                break
+
+    avg_review_time_days = {
+        stage: round(sum(vals) / len(vals), 2) for stage, vals in stage_durations.items() if vals
+    }
+    avg_lead_time_days = {
+        stage: round(sum(vals) / len(vals), 2) for stage, vals in lead_times.items() if vals
+    }
 
     terminal_qs = ArtworkRequest.objects.filter(status__in=["APPROVED", "RELEASED"])
     terminal_count = terminal_qs.count()
     first_pass_count = sum(1 for artwork in terminal_qs if artwork.versions.count() == 1)
     first_pass_rate = round((first_pass_count / terminal_count) * 100, 1) if terminal_count else None
 
-    valid_stages = {k: v for k, v in avg_review_time_days.items() if v is not None}
-    bottleneck_stage = max(valid_stages, key=valid_stages.get) if valid_stages else None
+    bottleneck_stage = max(avg_review_time_days, key=avg_review_time_days.get) if avg_review_time_days else None
 
-    from collections import defaultdict
-    vendor_turnarounds = defaultdict(list)
-    vendor_version_counts = defaultdict(list)
+    # ---- Trim Performance — grouped by packaging category instead of
+    # by vendor. Only artworks that went through the packaging-spec
+    # form (and so have a category) are counted. ----
+    category_turnarounds = defaultdict(list)
+    category_version_counts = defaultdict(list)
 
-    for artwork in ArtworkRequest.objects.select_related("assigned_vendor").prefetch_related("versions"):
-        if not artwork.assigned_vendor:
+    for artwork in ArtworkRequest.objects.select_related("packaging_spec").prefetch_related("versions"):
+        spec = getattr(artwork, "packaging_spec", None)
+        if not spec:
             continue
-        vendor_name = artwork.assigned_vendor.username
-        vendor_version_counts[vendor_name].append(artwork.versions.count())
+        category = spec.category
+        category_version_counts[category].append(artwork.versions.count())
         if artwork.status in ["APPROVED", "RELEASED"]:
             days = (artwork.updated_on - artwork.created_on).total_seconds() / 86400.0
-            vendor_turnarounds[vendor_name].append(days)
+            category_turnarounds[category].append(days)
 
-    vendor_performance = []
-    all_vendors = set(vendor_version_counts.keys()) | set(vendor_turnarounds.keys())
-    for vendor_name in all_vendors:
-        turnarounds = vendor_turnarounds.get(vendor_name, [])
-        versions_list = vendor_version_counts.get(vendor_name, [])
-        vendor_performance.append({
-            "vendor": vendor_name,
+    trim_performance = []
+    all_categories = set(category_version_counts.keys()) | set(category_turnarounds.keys())
+    for category in all_categories:
+        turnarounds = category_turnarounds.get(category, [])
+        versions_list = category_version_counts.get(category, [])
+        trim_performance.append({
+            "trim": category,
             "avg_turnaround_days": round(sum(turnarounds) / len(turnarounds), 1) if turnarounds else None,
             "revisions": round(sum(versions_list) / len(versions_list), 1) if versions_list else 0,
         })
@@ -1658,10 +1786,11 @@ def artwork_performance_stats(request):
     return Response(
         {
             "avg_review_time_by_department": avg_review_time_days,
+            "avg_lead_time_by_department": avg_lead_time_days,
             "first_pass_approval_rate": first_pass_rate,
             "bottleneck_stage": bottleneck_stage,
-            "bottleneck_days": valid_stages.get(bottleneck_stage) if bottleneck_stage else None,
-            "vendor_performance": vendor_performance,
+            "bottleneck_days": avg_review_time_days.get(bottleneck_stage) if bottleneck_stage else None,
+            "trim_performance": trim_performance,
             "sample_size": {
                 "versions_analyzed": versions.count(),
                 "terminal_artworks": terminal_count,
@@ -1669,8 +1798,6 @@ def artwork_performance_stats(request):
         },
         status=http_status.HTTP_200_OK,
     )
-
-
 # ------------------------------------------------------------------
 # Notification Bell — list + mark-read endpoints
 # ------------------------------------------------------------------

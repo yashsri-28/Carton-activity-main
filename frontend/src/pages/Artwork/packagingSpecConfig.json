@@ -3,12 +3,17 @@
     "sheet_name": "PVC BAG SPECIFICATION",
     "fields": [
       {
+        "label": "BUSINESS",
+        "section": null,
+        "options": []
+      },
+      {
         "label": "PRODUCT",
         "section": null,
         "options": []
       },
       {
-        "label": "BUYER NAME",
+        "label": "CUSTOMER",
         "section": null,
         "options": []
       },
@@ -172,13 +177,18 @@
   "RIBBON": {
     "sheet_name": "RIBBON",
     "fields": [
+         {
+        "label": "BUSINESS",
+        "section": null,
+        "options": []
+      },
       {
         "label": "PRODUCT",
         "section": null,
         "options": []
       },
       {
-        "label": "BUYER NAME",
+        "label": "CUSTOMER",
         "section": null,
         "options": []
       },
@@ -265,12 +275,17 @@
     "sheet_name": "B&W STICKER",
     "fields": [
       {
+        "label": "BUSINESS",
+        "section": null,
+        "options": []
+      },
+      {
         "label": "PRODUCT",
         "section": null,
         "options": []
       },
       {
-        "label": "BUYER NAME",
+        "label": "CUSTOMER",
         "section": null,
         "options": []
       },
@@ -347,12 +362,17 @@
     "sheet_name": "LABEL",
     "fields": [
       {
+        "label": "BUSINESS",
+        "section": null,
+        "options": []
+      },
+      {
         "label": "PRODUCT",
         "section": null,
         "options": []
       },
       {
-        "label": "BUYER NAME",
+        "label": "CUSTOMER",
         "section": null,
         "options": []
       },
@@ -498,13 +518,18 @@
   "PAPER_PRINTED_ITEM": {
     "sheet_name": "PAPER PRINTED ITEM",
     "fields": [
+        {
+        "label": "BUSINESS",
+        "section": null,
+        "options": []
+      },
       {
         "label": "PRODUCT",
         "section": null,
         "options": []
       },
       {
-        "label": "BUYER NAME",
+        "label": "CUSTOMER",
         "section": null,
         "options": []
       },
@@ -703,13 +728,18 @@
   "BOX": {
     "sheet_name": "BOX",
     "fields": [
+        {
+        "label": "BUSINESS",
+        "section": null,
+        "options": []
+      },
       {
         "label": "PRODUCT",
         "section": null,
         "options": []
       },
       {
-        "label": "BUYER NAME",
+        "label": "CUSTOMER",
         "section": null,
         "options": []
       },
@@ -820,13 +850,18 @@
   "OTHER": {
     "sheet_name": "OTHER",
     "fields": [
+         {
+        "label": "BUSINESS",
+        "section": null,
+        "options": []
+      },
       {
         "label": "PRODUCT",
         "section": null,
         "options": []
       },
       {
-        "label": "BUYER NAME",
+        "label": "CUSTOMER",
         "section": null,
         "options": []
       },
@@ -1177,12 +1212,17 @@
     "sheet_name": "PDQ",
     "fields": [
       {
+        "label": "BUSINESS",
+        "section": null,
+        "options": []
+      },
+      {
         "label": "PRODUCT",
         "section": null,
         "options": []
       },
       {
-        "label": "BUYER NAME",
+        "label": "CUSTOMER",
         "section": null,
         "options": []
       },

@@ -1276,7 +1276,61 @@ const sampleHeaders = [
         bedsheet: bedsheetPayload,
       };
 
-      await api.post('/api/combined-program/submit/', payload);
+      const response = await api.post('/api/combined-program/submit/', payload);
+      const { gusset_program_id, carton_program_id, gusset_sample_ids, bedsheet_sample_ids } = response.data;
+
+      // Upload the main attachment — linked to the Bedsheet (Carton) side,
+      // since that's what TQM/PPC will actually open (CartonView).
+      if (selectedFile && carton_program_id) {
+        try {
+          const attFormData = new FormData();
+          attFormData.append('program_id', carton_program_id);
+          attFormData.append('file', selectedFile);
+          await api.post('/api/carton-program/attachment/upload/', attFormData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+        } catch (attErr) {
+          console.warn('Combined submit — attachment upload failed:', attErr);
+        }
+      }
+
+      // Upload sample-level attachments — same sample rows were submitted
+      // to both Gusset and Bedsheet, so upload to both sets of sample_ids.
+      const filteredSampleRows = sampleRows.filter(row => row.col1 || row.col2);
+      const uploadPromises = [];
+
+      filteredSampleRows.forEach((row, idx) => {
+        const file = row.col13;
+        if (!(file instanceof File)) return;
+
+        const bedsheetSampleId = bedsheet_sample_ids?.[idx];
+        if (bedsheetSampleId) {
+          const fd = new FormData();
+          fd.append('sample_id', bedsheetSampleId);
+          fd.append('file', file);
+          uploadPromises.push(
+            api.post('/api/carton-program/sample-attachment/upload/', fd, {
+              headers: { 'Content-Type': 'multipart/form-data' }
+            })
+          );
+        }
+
+        const gussetSampleId = gusset_sample_ids?.[idx];
+        if (gussetSampleId) {
+          const fd2 = new FormData();
+          fd2.append('sample_id', gussetSampleId);
+          fd2.append('file', file);
+          uploadPromises.push(
+            api.post('/api/gusset-program/sample-attachment/upload/', fd2, {
+              headers: { 'Content-Type': 'multipart/form-data' }
+            })
+          );
+        }
+      });
+
+      if (uploadPromises.length) {
+        await Promise.allSettled(uploadPromises);
+      }
 
       toast.success('Combined Gusset + Bedsheet Program Submitted Successfully');
       setTimeout(() => navigate('/'), 1500);

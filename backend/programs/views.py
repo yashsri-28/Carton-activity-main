@@ -549,7 +549,7 @@ def submit_carton_program(request):
         for fn in freezing_note_rows:
             BedsheetFreezingNoteRow.objects.create(
                 carton_program=carton_program,
-                sr_no=fn.get("sr_no"),
+                sr_no=clean_int(fn.get("sr_no")),
                 size=fn.get("size"),
                 product_dimension=fn.get("product_dimension"),
                 pcs_per_bag_or_inner_box=fn.get("pcs_per_bag_or_inner_box"),
@@ -1525,7 +1525,7 @@ def edit_carton_program(request):
             fn_id = fn.get("freezing_note_id")
 
             field_values = dict(
-                sr_no=fn.get("sr_no"),
+                sr_no=clean_int(fn.get("sr_no")),
                 size=fn.get("size"),
                 product_dimension=fn.get("product_dimension"),
                 pcs_per_bag_or_inner_box=fn.get("pcs_per_bag_or_inner_box"),
@@ -5433,7 +5433,7 @@ def submit_combined_gusset_bedsheet(request):
     for fn in bedsheet_data.get("freezing_note_rows", []):
         BedsheetFreezingNoteRow.objects.create(
             carton_program=carton_program,
-            sr_no=fn.get("sr_no"),
+            sr_no=clean_int(fn.get("sr_no")),
             size=fn.get("size"),
             product_dimension=fn.get("product_dimension"),
             pcs_per_bag_or_inner_box=fn.get("pcs_per_bag_or_inner_box"),
@@ -5654,7 +5654,7 @@ def attach_bedsheet_to_gusset(request):
     for fn in data.get("freezing_note_rows", []):
         BedsheetFreezingNoteRow.objects.create(
             carton_program=carton_program,
-            sr_no=fn.get("sr_no"),
+            sr_no=clean_int(fn.get("sr_no")),
             size=fn.get("size"),
             product_dimension=fn.get("product_dimension"),
             pcs_per_bag_or_inner_box=fn.get("pcs_per_bag_or_inner_box"),

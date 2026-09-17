@@ -29,6 +29,7 @@ class User(AbstractUser):
     TESTING = "TESTING"
     LAB = "LAB"
     VENDOR = "VENDOR" 
+    PROCUREMENT = "PROCUREMENT"
     LEGAL = "LEGAL"
     COMPLIANCE = "COMPLIANCE"
 
@@ -49,6 +50,7 @@ class User(AbstractUser):
         (TESTING, "Testing"),
         (LAB, "LAB"),
         (VENDOR, "Vendor"), 
+        (PROCUREMENT, "Procurement"),
         (LEGAL, "Legal"),
         (COMPLIANCE, "Compliance"),
 

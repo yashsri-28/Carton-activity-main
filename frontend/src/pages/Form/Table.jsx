@@ -837,6 +837,20 @@ function Table({
                             );
                           }
 
+                          if (header.blankOnly) {
+                            return (
+                              <td key={hIdx} className="p-3 border-r border-gray-100 align-middle text-center">
+                                <input
+                                  type="text"
+                                  value=""
+                                  disabled
+                                  readOnly
+                                  className="w-full px-2 py-1 text-xs border rounded bg-gray-100 border-gray-200 cursor-not-allowed"
+                                />
+                              </td>
+                            );
+                          }
+
                           return (
                             <td key={hIdx} className="p-3 border-r border-gray-100 text-center">
                               —

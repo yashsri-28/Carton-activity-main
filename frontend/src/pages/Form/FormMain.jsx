@@ -596,21 +596,30 @@ function FormMain({ onBack }) {
 
   const isStandardBedsheet = isBedsheetCategory && formData.bedsheetSectionOpen === true;
 
-  const programHeaders = [
-    { label: "Program", key: "program" },
-    { label: "Size", key: "style", hasAddBtn: true },
-    { label: "W-In", key: "w_in" },
-    { label: "L-In", key: "l_in" },
-    { label: "Wt/Unit", key: "wt_unit" },
-    { label: isStandardBedsheet ? "TC" : "GSM", key: "gsm" },
-    { label: "Units/Polybag", key: "inner_pack" },
-    { label: "Units/Carton", key: "unit_carton" },
-    { label: "Polybags/Carton", key: "polybags_carton" },
-    { label: "Folding Details", key: "fold" },
-    { label: "", key: "actions" }
-  ];
+const isTowelCategory = formData.productCategory === "";
 
-  const sampleHeaders = [
+const programHeaders = [
+  { label: "Program", key: "program" },
+  { label: "Size", key: "style", hasAddBtn: true },
+  { label: "W-In", key: "w_in" },
+  { label: "L-In", key: "l_in" },
+  { label: "Wt/Unit", key: "wt_unit" },
+  { label: isStandardBedsheet ? "TC" : "GSM", key: "gsm" },
+  { label: "Units/Polybag", key: "inner_pack" },
+  { label: "Units/Carton", key: "unit_carton" },
+  { label: "Polybags/Carton", key: "polybags_carton" },
+  { label: "Folding Details", key: "fold" },
+  // Sirf Towel ke liye ye 5 blank columns
+  ...(isTowelCategory ? [
+    { label: "L (cm)", key: "carton_l_cm", blankOnly: true },
+    { label: "W (cm)", key: "carton_w_cm", blankOnly: true },
+    { label: "H (cm)", key: "carton_h_cm", blankOnly: true },
+    { label: "Net Weight", key: "carton_net_weight", blankOnly: true },
+    { label: "CBM", key: "carton_cbm", blankOnly: true },
+  ] : []),
+  { label: "", key: "actions" }
+];
+const sampleHeaders = [
     { label: "Sample", key: "col1", hasAddBtn: true },
     { label: "Size", key: "col2" },
     { label: "Program", key: "col3" },

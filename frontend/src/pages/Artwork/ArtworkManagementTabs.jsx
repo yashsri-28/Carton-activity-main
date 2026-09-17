@@ -7,7 +7,7 @@ import ArtworkPerformanceDashboard from './ArtworkPerformanceDashboard';
 // more entry here. Nothing else in this file needs to change, and
 // none of the existing tab components (ArtworkList etc.) are touched.
 const TABS = [
-  { id: 'operational', label: 'Operational', component: ArtworkList },
+  { id: 'operational', label: 'Artwork Database', component: ArtworkList },
   { id: 'performance', label: 'Performance', component: ArtworkPerformanceDashboard },
 ];
 

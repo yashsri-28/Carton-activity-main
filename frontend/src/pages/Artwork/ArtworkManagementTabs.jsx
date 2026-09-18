@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import ArtworkList from './ArtworkList';
 import ArtworkPerformanceDashboard from './ArtworkPerformanceDashboard';
 import OperationalDashboard from './OperationalDashboard';
+import BusinessAnalyticsDashboard from './BusinessAnalyticsDashboard';
 
 // Extensible tab config — to add a new tab in the future (e.g. a
 // "Quality & Compliance" dashboard per BRD Section 12), just add one
@@ -11,6 +12,8 @@ const TABS = [
   { id: 'operational', label: 'Artwork Database', component: ArtworkList },
   { id: 'performance', label: 'Performance', component: ArtworkPerformanceDashboard },
   { id: 'operational-dashboard', label: 'Operational Dashboard', component: OperationalDashboard },
+  { id: 'business-analytics', label: 'Business Analytics Dashboard', component: BusinessAnalyticsDashboard },
+
 
 ];
 

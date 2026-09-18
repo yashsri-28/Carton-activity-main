@@ -1,5 +1,6 @@
 from django.db import transaction
 from django.utils import timezone
+from django.db.models import Count
 from django.shortcuts import get_object_or_404
 
 from rest_framework.decorators import api_view, permission_classes
@@ -1806,3 +1807,61 @@ def mark_sample_received_by_me(request, artwork_id):
     _log_activity(request, artwork, "Sample Receipt Confirmed", f"{request.user.username} ({request.user.role}) confirmed receipt of the physical sample for {artwork.artwork_id}.")
 
     return Response(_artwork_to_dict(artwork, request=request), status=http_status.HTTP_200_OK)
+
+
+# ------------------------------------------------------------------
+# Operational Dashboard — real-time status counts + team workload
+# ------------------------------------------------------------------
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def operational_dashboard_stats(request):
+    from collections import defaultdict
+
+    # ---- 1. Status breakdown — kitne artworks abhi kis status mein hain ----
+    status_counts = (
+        ArtworkRequest.objects
+        .values("status")
+        .annotate(count=Count("id"))
+        .order_by("status")
+    )
+    status_count_map = {row["status"]: row["count"] for row in status_counts}
+
+    active_statuses = [
+        "DRAFT", "VENDOR_UPLOAD_PENDING", "MARKETING_REVIEW", "PPC_REVIEW",
+        "TQM_REVIEW", "LEGAL_REVIEW", "COMPLIANCE_REVIEW", "LAB_REVIEW",
+        "CUSTOMER_REVIEW", "PHYSICAL_SAMPLE_PENDING", "SAMPLE_SENT",
+        "SAMPLE_RECEIVED_REVIEW", "MATCODE_PENDING",
+    ]
+    in_progress_count = sum(status_count_map.get(s, 0) for s in active_statuses)
+    approved_count = status_count_map.get("APPROVED", 0)
+    released_count = status_count_map.get("RELEASED", 0)
+    rejected_count = status_count_map.get("REJECTED", 0) + status_count_map.get("SAMPLE_REJECTED", 0)
+    total_count = ArtworkRequest.objects.count()
+
+    # ---- 2. Team workload — kis role ke paas ABHI kitne artworks
+    # pending hain (same "whose turn is it" logic jo _compute_pending_roles
+    # "In Action" list ke liye use karta hai) ----
+    role_workload = defaultdict(int)
+    active_artworks = ArtworkRequest.objects.exclude(
+        status__in=["RELEASED", "ARCHIVED", "OBSOLETE"]
+    ).prefetch_related("versions", "approvals", "workflow_steps")
+
+    for artwork in active_artworks:
+        for role in _compute_pending_roles(artwork):
+            role_workload[role] += 1
+
+    return Response(
+        {
+            "status_breakdown": status_count_map,
+            "summary": {
+                "total": total_count,
+                "in_progress": in_progress_count,
+                "approved": approved_count,
+                "released": released_count,
+                "rejected": rejected_count,
+            },
+            "role_workload": dict(role_workload),
+        },
+        status=http_status.HTTP_200_OK,
+    )

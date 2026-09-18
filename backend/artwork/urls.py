@@ -10,6 +10,7 @@ urlpatterns = [
     path("compliance-team/", views.list_compliance_team, name="list_compliance_team"),
     path("lab-team/", views.list_lab_team, name="list_lab_team"),
     path("performance-stats/", views.artwork_performance_stats, name="artwork_performance_stats"),
+    path("operational-dashboard-stats/", views.operational_dashboard_stats, name="operational_dashboard_stats"),
     path("notifications/", views.list_artwork_notifications, name="list_artwork_notifications"),
     path("notifications/<int:notification_id>/read/", views.mark_notification_read, name="mark_notification_read"),
     path("notifications/mark-all-read/", views.mark_all_notifications_read, name="mark_all_notifications_read"),

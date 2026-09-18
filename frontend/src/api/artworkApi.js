@@ -63,6 +63,9 @@ export const exportArtworkExcel = (artworkId) =>
 export const getPerformanceStats = () =>
   api.get('/api/artwork/performance-stats/');
 
+export const getOperationalStats = () =>
+  api.get('/api/artwork/operational-dashboard-stats/');
+
 export const getArtworkNotifications = () =>
   api.get('/api/artwork/notifications/');
 

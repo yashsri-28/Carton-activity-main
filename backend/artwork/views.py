@@ -1470,16 +1470,125 @@ def _all_buckets(max_value, bucket_size=5):
 
 
 
+# @api_view(["GET"])
+# @permission_classes([IsAuthenticated])
+# def artwork_performance_stats(request):
+#     from collections import defaultdict
+
+#     # Custom-flow WorkflowStep.actor_role uses "TTQM" (matching
+#     # userManagement's role code); STANDARD flow's ArtworkApproval.stage
+#     # uses "TQM" — normalize both to the same key so Marketing/PPC/TQM/
+#     # Legal/Compliance/Lab/Customer merge into ONE consistent set of
+#     # buckets regardless of which workflow engine an artwork used.
+#     ROLE_TO_STAGE_KEY = {
+#         "MARKETING": "MARKETING",
+#         "PPC": "PPC",
+#         "TTQM": "TQM",
+#         "LEGAL": "LEGAL",
+#         "COMPLIANCE": "COMPLIANCE",
+#         "LAB": "LAB",
+#         "ADMIN": "CUSTOMER",
+#     }
+
+#     TERMINAL_STATUSES = ["APPROVED", "RELEASED"]
+
+#     # ---- "Is stage/department ko average kitna time laga" ----
+#     # Sirf un artworks se, jo FINAL mein Approved/Released ho chuki
+#     # hain — aur sirf wo stage-actions jo actually APPROVE/DONE hue
+#     # the (rejected round count nahi hota, kyunki wo "successful
+#     # review time" ko represent nahi karta).
+#     stage_durations = defaultdict(list)
+
+#     versions = ArtworkVersion.objects.filter(
+#         artwork__status__in=TERMINAL_STATUSES
+#     ).select_related("artwork").prefetch_related("approvals")
+
+#     for v in versions:
+#         approvals = list(v.approvals.filter(decision="APPROVED").order_by("sequence"))
+#         prev_time = v.uploaded_on
+#         for a in approvals:
+#             if not a.acted_on:
+#                 continue
+#             dwell_days = (a.acted_on - prev_time).total_seconds() / 86400.0
+#             if dwell_days >= 0:
+#                 stage_durations[a.stage].append(dwell_days)
+#             prev_time = a.acted_on
+
+#     steps_qs = WorkflowStep.objects.filter(
+#         step_type__in=["APPROVAL", "SAMPLE_APPROVAL"],
+#         status="DONE",
+#         artwork__status__in=TERMINAL_STATUSES,
+#     ).select_related("version")
+
+#     steps_by_version = defaultdict(list)
+#     for s in steps_qs:
+#         if s.version_id:
+#             steps_by_version[s.version_id].append(s)
+
+#     for step_list in steps_by_version.values():
+#         step_list.sort(key=lambda s: s.sequence)
+#         version = step_list[0].version
+#         prev_time = version.uploaded_on
+#         for s in step_list:
+#             if not s.acted_on:
+#                 continue
+#             stage_key = ROLE_TO_STAGE_KEY.get(s.actor_role, s.actor_role)
+#             dwell_days = (s.acted_on - prev_time).total_seconds() / 86400.0
+#             if dwell_days >= 0:
+#                 stage_durations[stage_key].append(dwell_days)
+#             prev_time = s.acted_on
+
+#     avg_review_time_days = {
+#         stage: round(sum(vals) / len(vals), 2) for stage, vals in stage_durations.items() if vals
+#     }
+
+#     terminal_qs = ArtworkRequest.objects.filter(status__in=TERMINAL_STATUSES)
+#     terminal_count = terminal_qs.count()
+#     first_pass_count = sum(1 for artwork in terminal_qs if artwork.versions.count() == 1)
+#     first_pass_rate = round((first_pass_count / terminal_count) * 100, 1) if terminal_count else None
+
+#     bottleneck_stage = max(avg_review_time_days, key=avg_review_time_days.get) if avg_review_time_days else None
+
+#     # ---- "Is category/trim ko average kitna time laga" ----
+#     # Same rule: only APPROVED/RELEASED artworks — full creation-to-
+#     # completion turnaround, grouped by packaging category.
+#     category_turnarounds = defaultdict(list)
+#     for artwork in terminal_qs.select_related("packaging_spec"):
+#         spec = getattr(artwork, "packaging_spec", None)
+#         if not spec:
+#             continue
+#         days = (artwork.updated_on - artwork.created_on).total_seconds() / 86400.0
+#         category_turnarounds[spec.category].append(days)
+
+#     trim_performance = [
+#         {
+#             "trim": category,
+#             "avg_turnaround_days": round(sum(vals) / len(vals), 1) if vals else None,
+#         }
+#         for category, vals in category_turnarounds.items()
+#     ]
+
+#     return Response(
+#         {
+#             "avg_review_time_by_department": avg_review_time_days,
+#             "first_pass_approval_rate": first_pass_rate,
+#             "bottleneck_stage": bottleneck_stage,
+#             "bottleneck_days": avg_review_time_days.get(bottleneck_stage) if bottleneck_stage else None,
+#             "trim_performance": trim_performance,
+#             "sample_size": {
+#                 "versions_analyzed": versions.count(),
+#                 "terminal_artworks": terminal_count,
+#             },
+#         },
+#         status=http_status.HTTP_200_OK,
+#     )
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def artwork_performance_stats(request):
     from collections import defaultdict
 
-    # Custom-flow WorkflowStep.actor_role uses "TTQM" (matching
-    # userManagement's role code); STANDARD flow's ArtworkApproval.stage
-    # uses "TQM" — normalize both to the same key so Marketing/PPC/TQM/
-    # Legal/Compliance/Lab/Customer merge into ONE consistent set of
-    # buckets regardless of which workflow engine an artwork used.
     ROLE_TO_STAGE_KEY = {
         "MARKETING": "MARKETING",
         "PPC": "PPC",
@@ -1492,13 +1601,10 @@ def artwork_performance_stats(request):
 
     TERMINAL_STATUSES = ["APPROVED", "RELEASED"]
 
-    # ---- "Is stage/department ko average kitna time laga" ----
-    # Sirf un artworks se, jo FINAL mein Approved/Released ho chuki
-    # hain — aur sirf wo stage-actions jo actually APPROVE/DONE hue
-    # the (rejected round count nahi hota, kyunki wo "successful
-    # review time" ko represent nahi karta).
+    # stage_key -> list of individual dwell-times (in days)
     stage_durations = defaultdict(list)
 
+    # ---- STANDARD flow — strictly sequential, no gate ambiguity ----
     versions = ArtworkVersion.objects.filter(
         artwork__status__in=TERMINAL_STATUSES
     ).select_related("artwork").prefetch_related("approvals")
@@ -1514,32 +1620,48 @@ def artwork_performance_stats(request):
                 stage_durations[a.stage].append(dwell_days)
             prev_time = a.acted_on
 
-    steps_qs = WorkflowStep.objects.filter(
+    # ---- Custom flow — GATE-aware. Multiple roles can share the same
+    # `sequence` (a gate) and act in PARALLEL, so each role's dwell
+    # time is measured from when THEIR gate became actionable — never
+    # from a sibling's action in the same gate. ----
+    custom_steps = WorkflowStep.objects.filter(
         step_type__in=["APPROVAL", "SAMPLE_APPROVAL"],
-        status="DONE",
         artwork__status__in=TERMINAL_STATUSES,
     ).select_related("version")
 
     steps_by_version = defaultdict(list)
-    for s in steps_qs:
+    for s in custom_steps:
         if s.version_id:
             steps_by_version[s.version_id].append(s)
 
     for step_list in steps_by_version.values():
-        step_list.sort(key=lambda s: s.sequence)
         version = step_list[0].version
-        prev_time = version.uploaded_on
+        gates = defaultdict(list)
         for s in step_list:
-            if not s.acted_on:
-                continue
-            stage_key = ROLE_TO_STAGE_KEY.get(s.actor_role, s.actor_role)
-            dwell_days = (s.acted_on - prev_time).total_seconds() / 86400.0
-            if dwell_days >= 0:
-                stage_durations[stage_key].append(dwell_days)
-            prev_time = s.acted_on
+            gates[s.sequence].append(s)
+
+        gate_start_time = version.uploaded_on
+        for seq in sorted(gates.keys()):
+            gate_steps = gates[seq]
+            for s in gate_steps:
+                if s.status != "DONE" or not s.acted_on:
+                    continue
+                stage_key = ROLE_TO_STAGE_KEY.get(s.actor_role, s.actor_role)
+                # Sample-Approval: dwell starts from THIS reviewer's own
+                # "received" confirmation, not the gate-open time — so
+                # courier/shipping wait isn't wrongly counted as review time.
+                start_ref = s.received_on if (s.step_type == "SAMPLE_APPROVAL" and s.received_on) else gate_start_time
+                dwell_days = (s.acted_on - start_ref).total_seconds() / 86400.0
+                if dwell_days >= 0:
+                    stage_durations[stage_key].append(dwell_days)
+            # A gate only closes once EVERY member in it is done — the
+            # next gate starts from the LATEST acted_on in this gate.
+            acted_times = [s.acted_on for s in gate_steps if s.acted_on]
+            if acted_times:
+                gate_start_time = max(acted_times)
 
     avg_review_time_days = {
-        stage: round(sum(vals) / len(vals), 2) for stage, vals in stage_durations.items() if vals
+        stage: round(sum(vals) / len(vals), 4) for stage, vals in stage_durations.items() if vals
     }
 
     terminal_qs = ArtworkRequest.objects.filter(status__in=TERMINAL_STATUSES)
@@ -1549,9 +1671,7 @@ def artwork_performance_stats(request):
 
     bottleneck_stage = max(avg_review_time_days, key=avg_review_time_days.get) if avg_review_time_days else None
 
-    # ---- "Is category/trim ko average kitna time laga" ----
-    # Same rule: only APPROVED/RELEASED artworks — full creation-to-
-    # completion turnaround, grouped by packaging category.
+    # ---- Trim/category turnaround — same terminal-only rule ----
     category_turnarounds = defaultdict(list)
     for artwork in terminal_qs.select_related("packaging_spec"):
         spec = getattr(artwork, "packaging_spec", None)
@@ -1563,7 +1683,7 @@ def artwork_performance_stats(request):
     trim_performance = [
         {
             "trim": category,
-            "avg_turnaround_days": round(sum(vals) / len(vals), 1) if vals else None,
+            "avg_turnaround_days": round(sum(vals) / len(vals), 4) if vals else None,
         }
         for category, vals in category_turnarounds.items()
     ]
@@ -1582,6 +1702,7 @@ def artwork_performance_stats(request):
         },
         status=http_status.HTTP_200_OK,
     )
+    
 # ------------------------------------------------------------------
 # Notification Bell — list + mark-read endpoints
 # ------------------------------------------------------------------

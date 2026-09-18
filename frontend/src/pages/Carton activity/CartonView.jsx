@@ -929,6 +929,7 @@ import Table from '../Form/Table';
 import AICalculationsDisplay from './AICalculationsDisplay';
 import { toast } from 'react-toastify';
 import FreezingNoteTable from '../Form/FreezingNoteTable';
+import { resolveFileUrl } from '../../utils/fileUrl';
 
 function CartonView() {
   const { id } = useParams();
@@ -1064,7 +1065,8 @@ function CartonView() {
   }, [id]);
 
   const handleAttachmentClick = async (attachment, index) => {
-    const fileUrl = attachment.file_url;
+    // const fileUrl = attachment.file_url;
+    const fileUrl = resolveFileUrl(attachment.file_url);
     const attachmentId = attachment.id || index;
     if (!fileUrl) return;
     setCheckingLink(attachmentId);

@@ -4,6 +4,7 @@ import api from '../../api/axiosInstance';
 import { ArrowLeft, Paperclip, Eye, CheckCircle, XCircle, Calendar } from 'lucide-react';
 import Table from '../Form/Table';
 import { toast } from 'react-toastify';
+import { resolveFileUrl } from '../../utils/fileUrl';
 
 function GussetView() {
   const { id } = useParams();
@@ -191,7 +192,8 @@ function GussetView() {
 
   // ==================== ATTACHMENT HANDLER ====================
   const handleAttachmentClick = async (attachment, index) => {
-    const fileUrl = attachment.file_url;
+    // const fileUrl = attachment.file_url;
+    const fileUrl = resolveFileUrl(attachment.file_url);
     const attachmentId = attachment.id || index;
     if (!fileUrl) return;
 

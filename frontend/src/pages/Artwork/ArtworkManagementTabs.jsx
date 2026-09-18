@@ -10,7 +10,7 @@ import OperationalDashboard from './OperationalDashboard';
 const TABS = [
   { id: 'operational', label: 'Artwork Database', component: ArtworkList },
   { id: 'performance', label: 'Performance', component: ArtworkPerformanceDashboard },
-  { id: 'operational-dashboard', label: 'Operational Dashboard', component: OperationalDashboard },
+  // { id: 'operational-dashboard', label: 'Operational Dashboard', component: OperationalDashboard },
 
 ];
 

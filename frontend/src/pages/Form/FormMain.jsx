@@ -611,9 +611,9 @@ const programHeaders = [
   { label: "Folding Details", key: "fold" },
   // Sirf Towel ke liye ye 5 blank columns
   ...(isTowelCategory ? [
-    { label: "L (cm)", key: "carton_l_cm", blankOnly: true },
-    { label: "W (cm)", key: "carton_w_cm", blankOnly: true },
-    { label: "H (cm)", key: "carton_h_cm", blankOnly: true },
+    { label: "Carton Length (cm)", key: "carton_l_cm", blankOnly: true },
+    { label: "Carton Width (cm)", key: "carton_w_cm", blankOnly: true },
+    { label: "Carton Height (cm)", key: "carton_h_cm", blankOnly: true },
     { label: "Net Weight", key: "carton_net_weight", blankOnly: true },
     { label: "CBM", key: "carton_cbm", blankOnly: true },
   ] : []),

@@ -11,8 +11,8 @@ import BusinessAnalyticsDashboard from './BusinessAnalyticsDashboard';
 const TABS = [
   { id: 'operational', label: 'Artwork Database', component: ArtworkList },
   { id: 'performance', label: 'Performance', component: ArtworkPerformanceDashboard },
-  { id: 'operational-dashboard', label: 'Operational Dashboard', component: OperationalDashboard },
-  { id: 'business-analytics', label: 'Business Analytics Dashboard', component: BusinessAnalyticsDashboard },
+  // { id: 'operational-dashboard', label: 'Operational Dashboard', component: OperationalDashboard },
+  // { id: 'business-analytics', label: 'Business Analytics Dashboard', component: BusinessAnalyticsDashboard },
 
 
 ];
